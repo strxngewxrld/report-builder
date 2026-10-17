@@ -97,6 +97,29 @@ export class AlWorkspace implements vscode.Disposable {
     return byName;
   }
 
+  /**
+   * All layouts of the report a layout belongs to – of the report itself and of the report extensions extending it
+   * (BC lets users choose among them), with the resolved file.
+   */
+  async layoutsOf(owner: LayoutOwner): Promise<{ name: string; type: string; uri: vscode.Uri; owner: string }[]> {
+    await this.ready;
+    const target = owner.report.kind === 'report' ? owner.report : owner.base;
+    const out: { name: string; type: string; uri: vscode.Uri; owner: string }[] = [];
+    for (const file of this.files.values()) {
+      for (const report of file.reports) {
+        const isOwn = target ? report === target || (report.kind === 'reportextension' && this.baseOf(report) === target) : report === owner.report;
+        if (!isOwn) continue;
+        for (const l of report.layouts) {
+          if (!l.file) continue;
+          const ext = l.file.split('.').pop()?.toLowerCase();
+          const type = l.type || (ext === 'docx' ? 'Word' : ext === 'xlsx' ? 'Excel' : 'RDLC');
+          out.push({ name: l.name, type, uri: this.resolve(file, l.file), owner: report.name });
+        }
+      }
+    }
+    return out;
+  }
+
   private baseOf(report: AlReport): AlReport | undefined {
     if (report.kind !== 'reportextension' || !report.extends) return undefined;
     const name = report.extends.toLowerCase();

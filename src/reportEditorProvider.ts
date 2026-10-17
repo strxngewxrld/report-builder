@@ -55,6 +55,7 @@ type FromWebview =
   | { type: 'info'; message: string }
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
+  | { type: 'openLayout'; uri: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -200,6 +201,13 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           case 'pickImage': {
             const image = await pickImage(document.uri);
             if (image) await session.command('images.add', image);
+            break;
+          }
+          case 'openLayout': {
+            // another layout of the same report: RDLC in the designer, Word/Excel in their application
+            const target = vscode.Uri.parse(msg.uri, true);
+            if (/\.rdlc?$/i.test(target.path)) await vscode.commands.executeCommand('vscode.openWith', target, ReportEditorProvider.viewType);
+            else await vscode.env.openExternal(target);
             break;
           }
           case 'openLink':

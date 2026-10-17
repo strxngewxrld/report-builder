@@ -23,6 +23,7 @@ export type ToExtension =
   | { type: 'info'; message: string }
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
+  | { type: 'openLayout'; uri: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
