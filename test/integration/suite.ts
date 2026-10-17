@@ -255,6 +255,135 @@ test('Layouts des Reports: auch aus Report-Extensions, RDLC wechseln im Designer
   }
 });
 
+/**
+ * Answers VS Code's input box, quick pick and notifications with fixed values while `fn` runs (the commands under test
+ * ask the user); the quick pick answer picks items by label.
+ */
+async function withAnswers<T>(answers: { input?: string[]; pick?: string[][] }, fn: () => Promise<T>): Promise<{ result: T; asked: string[] }> {
+  const w = vscode.window as unknown as Record<string, unknown>;
+  const saved = {
+    showInputBox: w.showInputBox, showQuickPick: w.showQuickPick,
+    showInformationMessage: w.showInformationMessage, showWarningMessage: w.showWarningMessage, showErrorMessage: w.showErrorMessage,
+  };
+  const inputs = [...(answers.input ?? [])], picks = [...(answers.pick ?? [])];
+  const asked: string[] = [];
+  w.showInputBox = async (o: vscode.InputBoxOptions) => {
+    asked.push(`input:${o.title ?? o.prompt}`);
+    const v = inputs.shift();
+    const invalid = v !== undefined && await o.validateInput?.(v);
+    if (invalid) throw new Error(`Eingabe „${v}“ abgelehnt: ${invalid}`);
+    return v;
+  };
+  w.showQuickPick = async (items: readonly vscode.QuickPickItem[] | Thenable<readonly vscode.QuickPickItem[]>, o?: vscode.QuickPickOptions) => {
+    asked.push(`pick:${o?.title ?? ''}`);
+    const labels = picks.shift();
+    const all = await items;
+    return labels && all.filter(i => labels.includes(i.label));
+  };
+  w.showInformationMessage = async (message: string) => { asked.push(`info:${message}`); return undefined; };
+  w.showWarningMessage = async (message: string) => { asked.push(`warning:${message}`); return undefined; };
+  w.showErrorMessage = async (message: string) => { asked.push(`error:${message}`); return undefined; };
+  try {
+    return { result: await fn(), asked };
+  } finally {
+    Object.assign(w, saved);
+  }
+}
+
+/** Puts a document back to the given text (the tests change files of the shared temporary workspace). */
+async function restore(uri: vscode.Uri, text: string) {
+  const doc = await vscode.workspace.openTextDocument(uri);
+  if (doc.getText() === text) return;
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), text);
+  await vscode.workspace.applyEdit(edit);
+  await doc.save();
+}
+
+test('Als AL-Label anlegen: Name und Optionen abfragen, Label in AL, Textfeld im Layout – ein Bearbeitungsschritt', async api => {
+  const { doc } = await open(api, 'Verkaufsrechnung.rdlc');
+  const alUri = file('src/Verkaufsrechnung.Report.al');
+  const al = await vscode.workspace.openTextDocument(alUri);
+  const [layoutText, alText] = [doc.getText(), al.getText()];
+  const item = /<Textbox Name="([^"]+)">(?:(?!<\/Textbox>)[\s\S])*?<Value>Menge<\/Value>/.exec(layoutText)![1];
+  try {
+    const { asked } = await withAnswers({ input: ['MengeLbl', 'Spaltenüberschrift'], pick: [['Übersetzungshinweis (Comment)']] },
+      () => vscode.commands.executeCommand('bcReportBuilder.createLabel', { item, literalText: 'Menge' }) as Promise<unknown>);
+    assert.deepEqual(asked.filter(a => !a.startsWith('info:')).map(a => a.split(':')[0]), ['input', 'pick', 'input']);
+    assert.match(al.getText(), /MengeLbl = 'Menge', Comment = 'Spaltenüberschrift';/);
+    assert.ok(doc.getText().includes('<Value>=Parameters!MengeLbl.Value</Value>'));
+    assert.equal(doc.getText().split('\n').length, layoutText.split('\n').length, 'nur die eine Zeile geändert');
+  } finally {
+    await restore(doc.uri, layoutText);
+    await restore(alUri, alText);
+  }
+});
+
+test('Felder als Spalten hinzufügen: Auswahl aus den Tabellenfeldern', async api => {
+  await open(api, 'Verkaufsrechnung.rdlc');
+  const table = file('src/SalesInvoiceLine.Table.al');
+  const alUri = file('src/Verkaufsrechnung.Report.al');
+  const alText = (await vscode.workspace.openTextDocument(alUri)).getText();
+  await vscode.workspace.fs.writeFile(table, new TextEncoder().encode(`table 50101 "Sales Invoice Line"
+{
+    fields
+    {
+        field(1; "Document No."; Code[20]) { }
+        field(11; Description; Text[100]) { }
+        field(12; "Description 2"; Text[50]) { }
+        field(15; Quantity; Decimal) { }
+        field(22; "Unit Price"; Decimal) { }
+        field(30; "Shipment Date"; Date) { }
+    }
+}
+`));
+  try {
+    let offered: string[] = [];
+    const { asked } = await withAnswers({ pick: [['Description 2', 'Shipment Date']] }, async () => {
+      const w = vscode.window as unknown as { showQuickPick: (items: vscode.QuickPickItem[], o: unknown) => unknown };
+      const pick = w.showQuickPick;
+      w.showQuickPick = async (items, o) => { offered = (await items).map(i => i.label); return pick(items, o); };
+      // the AL index picks the new table up from the file watcher
+      for (let i = 0; i < 50 && !offered.length; i++) {
+        await vscode.commands.executeCommand('bcReportBuilder.addColumns', { dataItem: 'Line' });
+        if (!offered.length) await new Promise(r => setTimeout(r, 200));
+      }
+    });
+    assert.ok(offered.includes('Description 2') && !offered.includes('Quantity'), `angeboten: ${offered.join(', ')} (vorhandene Spalten nicht)`);
+    assert.ok(asked.some(a => a.startsWith('info:') && a.includes('2 Spalte(n)')), asked.join(' | '));
+    const text = (await vscode.workspace.openTextDocument(alUri)).getText();
+    assert.match(text, /column\(Description2_Line; "Description 2"\) \{ \}\s*column\(ShipmentDate_Line; "Shipment Date"\) \{ \}/);
+  } finally {
+    await restore(alUri, alText);
+    await vscode.workspace.fs.delete(table);
+  }
+});
+
+test('Spalte umbenennen: AL und Layout in einem Schritt', async api => {
+  const { doc } = await open(api, 'Verkaufsrechnung.rdlc');
+  const alUri = file('src/Verkaufsrechnung.Report.al');
+  const al = await vscode.workspace.openTextDocument(alUri);
+  const [layoutText, alText] = [doc.getText(), al.getText()];
+  try {
+    // refused: an existing column name
+    await assert.rejects(withAnswers({ input: ['UnitPrice_Line'] },
+      () => vscode.commands.executeCommand('bcReportBuilder.renameColumn', { column: 'Quantity_Line' }) as Promise<unknown>), /bereits/);
+    // from the AL editor: cursor on the column name
+    const editor = await vscode.window.showTextDocument(al);
+    const at = al.positionAt(al.getText().indexOf('Quantity_Line') + 3);
+    editor.selection = new vscode.Selection(at, at);
+    const { asked } = await withAnswers({ input: ['Menge_Line'] }, () => vscode.commands.executeCommand('bcReportBuilder.renameColumn') as Promise<unknown>);
+    assert.match(al.getText(), /column\(Menge_Line; Quantity\)/);
+    // read the layout again: the document object from before the AL editor was shown may be a stale one
+    const layout = (await vscode.workspace.openTextDocument(doc.uri)).getText();
+    assert.ok(!layout.includes('Quantity_Line'), asked.join(' | '));
+    assert.ok(layout.includes('=Fields!Menge_Line.Value'));
+  } finally {
+    await restore(doc.uri, layoutText);
+    await restore(alUri, alText);
+  }
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;

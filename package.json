@@ -340,6 +340,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "bcReportBuilder.renameColumn",
+        "title": "Spalte umbenennen (AL und Layouts)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(edit)"
+      },
+      {
         "command": "bcReportBuilder.buildAl",
         "title": "Projekt erstellen (AL: Package)",
         "category": "Business Central Report Builder",
@@ -758,6 +764,10 @@
         {
           "command": "bcReportBuilder.addColumns",
           "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.renameColumn",
+          "when": "resourceExtname == .al"
         },
         {
           "command": "bcReportBuilder.revealInLayout",
@@ -1238,6 +1248,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "bcReportBuilder.renameColumn",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == alSymbol && column",
+          "group": "navigation@3"
+        },
+        {
           "submenu": "bcReportBuilder.layout",
           "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned && selectionCount > 1",
           "group": "3_arrange@0"
@@ -1376,6 +1391,13 @@
           "command": "bcReportBuilder.table.deleteGroupOnly",
           "when": "inGroup",
           "group": "3_delete@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "bcReportBuilder.renameColumn",
+          "when": "resourceExtname == .al",
+          "group": "1_modification@9"
         }
       ]
     },
