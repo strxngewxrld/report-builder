@@ -32,6 +32,14 @@ Was Report Builder und Visual Studio nicht können, weil sie den AL-Report nicht
 - **CodeLens im AL-Code**: an jeder Spalte und jedem Label „n× im Layout“ – Klick öffnet den Designer und wählt das Textfeld; am Report
   „Layout im Designer öffnen“
 - **Kontextmenü in *Berichtsdaten***: *Zur Definition wechseln*, *Ausdruck kopieren* (`=Fields!…Value`)
+- **Spalte umbenennen (AL und Layouts)…** (im AL-Editor auf dem Spaltennamen oder in *Berichtsdaten*): ändert die Spalte im
+  AL-Report und in allen RDLC-Layouts des Reports und seiner Report-Extensions – Feldverweise, `<Spalte>Format`,
+  `<Spalte>Caption`, die Dataset-Deklaration und gleichnamige Textfelder; ein Rückgängig macht alles rückgängig
+- **Labels für Übersetzer**: beim Anlegen optional `Comment`, `MaxLength` und `Locked`; Hinweis auf die XLIFF-Dateien
+  (`TranslationFile` in `app.json`, Sprachdateien unter `Translations/`). Label und Textfeld ändern sich in einem Schritt –
+  ein Rückgängig nimmt beides zurück
+- **Layouts des Reports** in *Berichtsdaten*: alle Layouts des Reports und seiner Report-Extensions; RDLC-Layouts öffnen im
+  Designer, Word- und Excel-Layouts in Word bzw. Excel (der Designer bearbeitet sie nicht), fehlende Dateien sind markiert
 
 ### BC-Konventionen beim Gestalten
 - Felder mit `<Spalte>Format` (Dezimalspalten) bekommen beim Ziehen `Format = =Fields!<Spalte>Format.Value` und werden rechtsbündig
@@ -60,10 +68,12 @@ Rahmen je Seite, Textläufe mit eigener Formatierung, Datenbank- und eingebettet
 
 - **Seitenumbruch** nach Seitengröße und Rändern, Gruppenumbrüche (`PageBreak`), `KeepTogether`, wiederholte Kopfzeilen (`RepeatOnNewPage`), `ResetPageNumber`
 - **Seitenkopf/-fuß je Seite**: Seitenzahlen, `ReportItems!` der Seite, `First/Last(ReportItems!…)`
-- **`<Code>`-Block** wird interpretiert (VB-Teilmenge): `BlankZero`…, `SetData`/`GetData` (der Seitenkopf sieht den Stand seiner Seite), `IsNewPage`/`GetGroupPageNumber`, `SetRowColor`, `CalcPct` und eigene Funktionen
+- **Messgeräte** (rund und linear) mit Skala, Bereichen und Zeiger
+- **`<Code>`-Block** wird interpretiert (VB-Teilmenge, auch `For`/`For Each`/`While`/`Do`-Schleifen und `Select Case`): `BlankZero`…, `SetData`/`GetData` (der Seitenkopf sieht den Stand seiner Seite), `IsNewPage`/`GetGroupPageNumber`, `SetRowColor`, `CalcPct` und eigene Funktionen
 - Ausdrücke: Aggregate inkl. Bereich und `RunningValue`, `Previous`, `RowNumber`, `IIf`/`Switch`/`Choose`, Text-, Datums- und Formatfunktionen, `Convert.*`, `System.String.*`, `Math.*`, .NET-Formatcodes
 - **Daten**: *Berichtsdaten › Vorschaudaten laden* liest **Excel** (z. B. aus BC: Report ausführen › *Senden an › Microsoft Excel-Dokument (nur Daten)*), CSV oder JSON; gespeichert als `<Layout>.data.json`. Ohne Daten erzeugt die Vorschau Beispielzeilen entlang der AL-Datenelemente (Kopf- und Zeilendatensätze wie im echten BC-Dataset).
-- **Drucken / PDF** öffnet die paginierte Vorschau im Browser; Export als HTML
+- **PDF-Export** direkt aus der Vorschau (Text, Rahmen, Hintergründe als Vektoren; Bilder und Diagramme eingebettet);
+  **Drucken** öffnet die paginierte Vorschau im Browser; Export als HTML, Excel und Word
 
 ### Tabellen, Gruppen, Listen und Matrizen
 Alle Tablix-Bereiche der 379 Base-App-Layouts sind im Designer bearbeitbar – auch die BC-typische Belegliste (gruppierte
@@ -77,9 +87,19 @@ Tablix, je Beleg ein Rechteck mit Kopfdaten und der verschachtelten Zeilentabell
 - **Zellen verbinden/teilen**; Spalten einfügen/löschen berücksichtigt verbundene Zellen
 - **Listen**: Felder auf das Rechteck einer Listenzelle ziehen legt dort ein Textfeld an; Elemente darin sind verschiebbar
 - **Matrix einfügen** (Zeilen-/Spaltengruppe, Wert, Gesamtzeile/-spalte); Kopfzellen und Ecke sind normale Textfelder
-- **Diagramm einfügen** und *Diagrammeigenschaften* (Typ, Kategorie, Reihen, Titel, Legende, Palette); bestehende Diagramme
-  werden gezielt gepatcht, alles andere bleibt wortgleich
-- **Textteile**: Textfelder mit mehreren formatierten Teilen (z. B. „Seite **1**“) – jeder Teil mit Text/Ausdruck und Formatierung
+- **Diagramm einfügen** und *Diagrammeigenschaften*: Typ (Säulen, auch gestapelt und 100 %, Balken, Linie, geglättete Linie,
+  Fläche, gestapelte Fläche, Punkte, Kreis, Ring), Kategorie, Reihen mit eigenem Typ (Kombidiagramm) und zweiter Werteachse,
+  Achsen (Titel, Zahlenformat, Minimum/Maximum), Datenbeschriftungen, Titel, Legende, Palette; bestehende Diagramme werden
+  gezielt gepatcht, alles andere bleibt wortgleich
+- **Spaltengruppen** zu bestehenden Tabellen hinzufügen (*Gruppe hinzufügen › Spaltengruppe*) und löschen (nur Gruppe oder mit
+  Spalten); Spalteneigenschaften *Ausblenden* und *Umschalten durch*
+- **Textteile**: Textfelder mit mehreren formatierten Teilen (z. B. „Seite **1**“) – jeder Teil mit Text/Ausdruck und Formatierung;
+  *Textteile › Aufteilen* zerlegt ein Textfeld (`="Seite " & Globals!PageNumber` → zwei Teile), *In einfaches Textfeld* fasst sie
+  wieder zusammen
+- **Aktionen** an Textfeldern und Bildern: *Gehe zu URL*, *Gehe zu Lesezeichen*, *Gehe zu Bericht* (Drillthrough mit Parametern)
+  und das Lesezeichen des Elements; in der Vorschau öffnen Links extern (nur http/https/mailto) und Lesezeichen-Links springen
+- **Eingebettete Bilder** (z. B. Firmenlogo) unter *Berichtsdaten › Bilder*: einbetten (PNG, JPEG, GIF, BMP, SVG), umbenennen
+  (Bildelemente werden angepasst), löschen, auf die Fläche ziehen; im Designer sichtbar
 
 ### Quellerhaltendes Speichern
 Damit Layouts in Git kleine, nachvollziehbare Diffs ergeben: Unveränderte Elemente werden wortgleich geschrieben;
@@ -118,8 +138,10 @@ Der Designer verhält sich wie ein eingebauter Editor:
 | Zeilen innerhalb/außerhalb der Gruppe einfügen, Zellen verbinden/teilen | ✓ | ✓ | ✓ |
 | Listen (Rechteck je Gruppeninstanz, z. B. BC-Belege), verschachtelte Tabellen | ✓ | ✓ | ✓ |
 | Matrix (Spaltengruppen, Kopfzellen, Ecke, Gesamtzeile/-spalte) | ✓ | ✓ | ✓ |
-| Diagramme (Säule, Balken, Linie, Fläche, Kreis, Ring; gestapelt) | ✓ (mehr Typen) | ✓ (mehr Typen) | ✓ anlegen, bearbeiten, Vorschau |
-| Messgerät, Karte, Unterbericht-Vorschau | ✓ | ✓ | erhalten, Platzhalter |
+| Diagramme (Säule, Balken, Linie, Fläche, Punkte, Kreis, Ring; gestapelt, 100 %, Kombi, zweite Achse) | ✓ (mehr Typen) | ✓ (mehr Typen) | ✓ anlegen, bearbeiten, Vorschau |
+| Messgerät | ✓ | ✓ | erhalten, Vorschau |
+| Karte, Unterbericht-Vorschau | ✓ | ✓ | erhalten, Platzhalter |
+| Aktionen (Hyperlink, Lesezeichen, Drillthrough), eingebettete Bilder | ✓ | ✓ | ✓ |
 | Textfelder mit mehreren formatierten Textteilen | ✓ | ✓ | ✓ Textteil-Editor |
 | Ausrichten, gleiche Größe, Abstände, im Container zentrieren | eingeschränkt | ✓ (Format-Menü) | ✓ |
 | Sichtbarkeit, Drilldown (ToggleItem), interaktive Sortierung | ✓ | ✓ | ✓ inkl. Vorschau |
@@ -127,9 +149,10 @@ Der Designer verhält sich wie ein eingebauter Editor:
 | `<Code>`-Block | Textfeld | Textfeld | VS-Code-Editor mit VB-Hervorhebung, Prüfung im Problembereich |
 | Dokumentgliederung | – | ✓ | ✓ mit Suche, Ausblenden-Markierung, Problemen |
 | Vorschau | mit Datenquelle | nur mit Datenquelle im Projekt | mit Excel-Export aus BC oder generierten BC-Daten |
-| Export | PDF, Word, Excel, … | PDF, Word, Excel | Drucken/PDF, Excel, Word, HTML |
+| Export | PDF, Word, Excel, … | PDF, Word, Excel | PDF, Excel, Word, HTML, Drucken |
 | AL-Report als Datenquelle, „Build nötig“ | – | – | ✓ |
 | Spalten/Labels im AL-Report anlegen, Felder aus Symbolen | – | – | ✓ |
+| Spalte in AL und allen Layouts umbenennen | – | – | ✓ |
 | BC-Konventionen (Format-/Caption-Felder), Prüfung gegen AL | – | – | ✓ |
 | AL ↔ Layout navigieren (CodeLens, Definition), Report in BC ausführen | – | – | ✓ |
 | Quellerhaltendes Speichern (kleine Git-Diffs) | – | – | ✓ |
@@ -147,6 +170,13 @@ Der Designer verhält sich wie ein eingebauter Editor:
   Zahlen, BC-Belege als Kopftexte plus Positionstabelle) und **Word**
 - Speichern, Rückgängig/Wiederholen und Hot Exit kommen von VS Code; „Als XML öffnen“ öffnet die Datei daneben, Änderungen dort erscheinen sofort
 
+## Barrierefreiheit
+- Entwurfsfläche per Tastatur: Tab/Umschalt+Tab wählen das nächste/vorherige Element (Seitenkopf, Text, Seitenfuß; oben nach
+  unten), Pfeiltasten verschieben, Alt+Pfeiltasten ändern die Größe (mit Umschalt fein), Eingabe oder F2 bearbeitet den Text,
+  Entf löscht, Umschalt+F10 öffnet das Kontextmenü
+- Screenreader: Elemente sind beschriftet (Typ, Name, Text); Auswahl, Position und Größe werden angesagt
+- Hochkontrast-Designs: alle Elemente umrandet, die Auswahl mit dem aktiven Kontrastrahmen des Designs
+
 ## Tests
 
 ```sh
@@ -154,13 +184,15 @@ npm test               # Unit-Tests: RDL-Roundtrip und Quellerhaltung, Vorschau-
                        # Ausdrücke, AL-Parser, Prüfung, Excel/CSV
 npm run test:vscode    # Integrationstests im installierten VS Code (isoliertes Profil): Öffnen, Bearbeiten, Rückgängig,
                        # Speichern, externe Änderungen, AL-Kontext, Problembereich, Sprung zu AL, Vorschau mit Seitenumbruch,
-                       # Befehle/Einstellungen → Designer → Statusleiste
+                       # Befehle/Einstellungen → Designer → Statusleiste, Layouts wechseln, Label anlegen, Spalten hinzufügen,
+                       # Spalte umbenennen (Eingabefelder/Auswahllisten beantwortet), PDF-Export, Tabellenbefehle
+                       # BC_RB_TIMEOUT_SCALE=3 für langsame Rechner/CI
 npm run test:corpus    # alle W1-Layouts und AL-Reports der Base App aus github.com/microsoft/BCApps (nur im Speicher)
 ```
 
 Der Korpus-Test prüft für jedes der 379 Layouts: verlustfreies Speichern (unverändert und komplett neu erzeugt),
 stabile Ausgabe, vollständige Gliederung, Vorschau ohne Absturz (Entwurf und mit generierten Daten) und das Dataset
-gegen den zugehörigen AL-Report. Stand: 378/379 zeichengleich auch bei kompletter Neuerzeugung; 357 von 368 Layouts
+gegen den zugehörigen AL-Report. Stand: 379/379 zeichengleich auch bei kompletter Neuerzeugung; 357 von 368 Layouts
 stimmen exakt mit ihrem AL-Report überein – die übrigen 11 sind in Microsofts Repository tatsächlich veraltet und werden
 vom Linter gemeldet; kein einziger Lint-Fehler auf den Microsoft-Layouts.
 Mit `XSD=<Pfad zu ReportDefinition.xsd 2010>` wird zusätzlich gegen das Schema validiert.
@@ -188,22 +220,26 @@ mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsat
 | `src/bcCommands.ts`, `src/codeBlock.ts` | BC-Befehle, CodeLens, `<Code>`-Block als VB-Dokument |
 | `src/lint.ts`, `src/layoutService.ts` | Prüfung und Problembereich |
 | `src/xlsx.ts`, `src/csv.ts` | Excel-/CSV-Import |
+| `src/layoutEdit.ts` | Layout-Änderungen im Host (Label-Wert, Spalte umbenennen) für gemeinsame Bearbeitungsschritte mit AL |
 | `webview/rdl.ts` | RDL-Parser und quellerhaltender Serializer |
-| `webview/render/` | Vorschau-Engine (RDL → Darstellungsbaum), Seitenumbruch, React-Darstellung |
+| `webview/render/` | Vorschau-Engine (RDL → Darstellungsbaum), Seitenumbruch, React-Darstellung, Diagramme, Messgeräte, PDF-Export |
+| `webview/charts.ts`, `webview/images.ts`, `webview/richtext.ts` | Diagramme anlegen/patchen, eingebettete Bilder, Textteile |
 | `webview/expr.ts`, `webview/vb.ts` | Ausdrücke, Interpreter für den `<Code>`-Block |
 | `webview/outline.ts`, `webview/nested.ts` | Dokumentgliederung, Bearbeiten in unverändert gespeicherten Bereichen |
 | `webview/bc.ts` | BC-Kontext, Vorschau-Parameter und -Daten |
 | `webview/components/` | Symbolleiste, Designer, Berichtsdaten, Gliederung, Eigenschaften, Dialoge, Vorschau |
 
 ## Grenzen
-- Diagramme: die gängigen Typen werden gezeichnet und lassen sich anlegen; Achsen-, Beschriftungs- und Spezialoptionen
-  (Sekundärachse, Trendlinien, 3D …) bleiben wie im Layout und sind nur im XML änderbar
-- Messgeräte und Karten erscheinen als Platzhalter und bleiben unverändert erhalten; Unterberichte werden nicht ausgeführt
-- Spaltengruppen einer Matrix lassen sich über die Gruppeneigenschaften bearbeiten; neue Spaltengruppen entstehen über
-  *Matrix einfügen* (nicht durch Umbau einer bestehenden Tabelle); RowSpan im Tabellenkörper wird nicht bearbeitet
-- Export nach Excel/Word überträgt Texte, Tabellen (Zahlen als Zahlen) und Diagrammwerte – kein pixelgenaues Abbild
+- Diagramme: Trendlinien, 3D, Spezialtypen (Trichter, Bereich, Polar …) und Formatierung einzelner Datenpunkte bleiben wie im
+  Layout und sind nur im XML änderbar
+- Karten erscheinen als Platzhalter und bleiben unverändert erhalten; Unterberichte werden nicht ausgeführt (beides kommt in
+  Business-Central-RDLC-Layouts nicht vor)
+- Neue Spaltengruppen nur für Tabellen ohne Spaltenköpfe; Kreuztabellen entstehen über *Matrix einfügen*
+- Zellen im Tabellenkörper lassen sich nur waagerecht verbinden – wie in Report Builder, denn RDL kennt `RowSpan` nur in der Ecke
+- Export nach Excel/Word überträgt Texte, Tabellen (Zahlen als Zahlen) und Diagrammwerte – kein pixelgenaues Abbild; der
+  PDF-Export nutzt die PDF-Standardschriften (Helvetica, Times, Courier)
 - Neue Spalten und Labels erscheinen erst nach dem Erstellen des Projekts im Layout-Dataset (wie bei der Arbeit in Visual Studio)
-- Unterberichte, Drilldown/Toggle (`ToggleItem`) und interaktive Sortierung sind in der Vorschau nicht interaktiv
 - Die Vorschau ist eine Annäherung an den Berichtsserver, nicht pixelgenau; Abfragen gegen echte Datenquellen werden nicht ausgeführt
-- Der `<Code>`-Interpreter kennt keine Schleifen (`For`/`While`) und kein `Select Case` – betroffene Funktionen melden das in der Vorschau
-- Word- und Excel-Layouts werden nicht bearbeitet
+- Der `<Code>`-Interpreter kennt `Try`/`Catch`, `With` und Arrays mit Index-Zuweisung nicht – betroffene Funktionen melden das in der Vorschau
+- Word- und Excel-Layouts werden nicht bearbeitet (sie öffnen sich aus *Berichtsdaten › Layouts des Reports* in Word bzw. Excel)
+- Die Oberfläche ist deutsch
