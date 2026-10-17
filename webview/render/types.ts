@@ -91,7 +91,20 @@ export interface RChart extends RBase {
   sample: boolean;
 }
 
-export type RNode = RBox | RTable | RLine | RImage | RPlaceholder | RChart;
+/** A gauge (GaugePanel): its first radial or linear gauge with the first pointer's value, scale and ranges. */
+export interface RGauge extends RBase {
+  kind: 'gauge';
+  shape: 'radial' | 'linear';
+  value: number | null;
+  min: number;
+  max: number;
+  ranges: { start: number; end: number; color: string }[];
+  /** Format of the value label (from the pointer or the scale). */
+  format?: string;
+  sample: boolean;
+}
+
+export type RNode = RBox | RTable | RLine | RImage | RPlaceholder | RChart | RGauge;
 
 export interface RSection { height: number; css: Css; nodes: RNode[] }
 
