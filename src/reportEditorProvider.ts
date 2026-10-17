@@ -205,7 +205,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
         ReportEditorProvider.activeSession = undefined;
         ReportEditorProvider.changed.fire(undefined);
       }
-      if (probe) probes.delete(document.uri.toString());
+      if (probe && probes.get(document.uri.toString()) === probe) probes.delete(document.uri.toString());
       subscriptions.forEach(s => s.dispose());
       watcher.dispose();
     });
