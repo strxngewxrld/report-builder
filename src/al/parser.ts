@@ -14,7 +14,11 @@ export interface AlDataItem {
   /** Body braces, and where a new column goes (after the last column, before nested data items). */
   span?: AlSpan; columnInsert?: number;
 }
-export interface AlLabel { name: string; text: string; pos: AlPos }
+export interface AlLabel {
+  name: string; text: string; pos: AlPos;
+  /** Translation note, maximum length and Locked (not translated), when given. */
+  comment?: string; maxLength?: number; locked?: boolean;
+}
 export interface AlLayout { name: string; type: string; file: string; pos: AlPos }
 /** Columns/data items a report extension adds to its base report. */
 export interface AlAddition { target: string; columns: AlColumn[]; dataItems: AlDataItem[]; span?: AlSpan; columnInsert?: number }
@@ -277,7 +281,15 @@ class AlParser {
     for (const i of this.top(open)) {
       const t = this.toks[i];
       if ((t.t === 'id' || t.t === 'qid') && this.is(i + 1, '=') && this.toks[i + 2]?.t === 'str' && (i === open + 1 || this.toks[i - 1].v === ';')) {
-        out.push({ name: t.v, text: this.toks[i + 2].v, pos: this.pos(t.start) });
+        const label: AlLabel = { name: t.v, text: this.toks[i + 2].v, pos: this.pos(t.start) };
+        // options: , Comment = '…', MaxLength = 30, Locked = true
+        for (let j = i + 3; this.is(j, ',') && this.is(j + 2, '='); j += 4) {
+          const key = this.toks[j + 1].v.toLowerCase(), v = this.toks[j + 3];
+          if (key === 'comment' && v?.t === 'str') label.comment = v.v;
+          if (key === 'maxlength' && v?.t === 'num') label.maxLength = Number(v.v);
+          if (key === 'locked') label.locked = /^true$/i.test(v?.v ?? '');
+        }
+        out.push(label);
       }
     }
     return out;

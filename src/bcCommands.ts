@@ -3,7 +3,8 @@
 // report in the web client, navigating from AL to the layout, and editing the layout's <Code> block in a VB editor.
 
 import * as vscode from 'vscode';
-import { applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, TextInsert } from './al/edit';
+import { LabelOptions, applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, TextInsert } from './al/edit';
+import { textboxValueEdit } from './layoutEdit';
 import { alConfigurations, reportUrl } from './al/launch';
 import { mergedDataItems } from './al/context';
 import { AlDataItem, AlReport, allColumns, parseAl } from './al/parser';
@@ -52,8 +53,7 @@ async function alTarget(service: LayoutService, session: DesignerSession) {
   return { owner, doc, src, report };
 }
 
-async function applyAndOffer(doc: vscode.TextDocument, insert: TextInsert, done: string) {
-  const edit = new vscode.WorkspaceEdit();
+async function applyAndOffer(doc: vscode.TextDocument, insert: TextInsert, done: string, edit = new vscode.WorkspaceEdit()) {
   edit.insert(doc.uri, doc.positionAt(insert.offset), insert.text);
   if (!await vscode.workspace.applyEdit(edit)) {
     vscode.window.showErrorMessage('Der AL-Code konnte nicht geändert werden.');
@@ -68,7 +68,11 @@ async function applyAndOffer(doc: vscode.TextDocument, insert: TextInsert, done:
   }
 }
 
-/** A textbox with fixed text becomes a translatable label: new label in AL, the textbox shows =Parameters!<Label>.Value. */
+/**
+ * A textbox with fixed text becomes a translatable label: new label in AL (optionally with translator comment,
+ * maximum length or Locked), the textbox shows =Parameters!<Label>.Value. Both files change in one edit, so one
+ * undo reverts both.
+ */
 async function createLabel(service: LayoutService, arg: MenuArg) {
   const session = ReportEditorProvider.active;
   const item = str(arg?.item), text = str(arg?.literalText);
@@ -76,15 +80,77 @@ async function createLabel(service: LayoutService, arg: MenuArg) {
   const target = await alTarget(service, session);
   if (!target) return;
   const taken = [...target.report.labels.map(l => l.name), ...(session.bc?.labels.map(l => l.name) ?? [])];
+  const title = 'Als AL-Label anlegen';
   const name = await vscode.window.showInputBox({
-    title: 'Als AL-Label anlegen', prompt: `Label für „${text}“ im ${target.report.kind === 'report' ? 'Report' : 'Report-Extension'} „${target.report.name}“`,
+    title: `${title} (1/2)`, prompt: `Label für „${text}“ im ${target.report.kind === 'report' ? 'Report' : 'Report-Extension'} „${target.report.name}“`,
     value: labelName(text, taken), valueSelection: [0, Math.max(0, labelName(text, taken).length - 3)],
     validateInput: v => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(v) ? 'Nur Buchstaben, Ziffern und _ (beginnend mit einem Buchstaben)'
       : taken.some(t => t.toLowerCase() === v.toLowerCase()) ? `„${v}“ gibt es bereits` : undefined,
   });
   if (!name) return;
-  await session.command('setTextboxValue', { name: item, value: `=Parameters!${name}.Value` });
-  await applyAndOffer(target.doc, insertLabel(target.src, target.report, name, text), `Label „${name}“ angelegt, „${item}“ verwendet es.`);
+  const options = await labelOptions(title, text);
+  if (!options) return;
+
+  const layout = await vscode.workspace.openTextDocument(session.uri);
+  const valueEdit = textboxValueEdit(layout.getText(), item, `=Parameters!${name}.Value`);
+  const insert = insertLabel(target.src, target.report, name, text, options);
+  const hint = await translationHint(target.owner.file.root);
+  if (!valueEdit) {
+    // a textbox the host cannot patch (several parts): the designer changes it, the AL edit is a separate step
+    await session.command('setTextboxValue', { name: item, value: `=Parameters!${name}.Value` });
+    await applyAndOffer(target.doc, insert, `Label „${name}“ angelegt, „${item}“ verwendet es.${hint}`);
+    return;
+  }
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(layout.uri, new vscode.Range(layout.positionAt(valueEdit.start), layout.positionAt(valueEdit.end)), valueEdit.text);
+  await applyAndOffer(target.doc, insert, `Label „${name}“ angelegt, „${item}“ verwendet es (gemeinsam rückgängig zu machen).${hint}`, edit);
+}
+
+/** Optional label properties for translators, asked after the name; undefined when cancelled. */
+async function labelOptions(title: string, text: string): Promise<LabelOptions | undefined> {
+  type Pick = vscode.QuickPickItem & { key: keyof LabelOptions };
+  const picked = await vscode.window.showQuickPick<Pick>([
+    { key: 'comment', label: 'Übersetzungshinweis (Comment)', detail: 'Erscheint in der XLIFF-Datei als Hinweis für Übersetzer' },
+    { key: 'maxLength', label: 'Höchstlänge (MaxLength)', detail: 'Übersetzungen dürfen nicht länger werden – z. B. bei schmalen Textfeldern' },
+    { key: 'locked', label: 'Nicht übersetzen (Locked)', detail: 'Feste Texte wie Codes oder Markennamen' },
+  ], { title: `${title} (2/2)`, placeHolder: 'Optionen für die Übersetzung – Eingabe ohne Auswahl legt das Label ohne Optionen an', canPickMany: true });
+  if (!picked) return undefined;
+  const keys = new Set(picked.map(p => p.key));
+  const options: LabelOptions = { locked: keys.has('locked') || undefined };
+  if (keys.has('comment')) {
+    const comment = await vscode.window.showInputBox({ title, prompt: `Hinweis für Übersetzer zu „${text}“`, placeHolder: 'z. B. Spaltenüberschrift der Mengenspalte' });
+    if (comment === undefined) return undefined;
+    options.comment = comment.trim() || undefined;
+  }
+  if (keys.has('maxLength')) {
+    const max = await vscode.window.showInputBox({
+      title, prompt: 'Höchstlänge der Übersetzungen (Zeichen)', value: String(Math.max(text.length, 10)),
+      validateInput: v => (/^\d+$/.test(v) && Number(v) >= text.length ? undefined : `Eine ganze Zahl ≥ ${text.length} (Länge des Textes)`),
+    });
+    if (max === undefined) return undefined;
+    options.maxLength = Number(max);
+  }
+  return options;
+}
+
+/**
+ * How the new label gets translated: with the TranslationFile feature the compiler writes it to Translations/*.g.xlf;
+ * translations go into the language files there (e.g. with XLIFF Sync).
+ */
+async function translationHint(root: vscode.Uri): Promise<string> {
+  let features: string[] = [];
+  try {
+    const app = JSON.parse(new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(root, 'app.json'))));
+    features = Array.isArray(app.features) ? app.features : [];
+  } catch { return ''; }
+  if (!features.some(f => /^translationfile$/i.test(f))) {
+    return ' Für Übersetzungen in app.json „features“: ["TranslationFile"] setzen – dann erzeugt der Compiler eine XLIFF-Datei.';
+  }
+  const files = await vscode.workspace.fs.readDirectory(vscode.Uri.joinPath(root, 'Translations')).then(x => x, () => []);
+  const languages = files.map(([n]) => n).filter(n => /\.xlf$/i.test(n) && !/\.g\.xlf$/i.test(n));
+  return languages.length
+    ? ` Nach dem Erstellen die Übersetzungen in ${languages.join(', ')} ergänzen.`
+    : ' Nach dem Erstellen steht das Label in Translations/*.g.xlf; für jede Sprache eine eigene .xlf-Datei anlegen.';
 }
 
 /** Fields of the data item's table that are no column yet, picked in a quick pick, become new columns. */
