@@ -161,3 +161,11 @@ test('Rich-Text-Textfeld: Textteile lesen, einzeln ändern, hinzufügen, entfern
   assert.equal(serializeRdl(parseRdl(out, dom), dom), out);
   assert.ok(out.includes('<Value>S. </Value>'));
 });
+
+test('empty elements written as <X></X> keep that form', () => {
+  const xml = bc.replace(/^(\s*)(<rd:DefaultName>PageNo<\/rd:DefaultName>)/m, '$1$2\n$1<Visibility></Visibility>');
+  assert.ok(xml !== bc);
+  assert.equal(serializeRdl(parseRdl(xml, dom), dom), xml);
+  const out = edit(xml, r => { (locate(r, 'PageHdr_Company')!.item as TextboxItem).value = '=1'; });
+  assert.ok(out.includes('<Visibility></Visibility>'));
+});
