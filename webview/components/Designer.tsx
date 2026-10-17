@@ -1,8 +1,9 @@
 import { Fragment, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as RPointerEvent, DragEvent as RDragEvent, MouseEvent as RMouseEvent } from 'react';
 import { DRAG_MIME, DragPayload, currentDrag, useCommand, useEditor } from '../editor';
+import { embeddedImages, imageUrl } from '../images';
 import { designLabel } from '../expr';
-import { Box, Report, ReportItem, SectionKind, TableItem, TextboxItem } from '../model';
+import { Box, ImageItem, Report, ReportItem, SectionKind, TableItem, TextboxItem } from '../model';
 import {
   DEFAULT_SIZE, applyFieldFormat, bcFieldConventions, createItem, createTable, deleteColumn, displayFields, insertColumn, locate, makeTextbox, sectionOf, sections,
   splitCamel, tableHeight, tableWidth, toggleTableRow,
@@ -294,6 +295,13 @@ export function Designer() {
         created = t.name;
         return;
       }
+      if (p.kind === 'image') {
+        const img = createItem(r, 'image', { ...at, width: 1.5, height: 0.75 }) as ImageItem;
+        Object.assign(img, { source: 'Embedded', value: p.name, sizing: 'FitProportional' });
+        items.push(img);
+        created = img.name;
+        return;
+      }
       const value = p.kind === 'field' ? `=First(Fields!${p.field}.Value, "${p.dataSet}")`
         : p.kind === 'parameter' ? `=Parameters!${p.name}.Value`
         : `=Globals!${p.name}`;
@@ -307,7 +315,7 @@ export function Designer() {
 
   const onCellDrop = (e: RDragEvent, t: TableItem, row: number, col: number) => {
     const p = payloadOf(e);
-    if (!p || p.kind === 'dataSet' || p.kind === 'dataItem') return;
+    if (!p || p.kind === 'dataSet' || p.kind === 'dataItem' || p.kind === 'image') return;
     e.preventDefault();
     e.stopPropagation();
     const target = cellAt(t.rows[row], col)?.cell;
@@ -599,15 +607,18 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
         </div>
       );
     }
-    case 'image':
+    case 'image': {
+      const embedded = item.source === 'Embedded' ? embeddedImages(ed.report).find(i => i.name === item.value) : undefined;
+      const src = embedded ? imageUrl(embedded) : item.source === 'External' && /^(https?:|data:)/.test(item.value) ? item.value : '';
       return (
         <div className={`item image ${selected ? 'selected' : ''}`} style={{ ...px(box, S), ...styleToCss(item.style) }} {...common}>
-          {item.source === 'External' && /^(https?:|data:)/.test(item.value)
-            ? <img src={item.value} alt="" style={imageFit(item.sizing)} draggable={false} />
+          {src
+            ? <img src={src} alt="" style={imageFit(item.sizing)} draggable={false} />
             : <div className="placeholder" title={item.value}><Codicon name="file-media" /> {item.source === 'Database' ? 'Datenbankbild' : item.source === 'Embedded' ? item.value || 'Bild' : 'Bild'}</div>}
           {handles}
         </div>
       );
+    }
     case 'raw': {
       // an empty table cell
       if (item.kind === 'Empty') return <div className="item empty-cell" style={px(box, S)} {...common} />;

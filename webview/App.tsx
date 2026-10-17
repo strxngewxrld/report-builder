@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Diagnostic, Dialog, Editor, EditorContext, InsertTool, TablePart, useCommand, useEditor } from './editor';
+import { addEmbeddedImage } from './images';
 import { BcContext, isBcLayout } from './bc';
 import { Report, ReportItem, TextboxItem, allReportItems } from './model';
 import { alignItems, centerInContainer, distribute, makeSameSize } from './layoutTools';
@@ -320,6 +321,11 @@ function AppCommands() {
   useCommand('toggleHeader', () => ed.commit(r => { r.header = r.header ? null : { height: 1, items: [], style: {} }; }));
   useCommand('toggleFooter', () => ed.commit(r => { r.footer = r.footer ? null : { height: 1, items: [], style: {} }; }));
   useCommand('reportProperties', () => ed.setDialog({ kind: 'reportProperties' }));
+  // an image file picked in VS Code (Report data › Images › ＋)
+  useCommand('images.add', arg => {
+    const { name, mimeType, data } = arg as { name: string; mimeType: string; data: string };
+    ed.commit(r => { addEmbeddedImage(r, name, mimeType, data); });
+  });
   useCommand('importSampleData', arg => {
     const picked = (arg as { entryKind?: string; name?: string } | undefined)?.entryKind === 'dataSet' ? (arg as { name: string }).name : undefined;
     const ds = ed.report.dataSets.find(d => d.name === 'DataSet_Result') ?? ed.report.dataSets[0];

@@ -82,7 +82,9 @@ export type DragPayload =
   /** Business Central data item: a table with its columns. */
   | { kind: 'dataItem'; dataSet: string; name: string; columns: string[] }
   | { kind: 'parameter'; name: string }
-  | { kind: 'global'; name: string };
+  | { kind: 'global'; name: string }
+  /** Embedded image: an image item showing it. */
+  | { kind: 'image'; name: string };
 
 export const DRAG_MIME = 'application/x-rdl-item';
 /** dataTransfer contents are not readable during dragover, so the payload is also kept here. */

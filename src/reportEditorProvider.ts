@@ -54,6 +54,7 @@ type FromWebview =
   | { type: 'error'; message: string }
   | { type: 'info'; message: string }
   | { type: 'openLink'; url: string }
+  | { type: 'pickImage' }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -196,6 +197,11 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           case 'info':
             vscode.window.showInformationMessage(msg.message);
             break;
+          case 'pickImage': {
+            const image = await pickImage(document.uri);
+            if (image) await session.command('images.add', image);
+            break;
+          }
           case 'openLink':
             // only web and mail links: a report expression must not open local files or run protocol handlers
             if (/^(https?|mailto):/i.test(msg.url)) await vscode.env.openExternal(vscode.Uri.parse(msg.url, true));
@@ -328,3 +334,28 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
 
 /** Sample data lives next to the report: Sales.rdl → Sales.data.json, keyed by dataset name. */
 export const sampleDataUri = (reportUri: vscode.Uri) => reportUri.with({ path: reportUri.path.replace(/\.rdlc?$/i, '') + '.data.json' });
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml',
+};
+
+/** Lets the user pick an image file to embed (Report data › Images); returns it base64-encoded. */
+async function pickImage(near: vscode.Uri): Promise<{ name: string; mimeType: string; data: string } | undefined> {
+  const [uri] = await vscode.window.showOpenDialog({
+    canSelectMany: false, defaultUri: vscode.Uri.joinPath(near, '..'), openLabel: 'Einbetten',
+    filters: { Bilder: Object.keys(IMAGE_TYPES) },
+  }) ?? [];
+  if (!uri) return undefined;
+  const file = uri.path.split('/').pop()!;
+  const mimeType = IMAGE_TYPES[file.split('.').pop()!.toLowerCase()];
+  if (!mimeType) {
+    vscode.window.showErrorMessage(`${file}: Bildformat wird nicht unterstützt (PNG, JPEG, GIF, BMP, SVG).`);
+    return undefined;
+  }
+  const bytes = await vscode.workspace.fs.readFile(uri);
+  if (bytes.length > 2 * 1024 * 1024) {
+    const go = await vscode.window.showWarningMessage(`${file} ist ${Math.round(bytes.length / 1024)} KB groß – eingebettete Bilder vergrößern das Layout entsprechend.`, 'Trotzdem einbetten');
+    if (!go) return undefined;
+  }
+  return { name: file, mimeType, data: Buffer.from(bytes).toString('base64') };
+}
