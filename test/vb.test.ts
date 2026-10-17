@@ -154,8 +154,9 @@ test('state at a version: body state per page, section writes persist', () => {
 
 test('unsupported statements fail only when executed', () => {
   const code = new CodeModule(`Public Function Loop1()
-  For i = 1 To 3
-  Next
+  Try
+  Catch
+  End Try
   Return 1
 End Function
 Public Function Fine()
@@ -191,4 +192,87 @@ test('Convert, Choose/Split, Previous, ReportItems, named scopes', () => {
   assert.equal(evaluate('=Code.F()', { ...c, code: multi }), 3);
   assert.equal(evaluate('=RunningValue(Fields!A.Value, Sum, "DS")', c), 3);
   assert.equal(evaluate('=RunningValue(Fields!A.Value, Sum, "DS")', { ...c, row: rows[0] }), 1);
+});
+
+test('loops and Select Case', () => {
+  const code = new CodeModule(`Shared Total As Decimal
+Public Function SumTo(n As Integer) As Integer
+  Dim s As Integer = 0
+  For i As Integer = 1 To n
+    If i = 4 Then Continue For
+    s += i
+  Next i
+  Return s
+End Function
+Public Function Down() As String
+  Dim r As String = ""
+  For i = 5 To 1 Step -2
+    r &= i
+  Next
+  Return r
+End Function
+Public Function Words(t As String) As Integer
+  Dim c As Integer = 0
+  For Each w As String In Split(t, " ")
+    If w = "stop" Then Exit For
+    c += 1
+  Next
+  Return c
+End Function
+Public Function Halve(x As Decimal) As Integer
+  Dim n As Integer = 0
+  While x > 1
+    x = x / 2
+    n += 1
+  End While
+  Do
+    n += 100
+  Loop Until n > 300
+  Do While False
+    n = -1
+  Loop
+  Return n
+End Function
+Public Function Grade(p As Integer) As String
+  Select Case p
+    Case Is >= 90
+      Return "A"
+    Case 70 To 89, 69
+      Return "B"
+    Case 1, 2, 3
+      Select Case p
+        Case 1
+          Return "one"
+        Case Else
+          Exit Select
+      End Select
+      Return "low"
+    Case Else
+      Return "C"
+  End Select
+End Function
+Public Sub AddUp(n As Integer)
+  For k = 1 To n
+    Total = Total + k
+  Next
+End Sub
+Public Function Forever()
+  While True
+  End While
+End Function`);
+  assert.deepEqual(code.errors, []);
+  const ev = (e: string) => evaluate(e, ctx(code));
+  assert.equal(ev('=Code.SumTo(5)'), 11);
+  assert.equal(ev('=Code.Down()'), '531');
+  assert.equal(ev('=Code.Words("a b stop c")'), 2);
+  assert.equal(ev('=Code.Halve(8)'), 303);
+  assert.equal(ev('=Code.Grade(95)'), 'A');
+  assert.equal(ev('=Code.Grade(69)'), 'B');
+  assert.equal(ev('=Code.Grade(75)'), 'B');
+  assert.equal(ev('=Code.Grade(1)'), 'one');
+  assert.equal(ev('=Code.Grade(2)'), 'low');
+  assert.equal(ev('=Code.Grade(10)'), 'C');
+  ev('=Code.AddUp(3)');
+  assert.equal(ev('=Code.SumTo(0)'), 0);
+  assert.throws(() => ev('=Code.Forever()'), /Endlosschleife/);
 });

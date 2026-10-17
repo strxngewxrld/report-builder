@@ -2,17 +2,29 @@
 // (BlankZero…, SetData/GetData, IsNewPage/GetGroupPageNumber, SetRowColor, CalcPct, …).
 //
 // Supported: Function/Sub with parameters, Shared/Dim declarations (optionally initialised), If/ElseIf/Else/End If
-// (block and single-line, "Then" optional), Return, Exit Function/Sub, assignments (=, +=, -=, &=), calls,
-// comments (' and REM), line continuations and On Error (ignored). Loops and Select Case are reported as unsupported
-// when they are executed.
+// (block and single-line, "Then" optional), For/Next (with Step), For Each, While/End While, Do…Loop (While/Until
+// before or after), Select Case (values, ranges with To, Is <op>, Case Else), Exit/Continue For/Do/While/Select,
+// Return, Exit Function/Sub, assignments (=, +=, -=, *=, /=, &=), calls, comments (' and REM), line continuations
+// and On Error (ignored). Other statements (Try, With, …) are reported as unsupported when they are executed.
 //
 // Writes to Shared variables are logged with a version number, so the state at any point of the evaluation can be
 // restored – page headers need the state as it was at the end of their page.
 
-import { EvalContext, Node, evalNode, parseExpression, toBool } from './expr';
+import { EvalContext, Node, compare, evalNode, parseExpression, toBool } from './expr';
+
+type LoopKind = 'for' | 'do' | 'while' | 'select';
+type LoopCond = { until: boolean; cond: Node } | null;
+/** One test of a Case clause: a value (op '='), "Is <op> value" or a range "a To b". */
+type CaseTest = { op: string; expr: Node } | { from: Node; to: Node };
 
 type Stmt =
   | { k: 'if'; branches: { cond: Node | null; body: Stmt[] }[] }
+  | { k: 'for'; name: string; local: boolean; from: Node; to: Node; step: Node | null; body: Stmt[] }
+  | { k: 'foreach'; name: string; local: boolean; list: Node; body: Stmt[] }
+  | { k: 'loop'; kind: 'do' | 'while'; pre: LoopCond; post: LoopCond; body: Stmt[] }
+  | { k: 'select'; subject: Node; cases: { tests: CaseTest[] | null; body: Stmt[] }[] }
+  | { k: 'exitloop'; kind: LoopKind }
+  | { k: 'continue'; kind: LoopKind }
   | { k: 'return'; expr: Node | null }
   | { k: 'exit' }
   | { k: 'assign'; name: string; op: string; expr: Node }
@@ -24,6 +36,22 @@ interface Fn { name: string; params: { name: string; def: Node | null }[]; body:
 
 class ReturnSignal { constructor(readonly value: unknown) {} }
 class ExitSignal {}
+class LoopSignal { constructor(readonly kind: LoopKind, readonly cont: boolean) {} }
+
+/** Splits at commas outside of strings and parentheses. */
+function splitTop(text: string): string[] {
+  const out: string[] = [];
+  let depth = 0, inStr = false, cur = '';
+  for (const ch of text) {
+    if (ch === '"') inStr = !inStr;
+    else if (!inStr && ch === '(') depth++;
+    else if (!inStr && ch === ')') depth--;
+    else if (!inStr && depth === 0 && ch === ',') { out.push(cur.trim()); cur = ''; continue; }
+    cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
 
 const MODIFIERS = /^(?:(?:public|private|friend|protected|shared|overloads|overrides|static)\s+)*/i;
 
@@ -146,10 +174,80 @@ export class CodeModule {
         out.push({ k: 'if', branches });
         continue;
       }
+      const loop = this.loop(lines, i);
+      if (loop) {
+        out.push(loop[0]);
+        i = loop[1];
+        continue;
+      }
       out.push(this.stmt(text, line));
       i++;
     }
     return [out, i];
+  }
+
+  /** Parses For, For Each, While, Do and Select Case blocks starting at `i`; null if the line starts none of them. */
+  private loop(lines: { text: string; line: number }[], i: number): [Stmt, number] | null {
+    const { text, line } = lines[i];
+    let m: RegExpExecArray | null;
+    const typed = (name: string, as: string | undefined) => ({ name: name.toLowerCase(), local: !!as });
+    if ((m = /^for\s+each\s+(\w+)(\s+as\s+[\w.]+)?\s+in\s+(.+)$/i.exec(text))) {
+      const [body, next] = this.block(lines, i + 1, /^next(\s+\w+)?$/i);
+      return [this.guard(text, () => ({ k: 'foreach', ...typed(m![1], m![2]), list: this.expr(m![3], line), body })), next];
+    }
+    if ((m = /^for\s+(\w+)(\s+as\s+[\w.]+)?\s*=\s*(.+?)\s+to\s+(.+?)(?:\s+step\s+(.+))?$/i.exec(text))) {
+      const [body, next] = this.block(lines, i + 1, /^next(\s+\w+)?$/i);
+      return [this.guard(text, () => ({
+        k: 'for', ...typed(m![1], m![2]), from: this.expr(m![3], line), to: this.expr(m![4], line),
+        step: m![5] ? this.expr(m![5], line) : null, body,
+      })), next];
+    }
+    if ((m = /^while\s+(.+)$/i.exec(text))) {
+      const [body, next] = this.block(lines, i + 1, /^(end\s+while|wend)$/i);
+      return [this.guard(text, () => ({ k: 'loop', kind: 'while', pre: { until: false, cond: this.expr(m![1], line) }, post: null, body })), next];
+    }
+    if ((m = /^do(?:\s+(while|until)\s+(.+))?$/i.exec(text))) {
+      const end = /^loop(?:\s+(while|until)\s+(.+))?$/i;
+      const [body, next] = this.block(lines, i + 1, end);
+      const tail = end.exec(lines[next - 1]?.text ?? '');
+      return [this.guard(text, () => ({
+        k: 'loop', kind: 'do', body,
+        pre: m![1] ? { until: /^until$/i.test(m![1]), cond: this.expr(m![2], line) } : null,
+        post: tail?.[1] ? { until: /^until$/i.test(tail[1]), cond: this.expr(tail[2], lines[next - 1].line) } : null,
+      })), next];
+    }
+    if ((m = /^select\s+(?:case\s+)?(.+)$/i.exec(text))) {
+      const caseOrEnd = /^(case\s+.+|end\s+select)$/i;
+      // statements before the first Case are ignored; each block ends at the next Case or End Select
+      let [, next] = this.block(lines, i + 1, caseOrEnd);
+      const cases: { tests: CaseTest[] | null; body: Stmt[] }[] = [];
+      let bad: Error | null = null;
+      for (;;) {
+        const header = next > i + 1 ? /^case\s+(.+)$/i.exec(lines[next - 1].text) : null;
+        if (!header) break;
+        const [body, after] = this.block(lines, next, caseOrEnd);
+        try {
+          cases.push({ tests: /^else$/i.test(header[1].trim()) ? null : this.caseTests(header[1], lines[next - 1].line), body });
+        } catch (e) { bad ??= e as Error; }
+        const ended = after > next && caseOrEnd.test(lines[after - 1].text);
+        next = after;
+        if (!ended) break; // End Select missing: the block ran to the end of the code
+      }
+      return [this.guard(text, () => {
+        if (bad) throw bad;
+        return { k: 'select', subject: this.expr(m![1], line), cases };
+      }), next];
+    }
+    return null;
+  }
+
+  private caseTests(text: string, line: number): CaseTest[] {
+    return splitTop(text).map(part => {
+      let m: RegExpExecArray | null;
+      if ((m = /^is\s*(<>|<=|>=|=|<|>)\s*(.+)$/i.exec(part))) return { op: m[1], expr: this.expr(m[2], line) };
+      if ((m = /^(.+?)\s+to\s+(.+)$/i.exec(part))) return { from: this.expr(m[1], line), to: this.expr(m[2], line) };
+      return { op: '=', expr: this.expr(part, line) };
+    });
   }
 
   private stmt(text: string, line: number): Stmt {
@@ -164,12 +262,16 @@ export class CodeModule {
     let m: RegExpExecArray | null;
     if ((m = /^return(?:\s+(.+))?$/i.exec(text))) return { k: 'return', expr: m[1] ? this.expr(m[1], line) : null };
     if (/^exit\s+(function|sub)$/i.test(text)) return { k: 'exit' };
+    if ((m = /^(exit|continue)\s+(for|do|while|select)$/i.exec(text))) {
+      const kind = m[2].toLowerCase() as LoopKind;
+      return /^exit$/i.test(m[1]) ? { k: 'exitloop', kind } : { k: 'continue', kind };
+    }
     if (/^on\s+error\b/i.test(text)) return { k: 'expr', expr: { k: 'lit', v: null } };
     if ((m = /^(?:dim|static)\s+(\w+)(?:\s*\(\s*\))?(?:\s+as\s+(?:new\s+)?[\w.]+(?:\(\))?)?(?:\s*=\s*(.+))?$/i.exec(text))) {
       return { k: 'dim', name: m[1].toLowerCase(), expr: m[2] ? this.expr(m[2], line) : null };
     }
     if (/^(for|while|do|select|loop|next|wend|try|catch|with)\b/i.test(text)) return { k: 'unsupported', text };
-    if ((m = /^([A-Za-z_]\w*)\s*(=|\+=|-=|&=)\s*(.+)$/.exec(text))) return { k: 'assign', name: m[1].toLowerCase(), op: m[2], expr: this.expr(m[3], line) };
+    if ((m = /^([A-Za-z_]\w*)\s*(=|\+=|-=|\*=|\/=|&=)\s*(.+)$/.exec(text))) return { k: 'assign', name: m[1].toLowerCase(), op: m[2], expr: this.expr(m[3], line) };
     if ((m = /^call\s+(.+)$/i.exec(text))) return { k: 'expr', expr: this.expr(m[1], line) };
     return { k: 'expr', expr: this.expr(text, line) };
   }
@@ -243,12 +345,78 @@ export class CodeModule {
             const cur = locals.has(s.name) ? locals.get(s.name) : this.get(s.name);
             value = evalNode({ k: 'bin', op: s.op[0], a: { k: 'lit', v: cur }, b: { k: 'lit', v: value } }, ctx);
           }
-          if (locals.has(s.name) || !this.has(s.name)) locals.set(s.name, value);
-          else this.set(s.name, value);
+          this.assign(s.name, value, locals);
+          break;
+        }
+        case 'exitloop': throw new LoopSignal(s.kind, false);
+        case 'continue': throw new LoopSignal(s.kind, true);
+        case 'for': {
+          const to = Number(evalNode(s.to, ctx));
+          const step = s.step ? Number(evalNode(s.step, ctx)) : 1;
+          if (s.local) locals.set(s.name, null);
+          this.assign(s.name, evalNode(s.from, ctx), locals);
+          for (;;) {
+            const cur = Number(this.read(s.name, locals));
+            if (step >= 0 ? cur > to : cur < to) break;
+            if (!this.iterate('for', s.body, locals, ctx)) break;
+            this.assign(s.name, Number(this.read(s.name, locals)) + step, locals);
+          }
+          break;
+        }
+        case 'foreach': {
+          const list = evalNode(s.list, ctx);
+          const items = Array.isArray(list) ? list : typeof list === 'string' ? [...list] : list == null ? [] : null;
+          if (!items) throw new Error('Code: For Each erwartet eine Liste');
+          if (s.local) locals.set(s.name, null);
+          for (const item of items) {
+            this.assign(s.name, item, locals);
+            if (!this.iterate('for', s.body, locals, ctx)) break;
+          }
+          break;
+        }
+        case 'loop': {
+          const holds = (c: LoopCond) => !c || toBool(evalNode(c.cond, ctx)) !== c.until;
+          while (holds(s.pre)) {
+            if (!this.iterate(s.kind, s.body, locals, ctx)) break;
+            if (!holds(s.post)) break;
+          }
+          break;
+        }
+        case 'select': {
+          const v = evalNode(s.subject, ctx);
+          const hit = s.cases.find(c => c.tests === null || c.tests.some(t => 'from' in t
+            ? compare(v, evalNode(t.from, ctx)) >= 0 && compare(v, evalNode(t.to, ctx)) <= 0
+            : toBool(evalNode({ k: 'bin', op: t.op, a: { k: 'lit', v }, b: t.expr }, ctx))));
+          if (hit) {
+            try {
+              this.run(hit.body, locals, ctx);
+            } catch (e) {
+              if (!(e instanceof LoopSignal && e.kind === 'select' && !e.cont)) throw e;
+            }
+          }
           break;
         }
       }
     }
+  }
+
+  /** Runs one loop iteration; false when the loop is left with Exit. */
+  private iterate(kind: LoopKind, body: Stmt[], locals: Map<string, unknown>, ctx: EvalContext): boolean {
+    if (++this.steps > 100000) throw new Error('Code: zu viele Anweisungen (Endlosschleife?)');
+    try {
+      this.run(body, locals, ctx);
+      return true;
+    } catch (e) {
+      if (e instanceof LoopSignal && e.kind === kind) return e.cont;
+      throw e;
+    }
+  }
+
+  private read(name: string, locals: Map<string, unknown>) { return locals.has(name) ? locals.get(name) : this.get(name); }
+
+  private assign(name: string, value: unknown, locals: Map<string, unknown>) {
+    if (locals.has(name) || !this.has(name)) locals.set(name, value);
+    else this.set(name, value);
   }
 
   private has(name: string) { return this.overlay?.has(name) || this.shared.has(name); }
