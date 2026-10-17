@@ -70,7 +70,9 @@ const valid = (xml: string) => spawnSync('xmllint', ['--noout', '--schema', xsd!
 }).status === 0;
 
 async function main() {
-  const tree = await (await fetch(`https://api.github.com/repos/${REPO}/git/trees/main?recursive=1`)).json() as { tree?: { path: string }[]; message?: string };
+  // on CI the API's anonymous rate limit is shared between runners: use the workflow token when there is one
+  const auth: Record<string, string> = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
+  const tree = await (await fetch(`https://api.github.com/repos/${REPO}/git/trees/main?recursive=1`, { headers: auth })).json() as { tree?: { path: string }[]; message?: string };
   if (!tree.tree) throw new Error(`GitHub: ${tree.message}`);
   const paths = tree.tree.map(t => t.path).filter(p => p.startsWith(PREFIX) && /\.rdlc?$/i.test(p) && p.includes(filter));
   // AL reports of the same layer: check the AL parser against what the compiler wrote into each layout

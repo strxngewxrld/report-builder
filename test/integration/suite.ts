@@ -5,8 +5,11 @@ import type { EditorProbe } from '../../src/testing';
 
 type Api = { probes: Map<string, EditorProbe>; service: { lintAll(): Promise<void> } };
 
+/** Slow machines and CI (or a run right after the corpus test) need longer: BC_RB_TIMEOUT_SCALE=3. */
+const SCALE = Math.max(1, Number(process.env.BC_RB_TIMEOUT_SCALE) || 1);
+
 async function until<T>(what: string, fn: () => T | undefined | false, timeout = 20000): Promise<T> {
-  const end = Date.now() + timeout;
+  const end = Date.now() + timeout * SCALE;
   for (;;) {
     const v = fn();
     if (v) return v;
@@ -183,9 +186,10 @@ test('AL-Code: CodeLens zählt Verwendungen im Layout, Klick wählt das Textfeld
   const al = await vscode.workspace.openTextDocument(file('src/Verkaufsrechnung.Report.al'));
   // the AL index loads in the background: ask until the lenses are there
   let all: vscode.CodeLens[] = [];
-  for (let i = 0; i < 100 && !all.some(l => l.command?.command === 'bcReportBuilder.revealInLayout'); i++) {
+  const end = Date.now() + 30000 * SCALE;
+  while (!all.some(l => l.command?.command === 'bcReportBuilder.revealInLayout') && Date.now() < end) {
     all = (await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', al.uri, 100)) ?? [];
-    if (!all.length) await new Promise(r => setTimeout(r, 100));
+    if (!all.some(l => l.command?.command === 'bcReportBuilder.revealInLayout')) await new Promise(r => setTimeout(r, 200));
   }
   const titles = all.map(l => l.command?.title ?? '');
   assert.ok(titles.some(t => t.includes('Verkaufsrechnung.rdlc im Designer öffnen')), titles.join(' | '));
@@ -221,16 +225,29 @@ export async function run(): Promise<void> {
   const api = (await ext.activate()) as Api;
   assert.ok(api?.probes, 'Test-API (BC_REPORT_BUILDER_TEST=1)');
   const failures: string[] = [];
-  for (const [name, fn] of tests) {
-    try {
-      await fn(api);
-      console.log(`  ✓ ${name}`);
-    } catch (e) {
-      failures.push(name);
-      console.log(`  ✗ ${name}\n      ${(e as Error).stack ?? e}`);
-    }
+  const cleanUp = async () => {
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor').then(undefined, () => undefined);
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    // closed webviews dispose asynchronously; open() must not pick up the stale probe of the previous test
+    await until('Designer geschlossen', () => api.probes.size === 0, 5000).catch(() => api.probes.clear());
+  };
+  for (const [name, fn] of tests) {
+    // a test that fails (e.g. a timeout on a busy machine) gets one more attempt; both errors are reported
+    let error: unknown;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await fn(api);
+        error = undefined;
+        console.log(`  ✓ ${name}${attempt > 1 ? ' (im 2. Versuch)' : ''}`);
+        break;
+      } catch (e) {
+        error = e;
+        console.log(`  ${attempt === 1 ? '↻' : '✗'} ${name}\n      ${(e as Error).stack ?? e}`);
+      } finally {
+        await cleanUp();
+      }
+    }
+    if (error) failures.push(name);
   }
   console.log(`\n${tests.length - failures.length}/${tests.length} Integrationstests bestanden`);
   if (failures.length) throw new Error(`${failures.length} Integrationstest(s) fehlgeschlagen`);

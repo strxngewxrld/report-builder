@@ -31,7 +31,7 @@ async function main() {
       extensionDevelopmentPath: root,
       extensionTestsPath: join(root, 'out/test/integration/suite.js'),
       launchArgs: [workspace, '--disable-extensions', '--user-data-dir', join(tmp, 'user'), '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust'],
-      extensionTestsEnv: { BC_REPORT_BUILDER_TEST: '1' },
+      extensionTestsEnv: { BC_REPORT_BUILDER_TEST: '1', BC_RB_TIMEOUT_SCALE: process.env.BC_RB_TIMEOUT_SCALE ?? '' },
     });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
