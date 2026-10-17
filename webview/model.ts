@@ -218,6 +218,8 @@ export interface SourceFormat {
   /** Original <ReportParametersLayout> and the parameter names it was written for. */
   parameterLayout?: { xml: string; names: string[] };
   declaration: string | null;
+  /** Elements the file writes empty as <X></X> and never as <X />; written back the same way. */
+  emptyPairs?: string[];
   eol: '\n' | '\r\n';
   finalNewline: boolean;
   bom: boolean;

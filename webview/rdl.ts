@@ -541,11 +541,19 @@ export function parseRdl(input: string, dom: XmlDom = browserDom): Report {
       names: elements(child(layout, 'GridLayoutDefinition', 'CellDefinitions'), 'CellDefinition').map(c => text(c, 'ParameterName') ?? ''),
     },
     declaration: decl,
+    emptyPairs: emptyPairTags(xml),
     eol: xml.includes('\r\n') ? '\r\n' : '\n',
     finalNewline: /\n\s*$/.test(xml),
     bom,
   };
   return report;
+}
+
+/** Tag names written empty as <X></X> in `xml` and never self-closing (the DOM cannot tell the two apart). */
+function emptyPairTags(xml: string): string[] {
+  const pairs = new Set(Array.from(xml.matchAll(/<([\w:.-]+)(?:\s[^>]*)?><\/\1>/g), m => m[1]));
+  for (const m of xml.matchAll(/<([\w:.-]+)(?:\s[^>]*)?\/>/g)) pairs.delete(m[1]);
+  return [...pairs];
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -869,7 +877,11 @@ export function serializeRdl(r: Report, dom: XmlDom = browserDom): string {
     if (k.startsWith('xmlns:')) inner = inner.split(` ${k}="${esc(v)}"`).join('');
   }
   const eol = src.eol ?? '\n';
-  const lines = [src.declaration === undefined ? '<?xml version="1.0" encoding="utf-8"?>' : src.declaration, prettyXml(body.slice(0, rootStart) + inner)]
+  let pretty = prettyXml(body.slice(0, rootStart) + inner);
+  for (const tag of src.emptyPairs ?? []) {
+    pretty = pretty.replace(new RegExp(`<${tag.replace(/\./g, '\\.')}((?:\\s[^>]*?)?) />`, 'g'), `<${tag}$1></${tag}>`);
+  }
+  const lines = [src.declaration === undefined ? '<?xml version="1.0" encoding="utf-8"?>' : src.declaration, pretty]
     .filter((x): x is string => x !== null);
   const textOut = lines.join('\n').replace(/\n/g, eol) + (src.finalNewline === false ? '' : eol);
   return (src.bom ? '﻿' : '') + textOut;
