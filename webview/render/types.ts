@@ -24,7 +24,16 @@ interface RBase {
   values?: [string, unknown][];
   /** KeepTogether: kept on one page if it fits. */
   keepTogether?: boolean;
+  /** Action on click (preview): evaluated URL, bookmark, or drillthrough target. */
+  action?: RAction;
+  /** Evaluated bookmark of this item (target of bookmark links). */
+  bookmark?: string;
 }
+
+export type RAction =
+  | { kind: 'hyperlink'; url: string }
+  | { kind: 'bookmarkLink'; bookmark: string }
+  | { kind: 'drillthrough'; report: string; parameters: [string, string][] };
 
 export interface RBox extends RBase {
   kind: 'box';

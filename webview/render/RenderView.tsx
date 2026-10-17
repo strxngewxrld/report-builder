@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent as RMouseEvent } from 'react';
-import { RNode, RTable } from './types';
+import { RAction, RNode, RTable } from './types';
 import { ChartView } from './ChartView';
 
 /** Pixels per inch and optional interaction (designer). */
@@ -19,7 +19,12 @@ export interface ViewOptions {
   /** Preview interactivity: drilldown toggle (RBox.toggle.key) and interactive sort (textbox name). */
   onToggle?: (key: string) => void;
   onSort?: (name: string) => void;
+  /** Preview: click on an item with an action (hyperlink, bookmark link, drillthrough). */
+  onAction?: (action: RAction) => void;
 }
+
+const actionTitle = (a: RAction) =>
+  a.kind === 'hyperlink' ? a.url : a.kind === 'bookmarkLink' ? `Gehe zu Lesezeichen „${a.bookmark}“` : `Drillthrough: ${a.report}`;
 
 /** The +/− box of a drilldown textbox and the sort arrows of interactive sorting (left out when printing). */
 function Interactive({ node }: { node: Extract<RNode, { kind: 'box' }> }) {
@@ -102,7 +107,11 @@ export function NodeView({ node, shift = 0, inCell = false }: { node: RNode; shi
     'data-seq': node.seq,
     ...(node.values ? { 'data-values': '' } : {}),
     ...(node.keepTogether ? { 'data-keep': '' } : {}),
-    onClick: o.onPick ? (e: RMouseEvent) => { e.stopPropagation(); o.onPick!(node.name, e); } : undefined,
+    ...(node.bookmark ? { 'data-bookmark': node.bookmark } : {}),
+    ...(node.action && o.onAction ? { title: actionTitle(node.action), 'data-action': '' } : {}),
+    onClick: o.onPick ? (e: RMouseEvent) => { e.stopPropagation(); o.onPick!(node.name, e); }
+      : node.action && o.onAction ? (e: RMouseEvent) => { e.stopPropagation(); o.onAction!(node.action!); }
+      : undefined,
   };
 
   switch (node.kind) {

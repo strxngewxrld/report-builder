@@ -187,3 +187,86 @@ export function setUserSort(item: { extra?: string[] }, expression: string): boo
   item.extra = i >= 0 ? extra.flatMap((x, k) => (k === i ? (next ? [next] : []) : [x])) : next ? [...extra, next] : extra;
   return true;
 }
+
+// ------------------------------------------------------------------------------------------------ actions, bookmarks
+
+/** The action of a textbox or image (<ActionInfo>): go to a URL, to a bookmark, or to another report (drillthrough). */
+export type ItemAction =
+  | { kind: 'none' }
+  | { kind: 'hyperlink' | 'bookmarkLink'; value: string }
+  | { kind: 'drillthrough'; report: string; parameters: { name: string; value: string }[] };
+
+const tagText = (xml: string, tag: string) => {
+  const m = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`).exec(xml);
+  return m ? decode(m[1]) : undefined;
+};
+
+/** The first action of the item; more than one action per item is not modelled (and kept as it is). */
+export function actionOf(item: { extra?: string[] }): ItemAction {
+  const info = item.extra?.find(x => isTag(x, 'ActionInfo'));
+  const action = info && /<Action>([\s\S]*?)<\/Action>/.exec(info)?.[1];
+  if (!action) return { kind: 'none' };
+  const link = tagText(action, 'Hyperlink');
+  if (link !== undefined) return { kind: 'hyperlink', value: link };
+  const mark = tagText(action, 'BookmarkLink');
+  if (mark !== undefined) return { kind: 'bookmarkLink', value: mark };
+  const dt = /<Drillthrough>([\s\S]*?)<\/Drillthrough>/.exec(action)?.[1];
+  if (dt !== undefined) {
+    const parameters = Array.from(dt.matchAll(/<Parameter\s+Name="([^"]*)"\s*>([\s\S]*?)<\/Parameter>/g),
+      m => ({ name: decode(m[1]), value: tagText(m[2], 'Value') ?? '' }));
+    return { kind: 'drillthrough', report: tagText(dt, 'ReportName') ?? '', parameters };
+  }
+  return { kind: 'none' };
+}
+
+const actionXml = (a: ItemAction): string => {
+  switch (a.kind) {
+    case 'none': return '';
+    case 'hyperlink': return `<Hyperlink>${encode(a.value)}</Hyperlink>`;
+    case 'bookmarkLink': return `<BookmarkLink>${encode(a.value)}</BookmarkLink>`;
+    case 'drillthrough': {
+      const params = a.parameters.filter(p => p.name.trim());
+      return `<Drillthrough><ReportName>${encode(a.report)}</ReportName>${params.length
+        ? `<Parameters>${params.map(p => `<Parameter Name="${encode(p.name.trim()).replace(/"/g, '&quot;')}"><Value>${encode(p.value)}</Value></Parameter>`).join('')}</Parameters>`
+        : ''}</Drillthrough>`;
+    }
+  }
+};
+
+/**
+ * Sets the item's action. An existing <ActionInfo> keeps everything but the content of its first <Action>; with
+ * 'none' the first action is removed (and <ActionInfo> when it is empty then). Returns false if nothing changed.
+ */
+export function setAction(item: { extra?: string[] }, action: ItemAction): boolean {
+  if (JSON.stringify(action) === JSON.stringify(actionOf(item))) return false;
+  const extra = item.extra ?? [];
+  const i = extra.findIndex(x => isTag(x, 'ActionInfo'));
+  const inner = actionXml(action);
+  let next: string;
+  if (i < 0) {
+    next = inner ? `<ActionInfo><Actions><Action>${inner}</Action></Actions></ActionInfo>` : '';
+  } else if (/<Action>[\s\S]*?<\/Action>/.test(extra[i])) {
+    next = extra[i].replace(/<Action>[\s\S]*?<\/Action>/, inner ? `<Action>${inner}</Action>` : '');
+    if (!/<Action>/.test(next)) next = '';
+  } else {
+    next = inner ? `<ActionInfo><Actions><Action>${inner}</Action></Actions></ActionInfo>` : '';
+  }
+  item.extra = i >= 0 ? extra.flatMap((x, k) => (k === i ? (next ? [next] : []) : [x])) : next ? [...extra, next] : extra;
+  return true;
+}
+
+/** Bookmark of an item (target of BookmarkLink actions), "" if none. */
+export function bookmarkOf(item: { extra?: string[] }): string {
+  const b = item.extra?.find(x => isTag(x, 'Bookmark'));
+  return b ? tagText(b, 'Bookmark') ?? '' : '';
+}
+
+export function setBookmark(item: { extra?: string[] }, value: string): boolean {
+  value = value.trim();
+  if (value === bookmarkOf(item)) return false;
+  const extra = (item.extra ?? []);
+  const i = extra.findIndex(x => isTag(x, 'Bookmark'));
+  const next = value ? `<Bookmark>${encode(value)}</Bookmark>` : '';
+  item.extra = i >= 0 ? extra.flatMap((x, k) => (k === i ? (next ? [next] : []) : [x])) : next ? [...extra, next] : extra;
+  return true;
+}

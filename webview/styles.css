@@ -307,6 +307,7 @@ button.link:hover { background: none; text-decoration: underline; }
 .prop-cat:first-child .prop-cat-head { border-top-color: transparent; }
 .prop-cat-body { padding: 4px 0 8px; }
 .prop-row { display: grid; grid-template-columns: minmax(80px, 38%) 1fr; align-items: center; gap: 8px; padding: 2px 12px; min-height: 28px; }
+.prop-row.action-param { grid-template-columns: minmax(80px, 38%) 1fr auto; }
 .prop-label { color: var(--pane-fg); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .85; }
 .prop-value { display: flex; min-width: 0; }
 .prop-value > input:not([type=checkbox]), .prop-value > select, .prop-value > textarea { width: 100%; }
@@ -531,3 +532,5 @@ table.grid input, table.grid select { width: 100%; }
 .grouping-sub { font-size: 11px; color: var(--muted); padding: 4px 6px 2px; text-transform: uppercase; letter-spacing: .02em; }
 .grouping-list.column-groups { padding-bottom: 0; }
 .item.table .header-cell { background-color: color-mix(in srgb, var(--select) 6%, transparent); }
+
+.preview [data-action] { cursor: pointer; }

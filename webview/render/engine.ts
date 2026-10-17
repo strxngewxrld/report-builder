@@ -251,7 +251,7 @@ class Engine {
     };
     const hidden = this.visible(child(el, 'Visibility'), ctx, ctx, `${name} (Sichtbarkeit)`);
     const keepTogether = (text(el, 'KeepTogether') ?? '').toLowerCase() === 'true';
-    const base = { key: this.key(), name, ...box, hidden, seq: this.code?.version ?? 0, keepTogether };
+    const base = { key: this.key(), name, ...box, hidden, seq: this.code?.version ?? 0, keepTogether, ...this.actionInfo(el, ctx, name) };
     switch (el.localName) {
       case 'Textbox': return this.textbox(el, ctx, base);
       case 'Rectangle': {
@@ -272,6 +272,28 @@ class Engine {
       case 'Chart': return this.chart(el, ctx, base);
       default: return { ...base, kind: 'placeholder', css: {}, label: `${PLACEHOLDER[el.localName] ?? el.localName} „${name}“` };
     }
+  }
+
+  /** Action (first <Action> of <ActionInfo>) and bookmark of an item, evaluated; nothing in design mode. */
+  private actionInfo(el: Element, ctx: EvalContext, name: string): Pick<RNode, 'action' | 'bookmark'> {
+    if (this.design) return {};
+    const out: Pick<RNode, 'action' | 'bookmark'> = {};
+    const bookmark = text(el, 'Bookmark');
+    if (bookmark) out.bookmark = toStr(this.eval(bookmark, ctx, `${name} (Lesezeichen)`));
+    const action = elements(child(el, 'ActionInfo', 'Actions'), 'Action')[0];
+    const where = `${name} (Aktion)`;
+    const link = text(action, 'Hyperlink');
+    const mark = text(action, 'BookmarkLink');
+    const dt = child(action, 'Drillthrough');
+    if (link) out.action = { kind: 'hyperlink', url: toStr(this.eval(link, ctx, where)) };
+    else if (mark) out.action = { kind: 'bookmarkLink', bookmark: toStr(this.eval(mark, ctx, where)) };
+    else if (dt) {
+      out.action = {
+        kind: 'drillthrough', report: toStr(this.eval(text(dt, 'ReportName') ?? '', ctx, where)),
+        parameters: elements(child(dt, 'Parameters'), 'Parameter').map(p => [p.getAttribute('Name') ?? '', toStr(this.eval(text(p, 'Value') ?? '', ctx, where))]),
+      };
+    }
+    return out;
   }
 
   private imageSrc(el: Element, ctx: EvalContext, name: string): string {
