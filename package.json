@@ -1,0 +1,1463 @@
+{
+  "name": "bc-report-builder",
+  "version": "0.1.0",
+  "description": "Visueller Designer für Business-Central-RDLC-Layouts (.rdlc/.rdl) mit Dokumentgliederung – inspiriert vom Microsoft Report Builder und dem Visual-Studio-Berichts-Designer",
+  "main": "./out/extension.js",
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node esbuild.mjs --test && node --test out/test/*.test.js",
+    "package": "npm run build && vsce package --no-dependencies",
+    "test:corpus": "node esbuild.mjs --corpus && node --enable-source-maps out/corpus.js",
+    "test:vscode": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/vscode": "^1.90.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
+    "@xmldom/xmldom": "^0.8.10",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  },
+  "displayName": "Business Central Report Builder",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0b5f86",
+    "theme": "dark"
+  },
+  "publisher": "tknueppe",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.rdlc",
+    "workspaceContains:**/*.rdl",
+    "onLanguage:al"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "bcReportBuilder.designer",
+        "displayName": "Business Central Report Builder",
+        "selector": [
+          {
+            "filenamePattern": "*.rdl"
+          },
+          {
+            "filenamePattern": "*.rdlc"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bcReportBuilder.newReport",
+        "title": "Neues Berichtslayout…",
+        "category": "Business Central Report Builder",
+        "icon": "$(new-file)",
+        "shortTitle": "Berichtslayout (RDLC)"
+      },
+      {
+        "command": "bcReportBuilder.showPreview",
+        "title": "Vorschau anzeigen",
+        "category": "Business Central Report Builder",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "bcReportBuilder.showDesign",
+        "title": "Entwurf anzeigen",
+        "category": "Business Central Report Builder",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bcReportBuilder.togglePreview",
+        "title": "Entwurf/Vorschau umschalten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.openAsXml",
+        "title": "Als XML öffnen",
+        "category": "Business Central Report Builder",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "bcReportBuilder.openInDesigner",
+        "title": "Im Designer öffnen",
+        "category": "Business Central Report Builder",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "bcReportBuilder.revealAl",
+        "title": "AL-Report öffnen",
+        "category": "Business Central Report Builder",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "bcReportBuilder.reportProperties",
+        "title": "Berichtseigenschaften…",
+        "category": "Business Central Report Builder",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "bcReportBuilder.importSampleData",
+        "title": "Vorschaudaten laden (Excel, CSV, JSON)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "bcReportBuilder.print",
+        "title": "Drucken / Als PDF speichern…",
+        "category": "Business Central Report Builder",
+        "icon": "$(file-pdf)"
+      },
+      {
+        "command": "bcReportBuilder.exportHtml",
+        "title": "Als HTML exportieren…",
+        "category": "Business Central Report Builder",
+        "icon": "$(export)"
+      },
+      {
+        "command": "bcReportBuilder.zoom",
+        "title": "Zoom…",
+        "category": "Business Central Report Builder",
+        "icon": "$(zoom-in)"
+      },
+      {
+        "command": "bcReportBuilder.zoomIn",
+        "title": "Vergrößern",
+        "category": "Business Central Report Builder",
+        "icon": "$(zoom-in)"
+      },
+      {
+        "command": "bcReportBuilder.zoomOut",
+        "title": "Verkleinern",
+        "category": "Business Central Report Builder",
+        "icon": "$(zoom-out)"
+      },
+      {
+        "command": "bcReportBuilder.zoomReset",
+        "title": "Zoom zurücksetzen (100 %)",
+        "category": "Business Central Report Builder",
+        "icon": "$(screen-normal)"
+      },
+      {
+        "command": "bcReportBuilder.changeUnit",
+        "title": "Maßeinheit ändern…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleOutline",
+        "title": "Dokumentgliederung",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleReportData",
+        "title": "Berichtsdaten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleProperties",
+        "title": "Eigenschaften",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleRuler",
+        "title": "Lineal",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleGrid",
+        "title": "Raster",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleSnap",
+        "title": "Am Raster ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleHeader",
+        "title": "Seitenkopf",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.toggleFooter",
+        "title": "Seitenfuß",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.insert.textbox",
+        "title": "Textfeld einfügen",
+        "category": "Business Central Report Builder",
+        "icon": "$(symbol-text)"
+      },
+      {
+        "command": "bcReportBuilder.insert.table",
+        "title": "Tabelle einfügen",
+        "category": "Business Central Report Builder",
+        "icon": "$(table)"
+      },
+      {
+        "command": "bcReportBuilder.insert.image",
+        "title": "Bild einfügen",
+        "category": "Business Central Report Builder",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "bcReportBuilder.insert.line",
+        "title": "Linie einfügen",
+        "category": "Business Central Report Builder",
+        "icon": "$(chrome-minimize)"
+      },
+      {
+        "command": "bcReportBuilder.insert.rectangle",
+        "title": "Rechteck einfügen",
+        "category": "Business Central Report Builder",
+        "icon": "$(primitive-square)"
+      },
+      {
+        "command": "bcReportBuilder.editText",
+        "title": "Text bearbeiten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.editExpression",
+        "title": "Ausdruck…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.cut",
+        "title": "Ausschneiden",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.copy",
+        "title": "Kopieren",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.paste",
+        "title": "Einfügen",
+        "category": "Business Central Report Builder",
+        "enablement": "bcReportBuilder.canPaste"
+      },
+      {
+        "command": "bcReportBuilder.delete",
+        "title": "Löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.bringToFront",
+        "title": "In den Vordergrund",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.sendToBack",
+        "title": "In den Hintergrund",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertColumnLeft",
+        "title": "Spalte links einfügen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertColumnRight",
+        "title": "Spalte rechts einfügen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteColumn",
+        "title": "Spalte löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.toggleHeaderRow",
+        "title": "Kopfzeile",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.toggleFooterRow",
+        "title": "Fußzeile",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.select",
+        "title": "Tabelle auswählen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.goToAlDefinition",
+        "title": "Zur Definition wechseln",
+        "category": "Business Central Report Builder",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "bcReportBuilder.copyExpression",
+        "title": "Ausdruck kopieren",
+        "category": "Business Central Report Builder",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "bcReportBuilder.data.edit",
+        "title": "Bearbeiten…",
+        "category": "Business Central Report Builder",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "bcReportBuilder.data.delete",
+        "title": "Löschen",
+        "category": "Business Central Report Builder",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "bcReportBuilder.createLabel",
+        "title": "Als AL-Label anlegen…",
+        "category": "Business Central Report Builder",
+        "icon": "$(symbol-key)"
+      },
+      {
+        "command": "bcReportBuilder.addColumns",
+        "title": "Felder als Spalten hinzufügen…",
+        "category": "Business Central Report Builder",
+        "icon": "$(add)"
+      },
+      {
+        "command": "bcReportBuilder.buildAl",
+        "title": "Projekt erstellen (AL: Package)",
+        "category": "Business Central Report Builder",
+        "icon": "$(package)"
+      },
+      {
+        "command": "bcReportBuilder.runInBc",
+        "title": "Report in Business Central ausführen",
+        "category": "Business Central Report Builder",
+        "icon": "$(play)"
+      },
+      {
+        "command": "bcReportBuilder.editCode",
+        "title": "Code-Block bearbeiten (VB)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(code)"
+      },
+      {
+        "command": "bcReportBuilder.revealInLayout",
+        "title": "Im Layout anzeigen",
+        "category": "Business Central Report Builder",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignLeft",
+        "title": "Links ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignCenter",
+        "title": "Zentriert ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignRight",
+        "title": "Rechts ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignTop",
+        "title": "Oben ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignMiddle",
+        "title": "Mittig ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.alignBottom",
+        "title": "Unten ausrichten",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.sameWidth",
+        "title": "Gleiche Breite",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.sameHeight",
+        "title": "Gleiche Höhe",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.sameSize",
+        "title": "Gleiche Größe",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.distributeHorizontal",
+        "title": "Horizontal gleichmäßig verteilen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.distributeVertical",
+        "title": "Vertikal gleichmäßig verteilen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.centerHorizontal",
+        "title": "Im Container horizontal zentrieren",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.layout.centerVertical",
+        "title": "Im Container vertikal zentrieren",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.addParentGroup",
+        "title": "Übergeordnete Gruppe hinzufügen…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.addChildGroup",
+        "title": "Untergeordnete Gruppe hinzufügen…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.groupProperties",
+        "title": "Gruppeneigenschaften…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.addGroupHeader",
+        "title": "Gruppenkopf hinzufügen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.addGroupFooter",
+        "title": "Gruppenfuß hinzufügen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteGroup",
+        "title": "Gruppe mit Kopf-/Fußzeilen löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteGroupOnly",
+        "title": "Nur Gruppe löschen (Zeilen behalten)",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertRowAbove",
+        "title": "Oberhalb (innerhalb der Gruppe)",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertRowBelow",
+        "title": "Unterhalb (innerhalb der Gruppe)",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertRowOutsideAbove",
+        "title": "Oberhalb (außerhalb der Gruppe)",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.insertRowOutsideBelow",
+        "title": "Unterhalb (außerhalb der Gruppe)",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteRow",
+        "title": "Zeile löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.mergeCells",
+        "title": "Zellen verbinden",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.splitCell",
+        "title": "Zelle teilen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.exportExcel",
+        "title": "Als Excel exportieren (.xlsx)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(table)"
+      },
+      {
+        "command": "bcReportBuilder.exportWord",
+        "title": "Als Word exportieren (.docx)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "bcReportBuilder.insert.chart",
+        "title": "Diagramm einfügen…",
+        "category": "Business Central Report Builder",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "bcReportBuilder.chart.properties",
+        "title": "Diagrammeigenschaften…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.insert.matrix",
+        "title": "Matrix einfügen…",
+        "category": "Business Central Report Builder",
+        "icon": "$(symbol-array)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "bcReportBuilder.insert",
+        "label": "Einfügen",
+        "icon": "$(add)"
+      },
+      {
+        "id": "bcReportBuilder.view",
+        "label": "Ansicht"
+      },
+      {
+        "id": "bcReportBuilder.table",
+        "label": "Tabelle"
+      },
+      {
+        "id": "bcReportBuilder.layout",
+        "label": "Ausrichten und anordnen"
+      },
+      {
+        "id": "bcReportBuilder.tableRows",
+        "label": "Zeile einfügen"
+      },
+      {
+        "id": "bcReportBuilder.tableGroups",
+        "label": "Gruppe"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "bcReportBuilder.openInDesigner",
+          "when": "(resourceExtname == .rdlc || resourceExtname == .rdl) && activeEditor == workbench.editors.files.textFileEditor"
+        },
+        {
+          "command": "bcReportBuilder.showPreview",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.showDesign",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
+          "command": "bcReportBuilder.print",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
+          "command": "bcReportBuilder.exportHtml",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
+          "command": "bcReportBuilder.revealAl",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.hasAlReport"
+        },
+        {
+          "command": "bcReportBuilder.editText",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.editExpression",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.cut",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.copy",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.paste",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.delete",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.bringToFront",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.sendToBack",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.table.insertColumnLeft",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.table.insertColumnRight",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumn",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.table.toggleHeaderRow",
+          "when": "false",
+          "toggled": "tableHasHeader"
+        },
+        {
+          "command": "bcReportBuilder.table.toggleFooterRow",
+          "when": "false",
+          "toggled": "tableHasFooter"
+        },
+        {
+          "command": "bcReportBuilder.table.select",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.togglePreview",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.openAsXml",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.reportProperties",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.importSampleData",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.zoom",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.zoomIn",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.zoomOut",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.zoomReset",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.changeUnit",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.toggleOutline",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "bcReportBuilder.outlineVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleReportData",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "bcReportBuilder.reportDataVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleProperties",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "bcReportBuilder.propertiesVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleRuler",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "config.bcReportBuilder.designer.showRuler"
+        },
+        {
+          "command": "bcReportBuilder.toggleGrid",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "config.bcReportBuilder.designer.showGrid"
+        },
+        {
+          "command": "bcReportBuilder.toggleSnap",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "config.bcReportBuilder.designer.snapToGrid"
+        },
+        {
+          "command": "bcReportBuilder.toggleHeader",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "bcReportBuilder.hasHeader"
+        },
+        {
+          "command": "bcReportBuilder.toggleFooter",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "toggled": "bcReportBuilder.hasFooter"
+        },
+        {
+          "command": "bcReportBuilder.insert.textbox",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.insert.table",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.insert.image",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.insert.line",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.insert.rectangle",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.goToAlDefinition",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.copyExpression",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.data.edit",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.data.delete",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.createLabel",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.addColumns",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.revealInLayout",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.buildAl",
+          "when": "editorLangId == al || bcReportBuilder.hasAlReport"
+        },
+        {
+          "command": "bcReportBuilder.runInBc",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.hasAlReport"
+        },
+        {
+          "command": "bcReportBuilder.editCode",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignLeft",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignCenter",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignRight",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignTop",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignMiddle",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignBottom",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameWidth",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameHeight",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameSize",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.distributeHorizontal",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.distributeVertical",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.centerHorizontal",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.layout.centerVertical",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.addParentGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.addChildGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.groupProperties",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.addGroupHeader",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.addGroupFooter",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteGroupOnly",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowAbove",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowBelow",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowOutsideAbove",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowOutsideBelow",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteRow",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.mergeCells",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.splitCell",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.exportExcel",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
+          "command": "bcReportBuilder.exportWord",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
+          "command": "bcReportBuilder.insert.chart",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.chart.properties",
+          "when": "false"
+        },
+        {
+          "command": "bcReportBuilder.insert.matrix",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        }
+      ],
+      "editor/title": [
+        {
+          "submenu": "bcReportBuilder.insert",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcReportBuilder.showPreview",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcReportBuilder.showDesign",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "navigation@2"
+        },
+        {
+          "command": "bcReportBuilder.print",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "navigation@3"
+        },
+        {
+          "command": "bcReportBuilder.openAsXml",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "navigation@9"
+        },
+        {
+          "command": "bcReportBuilder.openInDesigner",
+          "when": "(resourceExtname == .rdlc || resourceExtname == .rdl) && activeEditor == workbench.editors.files.textFileEditor",
+          "group": "navigation"
+        },
+        {
+          "submenu": "bcReportBuilder.view",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "1_view@1"
+        },
+        {
+          "command": "bcReportBuilder.zoomIn",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "1_view@2"
+        },
+        {
+          "command": "bcReportBuilder.zoomOut",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "1_view@3"
+        },
+        {
+          "command": "bcReportBuilder.zoomReset",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "1_view@4"
+        },
+        {
+          "command": "bcReportBuilder.reportProperties",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "2_report@1"
+        },
+        {
+          "command": "bcReportBuilder.toggleHeader",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "2_report@2",
+          "toggled": "bcReportBuilder.hasHeader"
+        },
+        {
+          "command": "bcReportBuilder.toggleFooter",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "2_report@3",
+          "toggled": "bcReportBuilder.hasFooter"
+        },
+        {
+          "command": "bcReportBuilder.importSampleData",
+          "when": "activeCustomEditorId == bcReportBuilder.designer",
+          "group": "3_data@1"
+        },
+        {
+          "command": "bcReportBuilder.exportHtml",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "3_data@2"
+        },
+        {
+          "command": "bcReportBuilder.revealAl",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.hasAlReport",
+          "group": "3_data@3"
+        },
+        {
+          "command": "bcReportBuilder.runInBc",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.hasAlReport",
+          "group": "navigation@4"
+        },
+        {
+          "command": "bcReportBuilder.buildAl",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.hasAlReport",
+          "group": "3_data@4"
+        },
+        {
+          "command": "bcReportBuilder.editCode",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview",
+          "group": "2_report@4"
+        },
+        {
+          "submenu": "bcReportBuilder.layout",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview && bcReportBuilder.hasSelection",
+          "group": "2_report@0"
+        },
+        {
+          "command": "bcReportBuilder.exportExcel",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "3_data@2"
+        },
+        {
+          "command": "bcReportBuilder.exportWord",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "3_data@2"
+        }
+      ],
+      "bcReportBuilder.insert": [
+        {
+          "command": "bcReportBuilder.insert.textbox",
+          "group": "1_items@0"
+        },
+        {
+          "command": "bcReportBuilder.insert.table",
+          "group": "1_items@1"
+        },
+        {
+          "command": "bcReportBuilder.insert.image",
+          "group": "1_items@2"
+        },
+        {
+          "command": "bcReportBuilder.insert.line",
+          "group": "1_items@3"
+        },
+        {
+          "command": "bcReportBuilder.insert.rectangle",
+          "group": "1_items@4"
+        },
+        {
+          "command": "bcReportBuilder.insert.chart",
+          "group": "2_regions@1"
+        },
+        {
+          "command": "bcReportBuilder.insert.matrix",
+          "group": "2_regions@0"
+        }
+      ],
+      "bcReportBuilder.view": [
+        {
+          "command": "bcReportBuilder.toggleOutline",
+          "group": "1_panes@1",
+          "toggled": "bcReportBuilder.outlineVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleReportData",
+          "group": "1_panes@2",
+          "toggled": "bcReportBuilder.reportDataVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleProperties",
+          "group": "1_panes@3",
+          "toggled": "bcReportBuilder.propertiesVisible"
+        },
+        {
+          "command": "bcReportBuilder.toggleRuler",
+          "group": "2_surface@1",
+          "toggled": "config.bcReportBuilder.designer.showRuler"
+        },
+        {
+          "command": "bcReportBuilder.toggleGrid",
+          "group": "2_surface@2",
+          "toggled": "config.bcReportBuilder.designer.showGrid"
+        },
+        {
+          "command": "bcReportBuilder.toggleSnap",
+          "group": "2_surface@3",
+          "toggled": "config.bcReportBuilder.designer.snapToGrid"
+        }
+      ],
+      "bcReportBuilder.table": [
+        {
+          "command": "bcReportBuilder.table.insertColumnLeft",
+          "group": "1_col@1"
+        },
+        {
+          "command": "bcReportBuilder.table.insertColumnRight",
+          "group": "1_col@2"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumn",
+          "when": "tableColumns > 1",
+          "group": "1_col@3"
+        },
+        {
+          "command": "bcReportBuilder.table.toggleHeaderRow",
+          "group": "2_row@1",
+          "toggled": "tableHasHeader"
+        },
+        {
+          "command": "bcReportBuilder.table.toggleFooterRow",
+          "group": "2_row@2",
+          "toggled": "tableHasFooter"
+        },
+        {
+          "command": "bcReportBuilder.table.select",
+          "when": "itemType != table",
+          "group": "3_sel@1"
+        },
+        {
+          "submenu": "bcReportBuilder.tableRows",
+          "when": "rowId",
+          "group": "0_rows@1"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteRow",
+          "when": "rowId",
+          "group": "0_rows@2"
+        },
+        {
+          "submenu": "bcReportBuilder.tableGroups",
+          "group": "0_groups@1"
+        },
+        {
+          "command": "bcReportBuilder.table.mergeCells",
+          "when": "canMerge",
+          "group": "4_cells@1"
+        },
+        {
+          "command": "bcReportBuilder.table.splitCell",
+          "when": "merged",
+          "group": "4_cells@2"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "bcReportBuilder.editText",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && itemType == textbox",
+          "group": "0_text@1"
+        },
+        {
+          "command": "bcReportBuilder.editExpression",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && itemType == textbox",
+          "group": "0_text@2"
+        },
+        {
+          "submenu": "bcReportBuilder.table",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && inTable",
+          "group": "1_table@1"
+        },
+        {
+          "command": "bcReportBuilder.cut",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned",
+          "group": "2_clipboard@1"
+        },
+        {
+          "command": "bcReportBuilder.copy",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned",
+          "group": "2_clipboard@2"
+        },
+        {
+          "command": "bcReportBuilder.paste",
+          "when": "webviewId == 'bcReportBuilder.designer' && (webviewSection == item || webviewSection == section)",
+          "group": "2_clipboard@3"
+        },
+        {
+          "command": "bcReportBuilder.delete",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item",
+          "group": "2_clipboard@4"
+        },
+        {
+          "command": "bcReportBuilder.bringToFront",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned",
+          "group": "3_arrange@1"
+        },
+        {
+          "command": "bcReportBuilder.sendToBack",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned",
+          "group": "3_arrange@2"
+        },
+        {
+          "submenu": "bcReportBuilder.insert",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == section",
+          "group": "1_insert@1"
+        },
+        {
+          "command": "bcReportBuilder.toggleHeader",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == section",
+          "group": "4_report@1",
+          "toggled": "bcReportBuilder.hasHeader"
+        },
+        {
+          "command": "bcReportBuilder.toggleFooter",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == section",
+          "group": "4_report@2",
+          "toggled": "bcReportBuilder.hasFooter"
+        },
+        {
+          "command": "bcReportBuilder.reportProperties",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == section",
+          "group": "4_report@3"
+        },
+        {
+          "command": "bcReportBuilder.goToAlDefinition",
+          "when": "webviewId == 'bcReportBuilder.designer' && (webviewSection == alSymbol || webviewSection == alDataItem)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bcReportBuilder.data.edit",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == dataEntry",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "bcReportBuilder.importSampleData",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == dataEntry && entryKind == dataSet",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "bcReportBuilder.copyExpression",
+          "when": "webviewId == 'bcReportBuilder.designer' && expression",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "bcReportBuilder.data.delete",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == dataEntry",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "bcReportBuilder.createLabel",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && literalText",
+          "group": "0_text@3"
+        },
+        {
+          "command": "bcReportBuilder.addColumns",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == alDataItem",
+          "group": "navigation@2"
+        },
+        {
+          "submenu": "bcReportBuilder.layout",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && positioned && selectionCount > 1",
+          "group": "3_arrange@0"
+        },
+        {
+          "command": "bcReportBuilder.chart.properties",
+          "when": "webviewId == 'bcReportBuilder.designer' && webviewSection == item && rawKind == Chart",
+          "group": "0_text@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "bcReportBuilder.openInDesigner",
+          "when": "(resourceExtname == .rdlc || resourceExtname == .rdl) && !explorerResourceIsFolder",
+          "group": "navigation@20"
+        },
+        {
+          "command": "bcReportBuilder.openAsXml",
+          "when": "(resourceExtname == .rdlc || resourceExtname == .rdl) && !explorerResourceIsFolder",
+          "group": "navigation@21"
+        },
+        {
+          "command": "bcReportBuilder.newReport",
+          "when": "explorerResourceIsFolder",
+          "group": "1_bcReportBuilder@1"
+        }
+      ],
+      "file/newFile": [
+        {
+          "command": "bcReportBuilder.newReport",
+          "group": "file"
+        }
+      ],
+      "bcReportBuilder.layout": [
+        {
+          "command": "bcReportBuilder.layout.alignLeft",
+          "group": "1_align@1"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignCenter",
+          "group": "1_align@2"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignRight",
+          "group": "1_align@3"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignTop",
+          "group": "2_valign@1"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignMiddle",
+          "group": "2_valign@2"
+        },
+        {
+          "command": "bcReportBuilder.layout.alignBottom",
+          "group": "2_valign@3"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameWidth",
+          "group": "3_size@1"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameHeight",
+          "group": "3_size@2"
+        },
+        {
+          "command": "bcReportBuilder.layout.sameSize",
+          "group": "3_size@3"
+        },
+        {
+          "command": "bcReportBuilder.layout.distributeHorizontal",
+          "group": "4_spacing@1"
+        },
+        {
+          "command": "bcReportBuilder.layout.distributeVertical",
+          "group": "4_spacing@2"
+        },
+        {
+          "command": "bcReportBuilder.layout.centerHorizontal",
+          "group": "5_center@1"
+        },
+        {
+          "command": "bcReportBuilder.layout.centerVertical",
+          "group": "5_center@2"
+        }
+      ],
+      "bcReportBuilder.tableRows": [
+        {
+          "command": "bcReportBuilder.table.insertRowAbove",
+          "group": "1_in@1"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowBelow",
+          "group": "1_in@2"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowOutsideAbove",
+          "group": "2_out@1"
+        },
+        {
+          "command": "bcReportBuilder.table.insertRowOutsideBelow",
+          "group": "2_out@2"
+        }
+      ],
+      "bcReportBuilder.tableGroups": [
+        {
+          "command": "bcReportBuilder.table.addParentGroup",
+          "group": "1_add@1"
+        },
+        {
+          "command": "bcReportBuilder.table.addChildGroup",
+          "group": "1_add@2"
+        },
+        {
+          "command": "bcReportBuilder.table.groupProperties",
+          "when": "inGroup",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "bcReportBuilder.table.addGroupHeader",
+          "when": "inGroup",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "bcReportBuilder.table.addGroupFooter",
+          "when": "inGroup",
+          "group": "2_edit@3"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteGroup",
+          "when": "inGroup",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteGroupOnly",
+          "when": "inGroup",
+          "group": "3_delete@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "bcReportBuilder.togglePreview",
+        "key": "f5",
+        "when": "activeCustomEditorId == bcReportBuilder.designer"
+      },
+      {
+        "command": "bcReportBuilder.zoomIn",
+        "key": "ctrl+alt+=",
+        "mac": "cmd+alt+=",
+        "when": "activeCustomEditorId == bcReportBuilder.designer"
+      },
+      {
+        "command": "bcReportBuilder.zoomOut",
+        "key": "ctrl+alt+-",
+        "mac": "cmd+alt+-",
+        "when": "activeCustomEditorId == bcReportBuilder.designer"
+      },
+      {
+        "command": "bcReportBuilder.zoomReset",
+        "key": "ctrl+alt+0",
+        "mac": "cmd+alt+0",
+        "when": "activeCustomEditorId == bcReportBuilder.designer"
+      }
+    ],
+    "configuration": {
+      "title": "Business Central Report Builder",
+      "properties": {
+        "bcReportBuilder.designer.showGrid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Raster auf der Entwurfsfläche anzeigen."
+        },
+        "bcReportBuilder.designer.snapToGrid": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Elemente beim Verschieben und Aufziehen am Raster ausrichten (mit gedrückter `Alt`-Taste frei)."
+        },
+        "bcReportBuilder.designer.showRuler": {
+          "type": "boolean",
+          "default": true,
+          "description": "Lineal über der Entwurfsfläche anzeigen."
+        },
+        "bcReportBuilder.designer.defaultZoom": {
+          "type": "number",
+          "default": 1,
+          "enum": [
+            0.5,
+            0.75,
+            1,
+            1.25,
+            1.5,
+            2
+          ],
+          "enumItemLabels": [
+            "50 %",
+            "75 %",
+            "100 %",
+            "125 %",
+            "150 %",
+            "200 %"
+          ],
+          "description": "Zoomstufe, mit der neu geöffnete Layouts angezeigt werden."
+        }
+      }
+    }
+  },
+  "keywords": [
+    "Business Central",
+    "AL",
+    "RDLC",
+    "RDL",
+    "Report",
+    "Layout"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  }
+}

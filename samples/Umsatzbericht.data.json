@@ -1,0 +1,12 @@
+{
+  "Umsaetze": [
+    { "Region": "Nord", "Kunde": "Hansa Logistik GmbH", "Bestelldatum": "2026-01-14", "Menge": 12, "Umsatz": 4380.5 },
+    { "Region": "Nord", "Kunde": "Elbtal Feinkost", "Bestelldatum": "2026-02-03", "Menge": 3, "Umsatz": 612.0 },
+    { "Region": "Süd", "Kunde": "Alpenblick AG", "Bestelldatum": "2026-02-21", "Menge": 25, "Umsatz": 9875.0 },
+    { "Region": "Süd", "Kunde": "Bergmann & Söhne", "Bestelldatum": "2026-03-09", "Menge": 7, "Umsatz": 1540.25 },
+    { "Region": "West", "Kunde": "Rheinwerk Solutions", "Bestelldatum": "2026-03-30", "Menge": 18, "Umsatz": 6210.0 },
+    { "Region": "West", "Kunde": "Hansa Logistik GmbH", "Bestelldatum": "2026-04-12", "Menge": 2, "Umsatz": 389.9 },
+    { "Region": "Ost", "Kunde": "Spreewald Handel", "Bestelldatum": "2026-05-05", "Menge": 40, "Umsatz": 12400.0 },
+    { "Region": "Ost", "Kunde": "Elbtal Feinkost", "Bestelldatum": "2026-06-17", "Menge": 9, "Umsatz": 2115.75 }
+  ]
+}

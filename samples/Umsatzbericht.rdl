@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report MustUnderstand="df" xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:df="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition/defaultfontfamily">
+  <df:DefaultFontFamily>Segoe UI</df:DefaultFontFamily>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="Vertrieb">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=localhost;Initial Catalog=Vertrieb</ConnectString>
+        <IntegratedSecurity>true</IntegratedSecurity>
+      </ConnectionProperties>
+      <rd:SecurityType>Integrated</rd:SecurityType>
+      <rd:DataSourceID>5b2f0c1e-3a43-4f5e-9c39-0f0d7e3c2a11</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="Umsaetze">
+      <Query>
+        <DataSourceName>Vertrieb</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@Jahr">
+            <Value>=Parameters!Jahr.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>SELECT Region, Kunde, Bestelldatum, Menge, Umsatz
+FROM dbo.Bestellungen
+WHERE YEAR(Bestelldatum) = @Jahr</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="Region"><DataField>Region</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="Kunde"><DataField>Kunde</DataField><rd:TypeName>System.String</rd:TypeName></Field>
+        <Field Name="Bestelldatum"><DataField>Bestelldatum</DataField><rd:TypeName>System.DateTime</rd:TypeName></Field>
+        <Field Name="Menge"><DataField>Menge</DataField><rd:TypeName>System.Int32</rd:TypeName></Field>
+        <Field Name="Umsatz"><DataField>Umsatz</DataField><rd:TypeName>System.Decimal</rd:TypeName></Field>
+        <Field Name="Durchschnittspreis"><Value>=Fields!Umsatz.Value / Fields!Menge.Value</Value><rd:TypeName>System.Decimal</rd:TypeName></Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Textbox Name="Titel">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Umsatzbericht " &amp; Parameters!Jahr.Value</Value>
+                    <Style><FontFamily>Segoe UI Light</FontFamily><FontSize>20pt</FontSize><Color>#1F4E79</Color></Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <Top>0cm</Top><Left>0cm</Left><Height>1.0cm</Height><Width>16cm</Width>
+            <Style><Border><Style>None</Style></Border><VerticalAlign>Middle</VerticalAlign><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style>
+          </Textbox>
+          <Textbox Name="Untertitel">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun><Value>Bestellungen nach Kunde – </Value><Style><Color>DimGray</Color></Style></TextRun>
+                  <TextRun><Value>=CountRows("Umsaetze") &amp; " Positionen"</Value><Style><Color>DimGray</Color></Style></TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <Top>1.1cm</Top><Left>0cm</Left><Height>0.6cm</Height><Width>16cm</Width>
+            <Style><Border><Style>None</Style></Border><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style>
+          </Textbox>
+          <Tablix Name="Bestellungen">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn><Width>3cm</Width></TablixColumn>
+                <TablixColumn><Width>5cm</Width></TablixColumn>
+                <TablixColumn><Width>3cm</Width></TablixColumn>
+                <TablixColumn><Width>2cm</Width></TablixColumn>
+                <TablixColumn><Width>3cm</Width></TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.7cm</Height>
+                  <TablixCells>
+                    <TablixCell><CellContents><Textbox Name="hRegion"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Region</Value><Style><FontWeight>Bold</FontWeight><Color>White</Color></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>#1F4E79</BackgroundColor><VerticalAlign>Middle</VerticalAlign><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="hKunde"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Kunde</Value><Style><FontWeight>Bold</FontWeight><Color>White</Color></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>#1F4E79</BackgroundColor><VerticalAlign>Middle</VerticalAlign><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="hDatum"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Bestelldatum</Value><Style><FontWeight>Bold</FontWeight><Color>White</Color></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>#1F4E79</BackgroundColor><VerticalAlign>Middle</VerticalAlign><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="hMenge"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Menge</Value><Style><FontWeight>Bold</FontWeight><Color>White</Color></Style></TextRun></TextRuns><Style><TextAlign>Right</TextAlign></Style></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>#1F4E79</BackgroundColor><VerticalAlign>Middle</VerticalAlign><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="hUmsatz"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Umsatz</Value><Style><FontWeight>Bold</FontWeight><Color>White</Color></Style></TextRun></TextRuns><Style><TextAlign>Right</TextAlign></Style></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>#1F4E79</BackgroundColor><VerticalAlign>Middle</VerticalAlign><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell><CellContents><Textbox Name="Region"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Fields!Region.Value</Value><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>=IIf(RowNumber(Nothing) Mod 2 = 0, "#F2F6FA", "White")</BackgroundColor><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="Kunde"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Fields!Kunde.Value</Value><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>=IIf(RowNumber(Nothing) Mod 2 = 0, "#F2F6FA", "White")</BackgroundColor><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="Bestelldatum"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Fields!Bestelldatum.Value</Value><Style><Format>dd.MM.yyyy</Format></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>=IIf(RowNumber(Nothing) Mod 2 = 0, "#F2F6FA", "White")</BackgroundColor><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="Menge"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Fields!Menge.Value</Value><Style><Format>N0</Format></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>=IIf(RowNumber(Nothing) Mod 2 = 0, "#F2F6FA", "White")</BackgroundColor><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="Umsatz"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Fields!Umsatz.Value</Value><Style><Format>C</Format><Color>=IIf(Fields!Umsatz.Value &lt; 1000, "Firebrick", "Black")</Color></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>=IIf(RowNumber(Nothing) Mod 2 = 0, "#F2F6FA", "White")</BackgroundColor><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.7cm</Height>
+                  <TablixCells>
+                    <TablixCell><CellContents><Textbox Name="fSumme"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>Summe</Value><Style><FontWeight>Bold</FontWeight></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="fLeer1"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value /><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="fLeer2"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value /><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="fMenge"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Sum(Fields!Menge.Value)</Value><Style><FontWeight>Bold</FontWeight><Format>N0</Format></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                    <TablixCell><CellContents><Textbox Name="fUmsatz"><CanGrow>true</CanGrow><KeepTogether>true</KeepTogether><Paragraphs><Paragraph><TextRuns><TextRun><Value>=Sum(Fields!Umsatz.Value)</Value><Style><FontWeight>Bold</FontWeight><Format>C</Format></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><PaddingLeft>4pt</PaddingLeft><PaddingRight>4pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style></Textbox></CellContents></TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers><TablixMember /><TablixMember /><TablixMember /><TablixMember /><TablixMember /></TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember><KeepWithGroup>After</KeepWithGroup></TablixMember>
+                <TablixMember><Group Name="Details" /></TablixMember>
+                <TablixMember><KeepWithGroup>Before</KeepWithGroup></TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>Umsaetze</DataSetName>
+            <Top>2.2cm</Top><Left>0cm</Left><Height>2cm</Height><Width>16cm</Width>
+            <Style><Border><Style>None</Style></Border></Style>
+          </Tablix>
+          <Textbox Name="Hinweis">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>="Größter Einzelumsatz: " &amp; Format(Max(Fields!Umsatz.Value, "Umsaetze"), "C") &amp; " (" &amp; CountDistinct(Fields!Kunde.Value, "Umsaetze") &amp; " Kunden)"</Value>
+                    <Style><FontStyle>Italic</FontStyle><Color>DimGray</Color></Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <Top>4.6cm</Top><Left>0cm</Left><Height>0.6cm</Height><Width>16cm</Width>
+            <Style><Border><Style>None</Style></Border><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style>
+          </Textbox>
+          <Subreport Name="Kundendetails">
+            <ReportName>Kundendetails</ReportName>
+            <Parameters>
+              <Parameter Name="Jahr"><Value>=Parameters!Jahr.Value</Value></Parameter>
+            </Parameters>
+            <Top>5.6cm</Top><Left>0cm</Left><Height>1.5cm</Height><Width>16cm</Width>
+            <Style><Border><Style>None</Style></Border></Style>
+          </Subreport>
+        </ReportItems>
+        <Height>7.5cm</Height>
+        <Style />
+      </Body>
+      <Width>16cm</Width>
+      <Page>
+        <PageFooter>
+          <Height>1cm</Height>
+          <PrintOnFirstPage>true</PrintOnFirstPage>
+          <PrintOnLastPage>true</PrintOnLastPage>
+          <ReportItems>
+            <Textbox Name="Seite">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs><Paragraph><TextRuns><TextRun><Value>="Seite " &amp; Globals!PageNumber &amp; " von " &amp; Globals!TotalPages</Value><Style><FontSize>8pt</FontSize></Style></TextRun></TextRuns><Style><TextAlign>Right</TextAlign></Style></Paragraph></Paragraphs>
+              <Top>0.3cm</Top><Left>10cm</Left><Height>0.6cm</Height><Width>6cm</Width>
+              <Style><Border><Style>None</Style></Border><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style>
+            </Textbox>
+            <Textbox Name="Erstellt">
+              <CanGrow>true</CanGrow>
+              <KeepTogether>true</KeepTogether>
+              <Paragraphs><Paragraph><TextRuns><TextRun><Value>=Globals!ExecutionTime</Value><Style><FontSize>8pt</FontSize><Format>g</Format></Style></TextRun></TextRuns><Style /></Paragraph></Paragraphs>
+              <Top>0.3cm</Top><Left>0cm</Left><Height>0.6cm</Height><Width>6cm</Width>
+              <Style><Border><Style>None</Style></Border><PaddingLeft>2pt</PaddingLeft><PaddingRight>2pt</PaddingRight><PaddingTop>2pt</PaddingTop><PaddingBottom>2pt</PaddingBottom></Style>
+            </Textbox>
+          </ReportItems>
+          <Style><Border><Style>None</Style></Border></Style>
+        </PageFooter>
+        <PageHeight>29.7cm</PageHeight>
+        <PageWidth>21cm</PageWidth>
+        <LeftMargin>2.5cm</LeftMargin>
+        <RightMargin>2.5cm</RightMargin>
+        <TopMargin>2cm</TopMargin>
+        <BottomMargin>2cm</BottomMargin>
+        <ColumnSpacing>0.13cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="Jahr">
+      <DataType>Integer</DataType>
+      <DefaultValue><Values><Value>2026</Value></Values></DefaultValue>
+      <Prompt>Jahr</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue><Value>2025</Value></ParameterValue>
+          <ParameterValue><Value>2026</Value></ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>4</NumberOfColumns>
+      <NumberOfRows>2</NumberOfRows>
+      <CellDefinitions><CellDefinition><ColumnIndex>0</ColumnIndex><RowIndex>0</RowIndex><ParameterName>Jahr</ParameterName></CellDefinition></CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <Language>de-DE</Language>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>8d6c2b6e-71a4-4c55-b1b8-0e3c1f6a9d42</rd:ReportID>
+</Report>

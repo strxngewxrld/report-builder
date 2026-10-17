@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a9e8f"/>
+      <stop offset="1" stop-color="#0b5f86"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#bg)"/>
+  <!-- page -->
+  <path d="M68 40h88l36 36v140a8 8 0 0 1-8 8H68a8 8 0 0 1-8-8V48a8 8 0 0 1 8-8z" fill="#fff"/>
+  <path d="M156 40v28a8 8 0 0 0 8 8h28z" fill="#cfe7ec"/>
+  <!-- title -->
+  <rect x="78" y="62" width="58" height="10" rx="3" fill="#0b5f86"/>
+  <!-- table -->
+  <rect x="78" y="96" width="100" height="18" rx="2" fill="#1a9e8f"/>
+  <g fill="#d5e3ea">
+    <rect x="78" y="122" width="100" height="10" rx="2"/>
+    <rect x="78" y="140" width="100" height="10" rx="2"/>
+    <rect x="78" y="158" width="100" height="10" rx="2"/>
+  </g>
+  <rect x="128" y="180" width="50" height="10" rx="2" fill="#0b5f86"/>
+  <!-- selection frame of the designer -->
+  <rect x="121" y="173" width="64" height="24" rx="3" fill="none" stroke="#f2a33a" stroke-width="4"/>
+  <rect x="177" y="189" width="14" height="14" rx="3" fill="#fff" stroke="#f2a33a" stroke-width="4"/>
+</svg>
