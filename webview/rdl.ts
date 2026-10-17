@@ -559,6 +559,21 @@ function emptyPairTags(xml: string): string[] {
 // ---------------------------------------------------------------------------------------------------------------
 // Serialization
 
+/** XML of one textbox as it would be saved (`positioned`: not a table cell). */
+export function textboxXml(r: Report, tb: TextboxItem, positioned: boolean, dom: XmlDom = browserDom): string {
+  return new Writer(r, dom).textbox(tb, positioned);
+}
+
+/**
+ * Reads one textbox from verbatim XML: editable when the model can represent it (and `raw` is not set), otherwise
+ * as a raw item kept verbatim.
+ */
+export function textboxFromXml(xml: string, positioned: boolean, dom: XmlDom = browserDom, raw = false): TextboxItem | RawItem {
+  const p = new Parser(dom);
+  const el = elements(dom.parse(`<w xmlns:rd="${NS_RD}">${xml}</w>`).documentElement)[0];
+  return (raw ? null : p.textbox(el, positioned)) ?? p.raw(el);
+}
+
 /** Escaping for attribute values. */
 export const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 /** Escaping for text content: quotes stay as they are (as Visual Studio writes them). */

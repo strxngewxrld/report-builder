@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { XmlDom, parseRdl, serializeRdl } from '../webview/rdl';
-import { RawItem, Report, TextboxItem } from '../webview/model';
+import { RawItem, Report, TextboxItem, allReportItems } from '../webview/model';
 import { fitSections, locate } from '../webview/ops';
 
 const dom: XmlDom = {
@@ -168,4 +168,44 @@ test('empty elements written as <X></X> keep that form', () => {
   assert.equal(serializeRdl(parseRdl(xml, dom), dom), xml);
   const out = edit(xml, r => { (locate(r, 'PageHdr_Company')!.item as TextboxItem).value = '=1'; });
   assert.ok(out.includes('<Visibility></Visibility>'));
+});
+
+test('Textfeld in Textteile aufteilen und wieder zusammenfassen (auch in Tabellenzellen)', async () => {
+  const { readRichText, editRichText, splitRuns, toRichText, toSimpleText } = await import('../webview/richtext');
+  assert.deepEqual(splitRuns('="Seite " & Globals!PageNumber & " von " & (Globals!TotalPages)'), [['Seite ', '=Globals!PageNumber', ' von ', '=Globals!TotalPages']]);
+  assert.deepEqual(splitRuns('=Fields!A.Value & vbCrLf & "x"""'), [['=Fields!A.Value'], ['x"']]);
+  assert.deepEqual(splitRuns('Zeile 1\nZeile 2'), [['Zeile 1'], ['Zeile 2']]);
+  assert.deepEqual(splitRuns('=Left("a&b", 1)'), [['=Left("a&b", 1)']]);
+
+  const r = structuredClone(parseRdl(bc, dom));
+  const before = locate(r, 'PageNo')!.item as TextboxItem;
+  assert.equal(before.type, 'textbox');
+  assert.ok(toRichText(r, 'PageNo', dom));
+  const raw = locate(r, 'PageNo')!.item as RawItem;
+  assert.equal(raw.type, 'raw');
+  assert.deepEqual(readRichText(raw.xml, 'PageNo', dom)![0].runs.map(x => x.value), ['Seite ', '=Globals!PageNumber']);
+  raw.xml = editRichText(raw.xml, 'PageNo', { kind: 'run', p: 0, r: 1, patch: { bold: true } }, dom);
+  // saved and read again: a textbox with two parts, the position kept
+  const saved = parseRdl(serializeRdl(r, dom), dom);
+  const again = locate(saved, 'PageNo')!.item as RawItem;
+  assert.equal(again.type, 'raw');
+  assert.deepEqual([again.left, again.top, again.width], [before.left, before.top, before.width]);
+
+  assert.ok(toSimpleText(saved, 'PageNo', dom));
+  const simple = locate(saved, 'PageNo')!.item as TextboxItem;
+  assert.equal(simple.type, 'textbox');
+  assert.equal(simple.value, '="Seite " & (Globals!PageNumber)');
+  assert.equal(simple.style.FontWeight, undefined, 'Formatierung des ersten Teils');
+
+  // a table cell keeps its cell settings (ColSpan …) through both conversions
+  const cell = allReportItems(r).find(it => it.type === 'textbox' && locate(r, it.name)?.cell)?.name;
+  assert.ok(cell);
+  const loc = locate(r, cell)!;
+  loc.item.colSpan = 2;
+  assert.ok(toRichText(r, cell, dom));
+  assert.equal(locate(r, cell)!.item.colSpan, 2);
+  assert.ok(locate(r, cell)!.cell);
+  assert.ok(toSimpleText(r, cell, dom));
+  assert.equal(locate(r, cell)!.item.type, 'textbox');
+  assert.equal(locate(r, cell)!.item.colSpan, 2);
 });
