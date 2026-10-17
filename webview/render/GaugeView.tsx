@@ -4,6 +4,7 @@
 import type { CSSProperties } from 'react';
 import { formatValue } from '../expr';
 import { RGauge } from './types';
+import { l10n } from '../l10n';
 
 export function GaugeView({ gauge, S, style }: { gauge: RGauge; S: number; style: CSSProperties }) {
   const W = gauge.width * S, H = gauge.height * S;
@@ -56,7 +57,7 @@ export function GaugeView({ gauge, S, style }: { gauge: RGauge; S: number; style
     <svg width={W} height={H} style={style} viewBox={`0 0 ${W} ${H}`}>
       <rect width={W} height={H} fill="white" />
       {body}
-      {gauge.sample && <text x={W - 4} y={H - 4} textAnchor="end" {...font} fontSize={9} fill="#999">Beispielwert</text>}
+      {gauge.sample && <text x={W - 4} y={H - 4} textAnchor="end" {...font} fontSize={9} fill="#999">{l10n.t('Sample value')}</text>}
     </svg>
   );
 }

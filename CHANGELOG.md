@@ -6,6 +6,8 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 ## [Unveröffentlicht]
 
 ### Hinzugefügt
+- **Englische Oberfläche**: Die Erweiterung folgt der Anzeigesprache von VS Code (Englisch und Deutsch) – Befehle, Menüs,
+  Einstellungen, Meldungen, Prüfungen, Designer, Dialoge und Vorschau
 - **PDF-Export** direkt aus der Vorschau (`pdf-lib`): Text, Rahmen und Hintergründe als Vektoren, Bilder und Diagramme eingebettet
 - **Diagramme**: Achsen (Titel, Zahlenformat, Minimum/Maximum), Datenbeschriftungen, zweite Werteachse, Typ je Reihe
   (Kombidiagramm), neue Typen Säulen 100 %, Linie geglättet, Fläche gestapelt, Punkte

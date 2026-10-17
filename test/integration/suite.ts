@@ -166,7 +166,7 @@ test('VS-Code-Befehle steuern den Designer, sein Zustand kommt zurück (Statusle
   await until('Eigenschaften eingeblendet', () => state()?.panes.properties === true);
 
   await vscode.commands.executeCommand('bcReportBuilder.insert.textbox');
-  await until('Einfügewerkzeug in der Statusleiste', () => state()?.status.includes('Textfeld'));
+  await until('Einfügewerkzeug in der Statusleiste', () => state()?.status.includes('Textbox'));
 
   await vscode.commands.executeCommand('bcReportBuilder.showPreview');
   await until('Vorschau', () => state()?.mode === 'preview');
@@ -192,17 +192,17 @@ test('AL-Code: CodeLens zählt Verwendungen im Layout, Klick wählt das Textfeld
     if (!all.some(l => l.command?.command === 'bcReportBuilder.revealInLayout')) await new Promise(r => setTimeout(r, 200));
   }
   const titles = all.map(l => l.command?.title ?? '');
-  assert.ok(titles.some(t => t.includes('Verkaufsrechnung.rdlc im Designer öffnen')), titles.join(' | '));
+  assert.ok(titles.some(t => t.includes('Open Verkaufsrechnung.rdlc in the Designer')), titles.join(' | '));
   const qty = all.find(l => l.command?.command === 'bcReportBuilder.revealInLayout' && l.command.arguments?.[1] === 'Quantity_Line');
   assert.ok(qty, 'Lens an Quantity_Line');
-  assert.match(qty!.command!.title, /^\d+× im Layout$/);
+  assert.match(qty!.command!.title, /^\d+× in the layout$/);
 
   await vscode.commands.executeCommand(qty!.command!.command, ...qty!.command!.arguments!);
   const probe = await until('Designer', () => api.probes.get(file('Verkaufsrechnung.rdlc').toString()));
   type State = { status: string };
   await until('Auswahl des Textfelds mit Quantity_Line', () => {
     const s = [...probe.received].reverse().find(m => m.type === 'state')?.state as State | undefined;
-    return s && s.status !== '' && /Textfeld|Tabellenzelle|Element/.test(s.status);
+    return s && s.status !== '' && /Textbox|Table cell|Item/.test(s.status);
   });
   assert.deepEqual(errorsOf(probe), []);
 });
@@ -307,7 +307,7 @@ test('Als AL-Label anlegen: Name und Optionen abfragen, Label in AL, Textfeld im
   const [layoutText, alText] = [doc.getText(), al.getText()];
   const item = /<Textbox Name="([^"]+)">(?:(?!<\/Textbox>)[\s\S])*?<Value>Menge<\/Value>/.exec(layoutText)![1];
   try {
-    const { asked } = await withAnswers({ input: ['MengeLbl', 'Spaltenüberschrift'], pick: [['Übersetzungshinweis (Comment)']] },
+    const { asked } = await withAnswers({ input: ['MengeLbl', 'Spaltenüberschrift'], pick: [['Note for translators (Comment)']] },
       () => vscode.commands.executeCommand('bcReportBuilder.createLabel', { item, literalText: 'Menge' }) as Promise<unknown>);
     assert.deepEqual(asked.filter(a => !a.startsWith('info:')).map(a => a.split(':')[0]), ['input', 'pick', 'input']);
     assert.match(al.getText(), /MengeLbl = 'Menge', Comment = 'Spaltenüberschrift';/);
@@ -350,7 +350,7 @@ test('Felder als Spalten hinzufügen: Auswahl aus den Tabellenfeldern', async ap
       }
     });
     assert.ok(offered.includes('Description 2') && !offered.includes('Quantity'), `angeboten: ${offered.join(', ')} (vorhandene Spalten nicht)`);
-    assert.ok(asked.some(a => a.startsWith('info:') && a.includes('2 Spalte(n)')), asked.join(' | '));
+    assert.ok(asked.some(a => a.startsWith('info:') && a.includes('2 column(s)')), asked.join(' | '));
     const text = (await vscode.workspace.openTextDocument(alUri)).getText();
     assert.match(text, /column\(Description2_Line; "Description 2"\) \{ \}\s*column\(ShipmentDate_Line; "Shipment Date"\) \{ \}/);
   } finally {
@@ -367,7 +367,7 @@ test('Spalte umbenennen: AL und Layout in einem Schritt', async api => {
   try {
     // refused: an existing column name
     await assert.rejects(withAnswers({ input: ['UnitPrice_Line'] },
-      () => vscode.commands.executeCommand('bcReportBuilder.renameColumn', { column: 'Quantity_Line' }) as Promise<unknown>), /bereits/);
+      () => vscode.commands.executeCommand('bcReportBuilder.renameColumn', { column: 'Quantity_Line' }) as Promise<unknown>), /already exists/);
     // from the AL editor: cursor on the column name
     const editor = await vscode.window.showTextDocument(al);
     const at = al.positionAt(al.getText().indexOf('Quantity_Line') + 3);
@@ -432,7 +432,7 @@ test('Tabellenbefehle aus VS Code wirken in der Webview: Spalte, Zeile, Gruppenf
   const [c0, r0, g0] = [columns(), rows(), groups()];
   // select the quantity cell of the line table (as a CodeLens click does)
   await vscode.commands.executeCommand('bcReportBuilder.revealInLayout', uri, 'Quantity_Line');
-  await until('Zelle gewählt', () => [...probe.received].reverse().find(m => m.type === 'state' && /Tabellenzelle/.test((m.state as { status: string }).status)));
+  await until('Zelle gewählt', () => [...probe.received].reverse().find(m => m.type === 'state' && /Table cell/.test((m.state as { status: string }).status)));
   const run = async (cmd: string, check: () => boolean, what: string) => {
     await vscode.commands.executeCommand(`bcReportBuilder.${cmd}`, uri);
     await until(what, check);
@@ -446,6 +446,29 @@ test('Tabellenbefehle aus VS Code wirken in der Webview: Spalte, Zeile, Gruppenf
   assert.deepEqual(errorsOf(probe), []);
 });
 
+test('Lokalisierung: Extension, Webview und Manifest in der Sprache von VS Code', async api => {
+  // BC_RB_TEST_LANGUAGE=de BC_RB_ONLY=Lokalisierung npm run test:vscode checks the German bundle end to end
+  const language = process.env.BC_RB_TEST_LANGUAGE || vscode.env.language;
+  const german = language.startsWith('de');
+  console.log(`      (Sprache: ${language})`);
+  // extension host: a message from the bundle
+  const al = await vscode.workspace.openTextDocument(file('src/Verkaufsrechnung.Report.al'));
+  let titles: string[] = [];
+  await until('CodeLens', async () => {
+    titles = ((await vscode.commands.executeCommand<vscode.CodeLens[]>('vscode.executeCodeLensProvider', al.uri)) ?? []).map(l => l.command?.title ?? '');
+    return titles.length > 0;
+  });
+  assert.ok(titles.some(t => t.includes(german ? 'im Designer öffnen' : 'in the Designer')), titles.join(' | '));
+  // webview: the translations reach it (status of the insert tool)
+  const { uri, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  await vscode.commands.executeCommand('bcReportBuilder.insert.textbox', uri);
+  const state = await until('Status', () => [...probe.received].reverse().find(m => m.type === 'state' && (m.state as { status: string }).status));
+  assert.match((state.state as { status: string }).status, german ? /Textfeld: klicken oder Rahmen ziehen/ : /Textbox: click or drag a frame/);
+  // manifest: command title
+  const pkg = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!.packageJSON;
+  assert.equal(pkg.l10n, './l10n');
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;
@@ -457,7 +480,8 @@ export async function run(): Promise<void> {
     // closed webviews dispose asynchronously; open() must not pick up the stale probe of the previous test
     await until('Designer geschlossen', () => api.probes.size === 0, 5000).catch(() => api.probes.clear());
   };
-  for (const [name, fn] of tests) {
+  const only = process.env.BC_RB_ONLY ? new RegExp(process.env.BC_RB_ONLY) : null;
+  for (const [name, fn] of tests.filter(([n]) => !only || only.test(n))) {
     // a test that fails (e.g. a timeout on a busy machine) gets one more attempt; both errors are reported
     let error: unknown;
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -475,6 +499,7 @@ export async function run(): Promise<void> {
     }
     if (error) failures.push(name);
   }
-  console.log(`\n${tests.length - failures.length}/${tests.length} Integrationstests bestanden`);
+  const ran = only ? tests.filter(([n]) => only.test(n)).length : tests.length;
+  console.log(`\n${ran - failures.length}/${ran} Integrationstests bestanden`);
   if (failures.length) throw new Error(`${failures.length} Integrationstest(s) fehlgeschlagen`);
 }

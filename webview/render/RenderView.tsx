@@ -7,6 +7,7 @@ import type { CSSProperties, MouseEvent as RMouseEvent } from 'react';
 import { RAction, RNode, RTable } from './types';
 import { ChartView } from './ChartView';
 import { GaugeView } from './GaugeView';
+import { l10n } from '../l10n';
 
 /** Pixels per inch and optional interaction (designer). */
 export interface ViewOptions {
@@ -25,7 +26,7 @@ export interface ViewOptions {
 }
 
 const actionTitle = (a: RAction) =>
-  a.kind === 'hyperlink' ? a.url : a.kind === 'bookmarkLink' ? `Gehe zu Lesezeichen „${a.bookmark}“` : `Drillthrough: ${a.report}`;
+  a.kind === 'hyperlink' ? a.url : a.kind === 'bookmarkLink' ? l10n.t('Go to bookmark "{0}"', a.bookmark) : l10n.t('Drillthrough: {0}', a.report);
 
 /** The +/− box of a drilldown textbox and the sort arrows of interactive sorting (left out when printing). */
 function Interactive({ node }: { node: Extract<RNode, { kind: 'box' }> }) {
@@ -36,11 +37,11 @@ function Interactive({ node }: { node: Extract<RNode, { kind: 'box' }> }) {
   };
   return <>
     {node.toggle && o.onToggle && (
-      <span className="rv-interactive" style={box} title={node.toggle.expanded ? 'Zuklappen' : 'Aufklappen'}
+      <span className="rv-interactive" style={box} title={node.toggle.expanded ? l10n.t('Collapse') : l10n.t('Expand')}
         onClick={e => { e.stopPropagation(); o.onToggle!(node.toggle!.key); }}>{node.toggle.expanded ? '−' : '+'}</span>
     )}
     {node.userSort && o.onSort && (
-      <span className="rv-interactive" title="Sortieren" style={{ float: 'right', cursor: 'pointer', fontSize: 9, color: node.userSort.direction ? '#0a84ff' : '#999', userSelect: 'none' }}
+      <span className="rv-interactive" title={l10n.t('Sort')} style={{ float: 'right', cursor: 'pointer', fontSize: 9, color: node.userSort.direction ? '#0a84ff' : '#999', userSelect: 'none' }}
         onClick={e => { e.stopPropagation(); o.onSort!(node.userSort!.name); }}>
         {node.userSort.direction === 'Ascending' ? '▲' : node.userSort.direction === 'Descending' ? '▼' : '⇅'}
       </span>
@@ -178,7 +179,7 @@ export function NodeView({ node, shift = 0, inCell = false }: { node: RNode; shi
           {node.src
             ? <img src={node.src} alt="" style={{ width: '100%', height: '100%', objectFit: node.sizing === 'Fit' ? 'fill' : node.sizing === 'Clip' ? 'none' : 'contain', objectPosition: 'left top' }}
                 onError={e => { e.currentTarget.style.display = 'none'; }} />
-            : <div style={{ fontSize: 10, color: '#999', padding: 2 }}>Bild</div>}
+            : <div style={{ fontSize: 10, color: '#999', padding: 2 }}>{l10n.t('Image')}</div>}
         </div>
       );
     case 'chart':

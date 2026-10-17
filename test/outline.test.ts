@@ -20,13 +20,13 @@ test('outline shows the full hierarchy of a Business Central layout', () => {
   // built from what the designer writes back, i.e. after a round trip through the model
   const outline = buildOutline(serializeRdl(parseRdl(bc, dom)), dom);
   assert.deepEqual(shape(outline), [
-    { 'Section:Seitenkopf': ['Textbox:PageHdr_Company', 'Textbox:PageHdr_DocNo', 'Textbox:PageNo'] },
-    { 'Section:Text': [{
+    { 'Section:Page Header': ['Textbox:PageHdr_Company', 'Textbox:PageHdr_DocNo', 'Textbox:PageNo'] },
+    { 'Section:Body': [{
       'Tablix:Table_Document': [
-        { 'Rows:Zeilengruppen': ['Group:Group_Document'] },
+        { 'Rows:Row Groups': ['Group:Group_Document'] },
         { 'Rectangle:Rect_DocHeader': ['Textbox:CompanyName', 'Textbox:DocumentNo_Lbl', 'Textbox:DocumentNo', 'Textbox:DocumentDate', 'Textbox:SetData_Header', 'Textbox:PaidInfo'] },
         { 'Tablix:Table_Lines': [
-          { 'Rows:Zeilengruppen': ['Group:Details_Lines'] },
+          { 'Rows:Row Groups': ['Group:Details_Lines'] },
           'Textbox:Description_Lbl', 'Textbox:Quantity_Lbl', 'Textbox:UnitPrice_Lbl', 'Textbox:LineAmount_Lbl',
           'Textbox:Description_Line', 'Textbox:Quantity_Line', 'Textbox:UnitPrice_Line', 'Textbox:LineAmount_Line',
           'Textbox:Total_Lbl', 'Textbox:Total_Empty1', 'Textbox:Total_Empty2', 'Textbox:TotalAmount',
@@ -42,15 +42,15 @@ test('outline details: visibility, grouping, filters, sorting, values', () => {
 
   assert.equal(index.get('item:SetData_Header')!.node.hidden, 'true');
   assert.equal(index.get('item:PaidInfo')!.node.hidden, '=Not Fields!Paid.Value');
-  assert.equal(get('item:PageHdr_Company').Wert, '=Code.GetData(1,1)');
+  assert.equal(get('item:PageHdr_Company').Value, '=Code.GetData(1,1)');
   assert.equal(get('item:Table_Document').Dataset, 'DataSet_Result');
-  assert.equal(get('group:Group_Document')['Gruppieren nach'], '=Fields!No_SalesInvHdr.Value');
-  assert.equal(get('group:Group_Document').Seitenumbruch, 'Between');
-  assert.equal(get('group:Details_Lines')['Gruppieren nach'], '(Detaildaten)');
+  assert.equal(get('group:Group_Document')['Group by'], '=Fields!No_SalesInvHdr.Value');
+  assert.equal(get('group:Group_Document')['Page break'], 'Between');
+  assert.equal(get('group:Details_Lines')['Group by'], '(detail data)');
   assert.equal(get('group:Details_Lines').Filter, '=Fields!LineNo_Line.Value NotEqual 0');
-  assert.equal(get('group:Details_Lines').Sortierung, '=Fields!LineNo_Line.Value');
+  assert.equal(get('group:Details_Lines').Sorting, '=Fields!LineNo_Line.Value');
   assert.equal(get('item:CompanyName').Position, '0cm, 0cm – 10cm × 0.7cm');
-  assert.deepEqual(index.get('item:TotalAmount')!.ancestors.map(a => a.name), ['Text', 'Table_Document', 'Table_Lines']);
+  assert.deepEqual(index.get('item:TotalAmount')!.ancestors.map(a => a.name), ['Body', 'Table_Document', 'Table_Lines']);
 });
 
 test('group header cells are listed under their group', () => {

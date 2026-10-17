@@ -30,8 +30,10 @@ async function main() {
       vscodeExecutablePath: candidates[0],
       extensionDevelopmentPath: root,
       extensionTestsPath: join(root, 'out/test/integration/suite.js'),
-      launchArgs: [workspace, '--disable-extensions', '--user-data-dir', join(tmp, 'user'), '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust'],
-      extensionTestsEnv: { BC_REPORT_BUILDER_TEST: '1', BC_RB_TIMEOUT_SCALE: process.env.BC_RB_TIMEOUT_SCALE ?? '', BC_RB_KEEP_PDF: process.env.BC_RB_KEEP_PDF ?? '' },
+      // BC_RB_LOCALE=de runs VS Code in German (translations from l10n/ and package.nls.de.json)
+      launchArgs: [workspace, ...(process.env.BC_RB_LOCALE ? [`--locale=${process.env.BC_RB_LOCALE}`] : []), '--disable-extensions', '--user-data-dir', join(tmp, 'user'), '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust'],
+      extensionTestsEnv: { BC_REPORT_BUILDER_TEST: '1', BC_RB_TIMEOUT_SCALE: process.env.BC_RB_TIMEOUT_SCALE ?? '', BC_RB_KEEP_PDF: process.env.BC_RB_KEEP_PDF ?? '',
+        BC_RB_TEST_LANGUAGE: process.env.BC_RB_TEST_LANGUAGE ?? '', BC_RB_ONLY: process.env.BC_RB_ONLY ?? '' },
     });
   } finally {
     rmSync(tmp, { recursive: true, force: true });

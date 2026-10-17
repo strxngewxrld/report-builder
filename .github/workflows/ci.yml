@@ -26,6 +26,12 @@ jobs:
         run: xvfb-run -a npm run test:vscode
         env:
           BC_RB_TIMEOUT_SCALE: '3'
+      - name: Lokalisierung Deutsch (Bundle bis in die Webview)
+        run: xvfb-run -a npm run test:vscode
+        env:
+          BC_RB_TIMEOUT_SCALE: '3'
+          BC_RB_TEST_LANGUAGE: de
+          BC_RB_ONLY: Lokalisierung
       - name: VSIX bauen
         run: npm run package
       - uses: actions/upload-artifact@v4

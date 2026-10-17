@@ -3,15 +3,17 @@
 // XML stays as it is (charts are kept as verbatim items).
 
 import { NS_RD, XmlDom, browserDom, child, elements, normalizeFragment, text } from './rdl';
+import { l10n } from './l10n';
 
 export type ChartKind =
   | 'Column' | 'StackedColumn' | 'PercentColumn' | 'Bar' | 'StackedBar' | 'Line' | 'SmoothLine' | 'Area' | 'StackedArea'
   | 'Scatter' | 'Pie' | 'Doughnut';
-export const CHART_KINDS: [ChartKind, string, string][] = [
-  ['Column', 'Säulen', 'graph'], ['StackedColumn', 'Säulen gestapelt', 'graph'], ['PercentColumn', 'Säulen 100 %', 'graph'],
-  ['Bar', 'Balken', 'graph-left'], ['StackedBar', 'Balken gestapelt', 'graph-left'], ['Line', 'Linie', 'graph-line'],
-  ['SmoothLine', 'Linie geglättet', 'graph-line'], ['Area', 'Fläche', 'graph-line'], ['StackedArea', 'Fläche gestapelt', 'graph-line'],
-  ['Scatter', 'Punkte', 'graph-scatter'], ['Pie', 'Kreis', 'pie-chart'], ['Doughnut', 'Ring', 'pie-chart'],
+/** Chart kinds with their (translated) label and icon; a function, so the labels follow the display language. */
+export const chartKinds = (): [ChartKind, string, string][] => [
+  ['Column', l10n.t('Column'), 'graph'], ['StackedColumn', l10n.t('Stacked column'), 'graph'], ['PercentColumn', l10n.t('100% column'), 'graph'],
+  ['Bar', l10n.t('Bar'), 'graph-left'], ['StackedBar', l10n.t('Stacked bar'), 'graph-left'], ['Line', l10n.t('Line'), 'graph-line'],
+  ['SmoothLine', l10n.t('Smooth line'), 'graph-line'], ['Area', l10n.t('Area'), 'graph-line'], ['StackedArea', l10n.t('Stacked area'), 'graph-line'],
+  ['Scatter', l10n.t('Scatter'), 'graph-scatter'], ['Pie', l10n.t('Pie'), 'pie-chart'], ['Doughnut', l10n.t('Doughnut'), 'pie-chart'],
 ];
 /** Kinds a single series can have in a combined chart (with the chart's own kind). */
 export const SERIES_KINDS: ChartKind[] = ['Column', 'Line', 'SmoothLine', 'Area', 'Scatter'];
@@ -99,7 +101,7 @@ export function chartXml(spec: ChartSpec, box: { top: number; left: number; widt
     + `<ChartLegendTitle><Caption /><Style><FontSize>8pt</FontSize><FontWeight>Bold</FontWeight><TextAlign>Center</TextAlign></Style></ChartLegendTitle><HeaderSeparatorColor>Black</HeaderSeparatorColor><ColumnSeparatorColor>Black</ColumnSeparatorColor></ChartLegend></ChartLegends>`
     + `<ChartTitles><ChartTitle Name="Default"><Caption>${xmlEsc(spec.title)}</Caption><Style><BackgroundGradientType>None</BackgroundGradientType><FontWeight>Bold</FontWeight><TextAlign>General</TextAlign><VerticalAlign>Top</VerticalAlign></Style></ChartTitle></ChartTitles>`
     + `<Palette>${xmlEsc(spec.palette)}</Palette><ChartBorderSkin><Style><BackgroundColor>Gray</BackgroundColor><BackgroundGradientType>None</BackgroundGradientType><Color>White</Color></Style></ChartBorderSkin>`
-    + `<ChartNoDataMessage Name="NoDataMessage"><Caption>Keine Daten</Caption><Style><BackgroundGradientType>None</BackgroundGradientType><TextAlign>General</TextAlign><VerticalAlign>Top</VerticalAlign></Style></ChartNoDataMessage>`
+    + `<ChartNoDataMessage Name="NoDataMessage"><Caption>${xmlEsc(l10n.t('No data'))}</Caption><Style><BackgroundGradientType>None</BackgroundGradientType><TextAlign>General</TextAlign><VerticalAlign>Top</VerticalAlign></Style></ChartNoDataMessage>`
     + `<DataSetName>${xmlEsc(spec.dataSetName)}</DataSetName><Top>${inch(box.top)}</Top><Left>${inch(box.left)}</Left><Height>${inch(box.height)}</Height><Width>${inch(box.width)}</Width>`
     + `<Style><Border><Color>LightGrey</Color><Style>Solid</Style></Border><BackgroundColor>White</BackgroundColor><BackgroundGradientType>None</BackgroundGradientType></Style></Chart>`;
 }
@@ -128,7 +130,7 @@ export function readChart(xml: string, dom: XmlDom = browserDom): ChartSpec | nu
       const own = kindOf(text(s, 'Type') ?? 'Column', text(s, 'Subtype') ?? '');
       const secondary = !!axes.secondary && text(s, 'ValueAxisName') === axes.secondary.getAttribute('Name');
       return {
-        name: labels[i] || s.getAttribute('Name') || `Reihe${i + 1}`, value: text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y') ?? '',
+        name: labels[i] || s.getAttribute('Name') || l10n.t('Series{0}', i + 1), value: text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y') ?? '',
         ...(own !== kind ? { kind: own } : {}), ...(secondary ? { secondary } : {}),
       };
     }),

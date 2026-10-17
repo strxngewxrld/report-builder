@@ -3,6 +3,7 @@
 // ISO strings, numbers stay numbers. No dependencies: the zip container is read with Node's zlib.
 
 import { inflateRawSync } from 'node:zlib';
+import { l10n } from '../webview/l10n';
 
 /** Files of a zip archive by name. */
 export function unzip(buf: Uint8Array): Map<string, Uint8Array> {
@@ -11,7 +12,7 @@ export function unzip(buf: Uint8Array): Map<string, Uint8Array> {
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
     if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
   }
-  if (eocd < 0) throw new Error('Kein ZIP-Archiv (keine gültige Excel- bzw. .app-Datei)');
+  if (eocd < 0) throw new Error(l10n.t('Not a ZIP archive (no valid Excel or .app file)'));
   const count = view.getUint16(eocd + 10, true);
   // archives behind a header (Business Central .app files start with a "NAVX" header): all offsets are shifted
   const shift = eocd - (view.getUint32(eocd + 16, true) + view.getUint32(eocd + 12, true));
@@ -19,7 +20,7 @@ export function unzip(buf: Uint8Array): Map<string, Uint8Array> {
   const files = new Map<string, Uint8Array>();
   const dec = new TextDecoder();
   for (let n = 0; n < count; n++) {
-    if (view.getUint32(p, true) !== 0x02014b50) throw new Error('Beschädigtes ZIP-Verzeichnis');
+    if (view.getUint32(p, true) !== 0x02014b50) throw new Error(l10n.t('Damaged ZIP directory'));
     const method = view.getUint16(p + 10, true);
     const size = view.getUint32(p + 20, true);
     const nameLen = view.getUint16(p + 28, true), extraLen = view.getUint16(p + 30, true), commentLen = view.getUint16(p + 32, true);
@@ -61,7 +62,7 @@ export function parseXlsx(buf: Uint8Array): Record<string, unknown>[] {
   const date1904 = /date1904="(1|true)"/.test(text('xl/workbook.xml'));
 
   const sheets = [...files.keys()].filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
-  if (!sheets.length) throw new Error('Die Excel-Datei enthält kein Tabellenblatt');
+  if (!sheets.length) throw new Error(l10n.t('The Excel file contains no worksheet'));
   let best: unknown[][] = [];
   for (const name of sheets) {
     const rows: unknown[][] = [];
@@ -94,6 +95,6 @@ export function parseXlsx(buf: Uint8Array): Record<string, unknown>[] {
   }
   const [header, ...data] = best;
   if (!header) return [];
-  const names = header.map((h, i) => (h === null || h === undefined || h === '' ? `Spalte${i + 1}` : String(h).trim()));
+  const names = header.map((h, i) => (h === null || h === undefined || h === '' ? l10n.t('Column{0}', i + 1) : String(h).trim()));
   return data.map(r => Object.fromEntries(names.map((n, i) => [n, r[i] ?? null])));
 }

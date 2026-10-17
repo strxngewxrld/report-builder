@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { readFileSync } from 'node:fs';
+import { l10n, setLocalization } from '../webview/l10n';
 import { DesignerSession, ReportEditorProvider } from './reportEditorProvider';
 import { serializeRdl } from '../webview/rdl';
 import { newReportTemplate } from '../webview/templates';
@@ -31,6 +33,14 @@ const menuContext = (arg: unknown): MenuContext | undefined =>
 const SETTING_TOGGLES: Record<string, string> = { toggleRuler: 'showRuler', toggleGrid: 'showGrid', toggleSnap: 'snapToGrid' };
 
 export function activate(context: vscode.ExtensionContext) {
+  // translations for code shared with the webview (and passed on to it); the integration tests can force a language
+  const forced = testing ? process.env.BC_RB_TEST_LANGUAGE : undefined;
+  if (forced) {
+    const file = vscode.Uri.joinPath(context.extensionUri, 'l10n', `bundle.l10n.${forced}.json`).fsPath;
+    setLocalization(JSON.parse(readFileSync(file, 'utf8')), forced);
+  } else {
+    setLocalization(vscode.l10n.bundle, vscode.env.language);
+  }
   const service = new LayoutService();
   const api = testing ? { probes, service } : undefined;
   const command = (id: string, fn: (...args: any[]) => unknown) => vscode.commands.registerCommand(`bcReportBuilder.${id}`, fn);
@@ -51,9 +61,9 @@ export function activate(context: vscode.ExtensionContext) {
     command('newReport', async (folder?: vscode.Uri) => {
       const base = folder instanceof vscode.Uri ? folder : vscode.workspace.workspaceFolders?.[0]?.uri;
       const target = await vscode.window.showSaveDialog({
-        defaultUri: base ? vscode.Uri.joinPath(base, 'Bericht1.rdlc') : undefined,
-        filters: { 'RDLC-Layout': ['rdlc'], 'Berichtsdefinition': ['rdl'] },
-        saveLabel: 'Layout erstellen',
+        defaultUri: base ? vscode.Uri.joinPath(base, `${l10n.t('Report1')}.rdlc`) : undefined,
+        filters: { [l10n.t('RDLC Layout')]: ['rdlc'], [l10n.t('Report Definition')]: ['rdl'] },
+        saveLabel: l10n.t('Create Layout'),
       });
       if (!target) return;
       await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(serializeRdl(newReportTemplate())));
@@ -73,7 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
       const expression = menuContext(arg)?.expression;
       if (!expression) return;
       await vscode.env.clipboard.writeText(expression);
-      vscode.window.setStatusBarMessage(`$(copy) ${expression} kopiert`, 2500);
+      vscode.window.setStatusBarMessage(`$(copy) ${l10n.t('{0} copied', expression)}`, 2500);
     }),
 
     ...Object.entries(SETTING_TOGGLES).map(([id, key]) => command(id, async () => {
@@ -86,8 +96,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (!session) return;
       const current = session.state?.zoom ?? 1;
       const picked = await vscode.window.showQuickPick(
-        ZOOM_LEVELS.map(z => ({ label: `${Math.round(z * 100)} %`, zoom: z, description: z === current ? 'aktuell' : undefined })),
-        { placeHolder: 'Zoomstufe wählen', title: 'Zoom' });
+        ZOOM_LEVELS.map(z => ({ label: `${Math.round(z * 100)} %`, zoom: z, description: z === current ? l10n.t('current') : undefined })),
+        { placeHolder: l10n.t('Choose the zoom level'), title: l10n.t('Zoom') });
       if (picked) await session.command('setZoom', picked.zoom);
     }),
 
@@ -96,8 +106,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (!session) return;
       const current = session.state?.unit;
       const picked = await vscode.window.showQuickPick(
-        [{ label: 'Zentimeter', unit: 'cm' }, { label: 'Zoll', unit: 'in' }].map(u => ({ ...u, description: u.unit === current ? 'aktuell' : undefined })),
-        { placeHolder: 'Maßeinheit des Berichts (rd:ReportUnitType)', title: 'Maßeinheit' });
+        [{ label: l10n.t('Centimeters'), unit: 'cm' }, { label: l10n.t('Inches'), unit: 'in' }].map(u => ({ ...u, description: u.unit === current ? l10n.t('current') : undefined })),
+        { placeHolder: l10n.t('Unit of measurement of the report (rd:ReportUnitType)'), title: l10n.t('Unit of Measurement') });
       if (picked && picked.unit !== current) await session.command('setUnit', picked.unit);
     }),
 
@@ -127,11 +137,11 @@ function activeResource(): vscode.Uri | undefined {
  * language entries, they appear only while a designer has focus.
  */
 class DesignerStatus implements vscode.Disposable {
-  private readonly selection = this.item('selection', 'Auswahl', 104);
-  private readonly page = this.item('page', 'Seite', 103);
-  private readonly unit = this.item('unit', 'Maßeinheit', 102, 'bcReportBuilder.changeUnit', 'Maßeinheit ändern');
-  private readonly zoom = this.item('zoom', 'Zoom', 101, 'bcReportBuilder.zoom', 'Zoomstufe wählen');
-  private readonly al = this.item('al', 'AL-Report', 100, 'bcReportBuilder.revealAl');
+  private readonly selection = this.item('selection', l10n.t('Selection'), 104);
+  private readonly page = this.item('page', l10n.t('Page'), 103);
+  private readonly unit = this.item('unit', l10n.t('Unit of Measurement'), 102, 'bcReportBuilder.changeUnit', l10n.t('Change Unit of Measurement'));
+  private readonly zoom = this.item('zoom', l10n.t('Zoom'), 101, 'bcReportBuilder.zoom', l10n.t('Choose the zoom level'));
+  private readonly al = this.item('al', l10n.t('AL Report'), 100, 'bcReportBuilder.revealAl');
   private readonly subscription = ReportEditorProvider.onDidChange(s => this.update(s));
   private readonly keys = new Map<string, unknown>();
 
@@ -157,12 +167,12 @@ class DesignerStatus implements vscode.Disposable {
       if (text) { item.text = text; item.show(); } else item.hide();
     };
     show(this.selection, s?.mode === 'design' ? s.status : undefined);
-    show(this.page, s?.mode === 'preview' && s.page ? `Seite ${s.page.current} von ${s.page.total}` : undefined);
-    show(this.unit, s && (s.unit === 'cm' ? 'Zentimeter' : 'Zoll'));
+    show(this.page, s?.mode === 'preview' && s.page ? l10n.t('Page {0} of {1}', s.page.current, s.page.total) : undefined);
+    show(this.unit, s && (s.unit === 'cm' ? l10n.t('Centimeters') : l10n.t('Inches')));
     show(this.zoom, s && `$(zoom-in) ${Math.round(s.zoom * 100)} %`);
     const bc = session?.bc;
     show(this.al, bc ? `$(symbol-class) ${bc.reportName}` : undefined);
-    if (bc) this.al.tooltip = new vscode.MarkdownString(`**${bc.kind === 'reportextension' ? 'Report-Extension' : 'Report'} ${bc.id} „${bc.reportName}“**\n\n${bc.alFile}\n\nKlicken, um den AL-Code zu öffnen`);
+    if (bc) this.al.tooltip = new vscode.MarkdownString(`**${bc.kind === 'reportextension' ? l10n.t('Report extension {0} "{1}"', bc.id, bc.reportName) : l10n.t('Report {0} "{1}"', bc.id, bc.reportName)}**\n\n${bc.alFile}\n\n${l10n.t('Click to open the AL code')}`);
 
     this.setContext('mode', s?.mode ?? 'design');
     this.setContext('hasAlReport', !!bc);

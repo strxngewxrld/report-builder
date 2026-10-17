@@ -5,6 +5,7 @@
 import { CodeModule } from '../webview/vb';
 import { AlReport, allColumns } from './al/parser';
 import { mergedDataItems } from './al/context';
+import { l10n } from '../webview/l10n';
 
 export type Severity = 'error' | 'warning' | 'info' | 'hint';
 
@@ -73,9 +74,9 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
     try {
       const mod = new CodeModule(decl.code.text);
       functions = new Set(mod.functionNames.map(f => f.toLowerCase()));
-      for (const e of mod.errors) issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: `Code-Block: ${e}` });
+      for (const e of mod.errors) issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: l10n.t('Code block: {0}', e) });
     } catch (e) {
-      issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: `Code-Block kann nicht gelesen werden: ${(e as Error).message}` });
+      issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: l10n.t('The code block cannot be read: {0}', (e as Error).message) });
     }
   }
   const inCode = (o: number) => !!decl.code && o >= decl.code.start && o < decl.code.end;
@@ -88,18 +89,18 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
     const at = m[0].length - name.length;
     if (fields.has(name)) {
       if (al?.complete && !alFields.has(name) && !(name.endsWith('Format') && alFields.has(name.slice(0, -6)))) {
-        add(m, at, name, 'warning', 'removed-field', `Feld „${name}“ ist im Layout-Dataset, aber nicht mehr im AL-Report „${al.reportName}“. Beim nächsten Build entfernt der Compiler es, der Verweis schlägt dann fehl.`);
+        add(m, at, name, 'warning', 'removed-field', l10n.t('Field "{0}" is in the layout dataset but no longer in the AL report "{1}". The compiler removes it with the next build, then the reference fails.', name, al.reportName));
       }
       continue;
     }
     if (alFields.has(name)) {
-      add(m, at, name, 'warning', 'stale-field', `Spalte „${name}“ ist im AL-Report „${al!.reportName}“ definiert, fehlt aber noch im Layout-Dataset. Projekt neu erstellen, damit der AL-Compiler das Dataset aktualisiert.`);
+      add(m, at, name, 'warning', 'stale-field', l10n.t('Column "{0}" is defined in the AL report "{1}" but not yet in the layout dataset. Build the project so that the AL compiler updates the dataset.', name, al!.reportName));
       continue;
     }
     const other = fieldsLower.get(name.toLowerCase());
     add(m, at, name, 'error', 'unknown-field', other
-      ? `Feld „${name}“ gibt es nicht – Groß-/Kleinschreibung beachten: „${other}“.`
-      : `Feld „${name}“ gibt es im Dataset nicht${al ? ` (auch nicht im AL-Report „${al.reportName}“)` : ''}.`);
+      ? l10n.t('Field "{0}" does not exist – mind upper and lower case: "{1}".', name, other)
+      : al ? l10n.t('Field "{0}" exists neither in the dataset nor in the AL report "{1}".', name, al.reportName) : l10n.t('Field "{0}" does not exist in the dataset.', name));
   }
 
   for (const m of text.matchAll(/\bParameters!(\w+)/gi)) {
@@ -108,29 +109,29 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
     const at = m[0].length - name.length;
     if (params.has(name)) {
       if (al?.complete && !alParams.has(name)) {
-        add(m, at, name, 'warning', 'removed-parameter', `Parameter „${name}“ (Label/Beschriftung) ist im Layout, aber nicht mehr im AL-Report „${al.reportName}“.`);
+        add(m, at, name, 'warning', 'removed-parameter', l10n.t('Parameter "{0}" (label/caption) is in the layout but no longer in the AL report "{1}".', name, al.reportName));
       }
       continue;
     }
     if (alParams.has(name)) {
-      add(m, at, name, 'warning', 'stale-parameter', `„${name}“ ist im AL-Report „${al!.reportName}“ definiert (Label oder IncludeCaption), fehlt aber noch im Layout. Projekt neu erstellen.`);
+      add(m, at, name, 'warning', 'stale-parameter', l10n.t('"{0}" is defined in the AL report "{1}" (label or IncludeCaption) but not yet in the layout. Build the project.', name, al!.reportName));
       continue;
     }
     const other = paramsLower.get(name.toLowerCase());
-    add(m, at, name, 'error', 'unknown-parameter', other ? `Parameter „${name}“ gibt es nicht – gemeint ist vermutlich „${other}“.` : `Parameter „${name}“ gibt es nicht.`);
+    add(m, at, name, 'error', 'unknown-parameter', other ? l10n.t('Parameter "{0}" does not exist – probably "{1}" is meant.', name, other) : l10n.t('Parameter "{0}" does not exist.', name));
   }
 
   for (const m of text.matchAll(/\bCode\.(\w+)/g)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
-    if (!functions) add(m, 5, name, 'error', 'no-code', `Code.${name}: der Bericht hat keinen Code-Block.`);
-    else if (!functions.has(name.toLowerCase())) add(m, 5, name, 'error', 'unknown-code', `Code.${name} ist im Code-Block nicht definiert.`);
+    if (!functions) add(m, 5, name, 'error', 'no-code', l10n.t('Code.{0}: the report has no code block.', name));
+    else if (!functions.has(name.toLowerCase())) add(m, 5, name, 'error', 'unknown-code', l10n.t('Code.{0} is not defined in the code block.', name));
   }
 
   for (const m of text.matchAll(/\bReportItems!(\w+)/g)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
-    if (!items.has(name)) add(m, 12, name, 'error', 'unknown-item', `Berichtselement „${name}“ gibt es nicht.`);
+    if (!items.has(name)) add(m, 12, name, 'error', 'unknown-item', l10n.t('Report item "{0}" does not exist.', name));
   }
 
   // Business Central conventions per textbox
@@ -145,12 +146,12 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
       const field = /^=\s*(?:(?:Sum|First|Last|Min|Max|Avg)\()?Fields!(\w+)\.Value(?:\s*(?:,\s*"[^"]*")?\))?$/i.exec(value)?.[1];
       if (field && !hasFormat && fields.has(`${field}Format`)) {
         issues.push({ offset: at, length: v[1].length, severity: 'info', code: 'bc-format',
-          message: `„${tb[1]}“ zeigt „${field}“ ohne Zahlenformat. Business Central liefert dazu „${field}Format“ (Währung/Nachkommastellen) – Format auf =Fields!${field}Format.Value setzen.` });
+          message: l10n.t('"{0}" shows "{1}" without a number format. Business Central provides "{1}Format" for it (currency/decimals) – set Format to =Fields!{1}Format.Value.', tb[1], field) });
       }
       // fixed texts are not translated: Business Central layouts use labels/captions instead
       if (al && value && !value.startsWith('=') && /\p{L}{2,}/u.test(value)) {
         issues.push({ offset: at, length: v[1].length, severity: 'info', code: 'literal-text',
-          message: `„${tb[1]}“ enthält den festen Text „${value.length > 40 ? value.slice(0, 40) + '…' : value}“, der nicht übersetzt wird. Als Label im AL-Report anlegen (Kontextmenü im Designer: „Als AL-Label anlegen…“).` });
+          message: l10n.t('"{0}" contains the fixed text "{1}", which is not translated. Create it as a label in the AL report (context menu in the designer: "Create as AL Label…").', tb[1], value.length > 40 ? value.slice(0, 40) + '…' : value) });
       }
     }
   }
@@ -160,7 +161,7 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
     const missing = [...al.fields.filter(f => !fields.has(f)), ...al.parameters.filter(p => !params.has(p))];
     if (missing.length) {
       issues.push({ offset: decl.fieldsAt, length: 10, severity: 'info', code: 'stale-dataset',
-        message: `Das Layout-Dataset ist gegenüber dem AL-Report „${al.reportName}“ veraltet: ${missing.length} Spalte(n)/Label(s) fehlen (${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}). Projekt neu erstellen.` });
+        message: l10n.t('The layout dataset is out of date compared with the AL report "{0}": {1} column(s)/label(s) are missing ({2}). Build the project.', al.reportName, missing.length, `${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}`) });
     }
   }
 
@@ -179,11 +180,11 @@ export function lintAlUsage(rep: AlReport, layoutTexts: string[]): { line: numbe
   const out: { line: number; character: number; length: number; message: string }[] = [];
   for (const c of allColumns(mergedDataItems(rep))) {
     if (!used.has(c.name) && !used.has(`${c.name}Format`) && !used.has(`${c.name}Caption`)) {
-      out.push({ ...c.pos, length: c.name.length, message: `Spalte „${c.name}“ wird in keinem RDLC-Layout dieses Reports verwendet.` });
+      out.push({ ...c.pos, length: c.name.length, message: l10n.t('Column "{0}" is not used in any RDLC layout of this report.', c.name) });
     }
   }
   for (const l of rep.labels) {
-    if (!used.has(l.name)) out.push({ ...l.pos, length: l.name.length, message: `Label „${l.name}“ wird in keinem RDLC-Layout dieses Reports verwendet.` });
+    if (!used.has(l.name)) out.push({ ...l.pos, length: l.name.length, message: l10n.t('Label "{0}" is not used in any RDLC layout of this report.', l.name) });
   }
   return out;
 }

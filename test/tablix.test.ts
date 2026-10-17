@@ -230,8 +230,8 @@ test('Matrix: anlegen, stabil speichern, Kreuztabelle in der Vorschau, Kopfzelle
   const text = (n: unknown) => ((n as { paragraphs?: { runs: { text: string }[] }[] })?.paragraphs ?? []).map(p => p.runs.map(x => x.text).join('')).join('');
   const grid = table.rows.map(row => row.cells.map(c => text(c.node)));
   // groups sorted ascending, as created
-  assert.deepEqual(grid[0], ['', 'Lampe', 'Stuhl', 'Tisch', 'Gesamt']);
-  assert.deepEqual(grid.map(g => g[0]), ['', 'A', 'B', 'Gesamt']);
+  assert.deepEqual(grid[0], ['', 'Lampe', 'Stuhl', 'Tisch', 'Total']);
+  assert.deepEqual(grid.map(g => g[0]), ['', 'A', 'B', 'Total']);
   assert.deepEqual(grid[1].slice(1), ['', '50', '100', '150'], 'A: Stuhl 50, Tisch 100');
   assert.deepEqual(grid[2].slice(1), ['20', '', '', '20'], 'B: Lampe 20');
   assert.deepEqual(grid[3].slice(1), ['20', '50', '100', '170']);
@@ -248,7 +248,7 @@ test('Spaltengruppe zu einer Tabelle hinzufügen, Vorschau, löschen (nur Gruppe
   const g = addColumnGroup(r, t, 2, { name: 'Belege', expression: '=Fields!DocNo.Value' })!;
   assert.ok(g);
   assert.deepEqual(columnGroupList(t).map(x => x.member.group!.name), ['Belege']);
-  assert.match(columnGroupBlocker(t, 0) ?? '', /Spaltenköpfe/);
+  assert.match(columnGroupBlocker(t, 0) ?? '', /column headers/);
   assert.equal(t.corner, undefined, 'ohne Zeilenköpfe keine Ecke');
 
   const { xml, t: back } = roundTrip(r);

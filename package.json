@@ -1,8 +1,9 @@
 {
   "name": "bc-report-builder",
   "version": "0.1.0",
-  "description": "Visueller Designer für Business-Central-RDLC-Layouts (.rdlc/.rdl) mit Dokumentgliederung – inspiriert vom Microsoft Report Builder und dem Visual-Studio-Berichts-Designer",
+  "description": "%description%",
   "main": "./out/extension.js",
+  "l10n": "./l10n",
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
@@ -70,517 +71,517 @@
     "commands": [
       {
         "command": "bcReportBuilder.newReport",
-        "title": "Neues Berichtslayout…",
-        "category": "Business Central Report Builder",
+        "title": "%command.newReport%",
+        "category": "%category%",
         "icon": "$(new-file)",
-        "shortTitle": "Berichtslayout (RDLC)"
+        "shortTitle": "%command.newReport.short%"
       },
       {
         "command": "bcReportBuilder.showPreview",
-        "title": "Vorschau anzeigen",
-        "category": "Business Central Report Builder",
+        "title": "%command.showPreview%",
+        "category": "%category%",
         "icon": "$(open-preview)"
       },
       {
         "command": "bcReportBuilder.showDesign",
-        "title": "Entwurf anzeigen",
-        "category": "Business Central Report Builder",
+        "title": "%command.showDesign%",
+        "category": "%category%",
         "icon": "$(edit)"
       },
       {
         "command": "bcReportBuilder.togglePreview",
-        "title": "Entwurf/Vorschau umschalten",
-        "category": "Business Central Report Builder"
+        "title": "%command.togglePreview%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.openAsXml",
-        "title": "Als XML öffnen",
-        "category": "Business Central Report Builder",
+        "title": "%command.openAsXml%",
+        "category": "%category%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "bcReportBuilder.openInDesigner",
-        "title": "Im Designer öffnen",
-        "category": "Business Central Report Builder",
+        "title": "%command.openInDesigner%",
+        "category": "%category%",
         "icon": "$(layout)"
       },
       {
         "command": "bcReportBuilder.revealAl",
-        "title": "AL-Report öffnen",
-        "category": "Business Central Report Builder",
+        "title": "%command.revealAl%",
+        "category": "%category%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "bcReportBuilder.reportProperties",
-        "title": "Berichtseigenschaften…",
-        "category": "Business Central Report Builder",
+        "title": "%command.reportProperties%",
+        "category": "%category%",
         "icon": "$(settings-gear)"
       },
       {
         "command": "bcReportBuilder.importSampleData",
-        "title": "Vorschaudaten laden (Excel, CSV, JSON)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.importSampleData%",
+        "category": "%category%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "bcReportBuilder.print",
-        "title": "Drucken / Als PDF speichern…",
-        "category": "Business Central Report Builder",
+        "title": "%command.print%",
+        "category": "%category%",
         "icon": "$(file-pdf)"
       },
       {
         "command": "bcReportBuilder.exportHtml",
-        "title": "Als HTML exportieren…",
-        "category": "Business Central Report Builder",
+        "title": "%command.exportHtml%",
+        "category": "%category%",
         "icon": "$(export)"
       },
       {
         "command": "bcReportBuilder.zoom",
-        "title": "Zoom…",
-        "category": "Business Central Report Builder",
+        "title": "%command.zoom%",
+        "category": "%category%",
         "icon": "$(zoom-in)"
       },
       {
         "command": "bcReportBuilder.zoomIn",
-        "title": "Vergrößern",
-        "category": "Business Central Report Builder",
+        "title": "%command.zoomIn%",
+        "category": "%category%",
         "icon": "$(zoom-in)"
       },
       {
         "command": "bcReportBuilder.zoomOut",
-        "title": "Verkleinern",
-        "category": "Business Central Report Builder",
+        "title": "%command.zoomOut%",
+        "category": "%category%",
         "icon": "$(zoom-out)"
       },
       {
         "command": "bcReportBuilder.zoomReset",
-        "title": "Zoom zurücksetzen (100 %)",
-        "category": "Business Central Report Builder",
+        "title": "%command.zoomReset%",
+        "category": "%category%",
         "icon": "$(screen-normal)"
       },
       {
         "command": "bcReportBuilder.changeUnit",
-        "title": "Maßeinheit ändern…",
-        "category": "Business Central Report Builder"
+        "title": "%command.changeUnit%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleOutline",
-        "title": "Dokumentgliederung",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleOutline%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleReportData",
-        "title": "Berichtsdaten",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleReportData%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleProperties",
-        "title": "Eigenschaften",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleProperties%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleRuler",
-        "title": "Lineal",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleRuler%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleGrid",
-        "title": "Raster",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleGrid%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleSnap",
-        "title": "Am Raster ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleSnap%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleHeader",
-        "title": "Seitenkopf",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleHeader%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.toggleFooter",
-        "title": "Seitenfuß",
-        "category": "Business Central Report Builder"
+        "title": "%command.toggleFooter%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.insert.textbox",
-        "title": "Textfeld einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.textbox%",
+        "category": "%category%",
         "icon": "$(symbol-text)"
       },
       {
         "command": "bcReportBuilder.insert.table",
-        "title": "Tabelle einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.table%",
+        "category": "%category%",
         "icon": "$(table)"
       },
       {
         "command": "bcReportBuilder.insert.image",
-        "title": "Bild einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.image%",
+        "category": "%category%",
         "icon": "$(file-media)"
       },
       {
         "command": "bcReportBuilder.insert.line",
-        "title": "Linie einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.line%",
+        "category": "%category%",
         "icon": "$(chrome-minimize)"
       },
       {
         "command": "bcReportBuilder.insert.rectangle",
-        "title": "Rechteck einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.rectangle%",
+        "category": "%category%",
         "icon": "$(primitive-square)"
       },
       {
         "command": "bcReportBuilder.editText",
-        "title": "Text bearbeiten",
-        "category": "Business Central Report Builder"
+        "title": "%command.editText%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.editExpression",
-        "title": "Ausdruck…",
-        "category": "Business Central Report Builder"
+        "title": "%command.editExpression%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.cut",
-        "title": "Ausschneiden",
-        "category": "Business Central Report Builder"
+        "title": "%command.cut%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.copy",
-        "title": "Kopieren",
-        "category": "Business Central Report Builder"
+        "title": "%command.copy%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.paste",
-        "title": "Einfügen",
-        "category": "Business Central Report Builder",
+        "title": "%command.paste%",
+        "category": "%category%",
         "enablement": "bcReportBuilder.canPaste"
       },
       {
         "command": "bcReportBuilder.delete",
-        "title": "Löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.delete%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.bringToFront",
-        "title": "In den Vordergrund",
-        "category": "Business Central Report Builder"
+        "title": "%command.bringToFront%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.sendToBack",
-        "title": "In den Hintergrund",
-        "category": "Business Central Report Builder"
+        "title": "%command.sendToBack%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertColumnLeft",
-        "title": "Spalte links einfügen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertColumnLeft%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertColumnRight",
-        "title": "Spalte rechts einfügen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertColumnRight%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteColumn",
-        "title": "Spalte löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteColumn%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.toggleHeaderRow",
-        "title": "Kopfzeile",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.toggleHeaderRow%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.toggleFooterRow",
-        "title": "Fußzeile",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.toggleFooterRow%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.select",
-        "title": "Tabelle auswählen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.select%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.goToAlDefinition",
-        "title": "Zur Definition wechseln",
-        "category": "Business Central Report Builder",
+        "title": "%command.goToAlDefinition%",
+        "category": "%category%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "bcReportBuilder.copyExpression",
-        "title": "Ausdruck kopieren",
-        "category": "Business Central Report Builder",
+        "title": "%command.copyExpression%",
+        "category": "%category%",
         "icon": "$(copy)"
       },
       {
         "command": "bcReportBuilder.data.edit",
-        "title": "Bearbeiten…",
-        "category": "Business Central Report Builder",
+        "title": "%command.data.edit%",
+        "category": "%category%",
         "icon": "$(edit)"
       },
       {
         "command": "bcReportBuilder.data.delete",
-        "title": "Löschen",
-        "category": "Business Central Report Builder",
+        "title": "%command.data.delete%",
+        "category": "%category%",
         "icon": "$(trash)"
       },
       {
         "command": "bcReportBuilder.createLabel",
-        "title": "Als AL-Label anlegen…",
-        "category": "Business Central Report Builder",
+        "title": "%command.createLabel%",
+        "category": "%category%",
         "icon": "$(symbol-key)"
       },
       {
         "command": "bcReportBuilder.addColumns",
-        "title": "Felder als Spalten hinzufügen…",
-        "category": "Business Central Report Builder",
+        "title": "%command.addColumns%",
+        "category": "%category%",
         "icon": "$(add)"
       },
       {
         "command": "bcReportBuilder.renameColumn",
-        "title": "Spalte umbenennen (AL und Layouts)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.renameColumn%",
+        "category": "%category%",
         "icon": "$(edit)"
       },
       {
         "command": "bcReportBuilder.buildAl",
-        "title": "Projekt erstellen (AL: Package)",
-        "category": "Business Central Report Builder",
+        "title": "%command.buildAl%",
+        "category": "%category%",
         "icon": "$(package)"
       },
       {
         "command": "bcReportBuilder.runInBc",
-        "title": "Report in Business Central ausführen",
-        "category": "Business Central Report Builder",
+        "title": "%command.runInBc%",
+        "category": "%category%",
         "icon": "$(play)"
       },
       {
         "command": "bcReportBuilder.editCode",
-        "title": "Code-Block bearbeiten (VB)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.editCode%",
+        "category": "%category%",
         "icon": "$(code)"
       },
       {
         "command": "bcReportBuilder.revealInLayout",
-        "title": "Im Layout anzeigen",
-        "category": "Business Central Report Builder",
+        "title": "%command.revealInLayout%",
+        "category": "%category%",
         "icon": "$(layout)"
       },
       {
         "command": "bcReportBuilder.layout.alignLeft",
-        "title": "Links ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignLeft%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.alignCenter",
-        "title": "Zentriert ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignCenter%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.alignRight",
-        "title": "Rechts ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignRight%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.alignTop",
-        "title": "Oben ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignTop%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.alignMiddle",
-        "title": "Mittig ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignMiddle%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.alignBottom",
-        "title": "Unten ausrichten",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.alignBottom%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.sameWidth",
-        "title": "Gleiche Breite",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.sameWidth%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.sameHeight",
-        "title": "Gleiche Höhe",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.sameHeight%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.sameSize",
-        "title": "Gleiche Größe",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.sameSize%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.distributeHorizontal",
-        "title": "Horizontal gleichmäßig verteilen",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.distributeHorizontal%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.distributeVertical",
-        "title": "Vertikal gleichmäßig verteilen",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.distributeVertical%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.centerHorizontal",
-        "title": "Im Container horizontal zentrieren",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.centerHorizontal%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.layout.centerVertical",
-        "title": "Im Container vertikal zentrieren",
-        "category": "Business Central Report Builder"
+        "title": "%command.layout.centerVertical%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.addParentGroup",
-        "title": "Übergeordnete Gruppe hinzufügen…",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.addParentGroup%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.addChildGroup",
-        "title": "Untergeordnete Gruppe hinzufügen…",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.addChildGroup%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.addColumnGroup",
-        "title": "Spaltengruppe hinzufügen…",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.addColumnGroup%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteColumnGroup",
-        "title": "Spaltengruppe und Spalten löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteColumnGroup%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteColumnGroupOnly",
-        "title": "Nur Spaltengruppe löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteColumnGroupOnly%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.groupProperties",
-        "title": "Gruppeneigenschaften…",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.groupProperties%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.addGroupHeader",
-        "title": "Gruppenkopf hinzufügen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.addGroupHeader%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.addGroupFooter",
-        "title": "Gruppenfuß hinzufügen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.addGroupFooter%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteGroup",
-        "title": "Gruppe mit Kopf-/Fußzeilen löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteGroup%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteGroupOnly",
-        "title": "Nur Gruppe löschen (Zeilen behalten)",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteGroupOnly%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertRowAbove",
-        "title": "Oberhalb (innerhalb der Gruppe)",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertRowAbove%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertRowBelow",
-        "title": "Unterhalb (innerhalb der Gruppe)",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertRowBelow%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertRowOutsideAbove",
-        "title": "Oberhalb (außerhalb der Gruppe)",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertRowOutsideAbove%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.insertRowOutsideBelow",
-        "title": "Unterhalb (außerhalb der Gruppe)",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.insertRowOutsideBelow%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.deleteRow",
-        "title": "Zeile löschen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.deleteRow%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.mergeCells",
-        "title": "Zellen verbinden",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.mergeCells%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.table.splitCell",
-        "title": "Zelle teilen",
-        "category": "Business Central Report Builder"
+        "title": "%command.table.splitCell%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.exportPdf",
-        "title": "Als PDF exportieren (.pdf)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.exportPdf%",
+        "category": "%category%",
         "icon": "$(file-pdf)"
       },
       {
         "command": "bcReportBuilder.exportExcel",
-        "title": "Als Excel exportieren (.xlsx)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.exportExcel%",
+        "category": "%category%",
         "icon": "$(table)"
       },
       {
         "command": "bcReportBuilder.exportWord",
-        "title": "Als Word exportieren (.docx)…",
-        "category": "Business Central Report Builder",
+        "title": "%command.exportWord%",
+        "category": "%category%",
         "icon": "$(file-text)"
       },
       {
         "command": "bcReportBuilder.insert.chart",
-        "title": "Diagramm einfügen…",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.chart%",
+        "category": "%category%",
         "icon": "$(graph)"
       },
       {
         "command": "bcReportBuilder.chart.properties",
-        "title": "Diagrammeigenschaften…",
-        "category": "Business Central Report Builder"
+        "title": "%command.chart.properties%",
+        "category": "%category%"
       },
       {
         "command": "bcReportBuilder.insert.matrix",
-        "title": "Matrix einfügen…",
-        "category": "Business Central Report Builder",
+        "title": "%command.insert.matrix%",
+        "category": "%category%",
         "icon": "$(symbol-array)"
       }
     ],
     "submenus": [
       {
         "id": "bcReportBuilder.insert",
-        "label": "Einfügen",
+        "label": "%submenu.insert%",
         "icon": "$(add)"
       },
       {
         "id": "bcReportBuilder.view",
-        "label": "Ansicht"
+        "label": "%submenu.view%"
       },
       {
         "id": "bcReportBuilder.table",
-        "label": "Tabelle"
+        "label": "%submenu.table%"
       },
       {
         "id": "bcReportBuilder.layout",
-        "label": "Ausrichten und anordnen"
+        "label": "%submenu.layout%"
       },
       {
         "id": "bcReportBuilder.tableRows",
-        "label": "Zeile einfügen"
+        "label": "%submenu.tableRows%"
       },
       {
         "id": "bcReportBuilder.tableGroups",
-        "label": "Gruppe"
+        "label": "%submenu.tableGroups%"
       }
     ],
     "menus": {
@@ -1489,17 +1490,17 @@
         "bcReportBuilder.designer.showGrid": {
           "type": "boolean",
           "default": true,
-          "description": "Raster auf der Entwurfsfläche anzeigen."
+          "description": "%config.showGrid%"
         },
         "bcReportBuilder.designer.snapToGrid": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Elemente beim Verschieben und Aufziehen am Raster ausrichten (mit gedrückter `Alt`-Taste frei)."
+          "markdownDescription": "%config.snapToGrid%"
         },
         "bcReportBuilder.designer.showRuler": {
           "type": "boolean",
           "default": true,
-          "description": "Lineal über der Entwurfsfläche anzeigen."
+          "description": "%config.showRuler%"
         },
         "bcReportBuilder.designer.defaultZoom": {
           "type": "number",
@@ -1520,7 +1521,7 @@
             "150 %",
             "200 %"
           ],
-          "description": "Zoomstufe, mit der neu geöffnete Layouts angezeigt werden."
+          "description": "%config.defaultZoom%"
         }
       }
     }

@@ -4,6 +4,7 @@
 
 import { Report, ReportItem, RowMember, SortExpression, TableGroup, TableItem, TableRow, TextboxItem, newId, uniqueName } from './model';
 import { makeTextbox } from './ops';
+import { l10n } from './l10n';
 
 // ------------------------------------------------------------------------------------------------ tree basics
 
@@ -450,9 +451,9 @@ const headerTextbox = (r: Report, value: string, taken: Set<string>, bold: boole
 /** Why a column group cannot be added to column `col` (null: it can). */
 export function columnGroupBlocker(t: TableItem, col: number): string | null {
   const leaf = leavesOf(t.columnMembers)[col];
-  if (!leaf) return 'Keine Spalte gewählt';
-  if (headerLevels(t.columnMembers).length) return 'Die Tabelle hat schon Spaltenköpfe – für Kreuztabellen „Matrix einfügen“ verwenden';
-  if (!t.columnMembers.includes(leaf) || leaf.group) return 'Die Spalte gehört schon zu einer Spaltengruppe';
+  if (!leaf) return l10n.t('No column selected');
+  if (headerLevels(t.columnMembers).length) return l10n.t('The table has column headers already – use "Insert Matrix" for cross tables');
+  if (!t.columnMembers.includes(leaf) || leaf.group) return l10n.t('The column belongs to a column group already');
   return null;
 }
 
@@ -601,7 +602,7 @@ export function createMatrix(r: Report, box: { top: number; left: number }, o: M
     id: newId(), group: newGroup(colName, [o.columnGroup]), header: header(o.columnGroup, 0.25),
     sort: [{ value: o.columnGroup, descending: false }], extra: [], children: [],
   }];
-  if (o.columnTotal) columnMembers.push({ id: newId(), header: header('Gesamt', 0.25), sort: [], extra: [], children: [] });
+  if (o.columnTotal) columnMembers.push({ id: newId(), header: header(l10n.t('Total'), 0.25), sort: [], extra: [], children: [] });
   const cols = columnMembers.length;
 
   const rows: TableRow[] = [{ id: newId(), kind: 'detail', height: 0.25, cells: Array.from({ length: cols }, valueCell) }];
@@ -612,7 +613,7 @@ export function createMatrix(r: Report, box: { top: number; left: number }, o: M
   if (o.rowTotal) {
     const total: TableRow = { id: newId(), kind: 'footer', height: 0.25, cells: Array.from({ length: cols }, () => { const c = valueCell(); c.style.FontWeight = 'Bold'; return c; }) };
     rows.push(total);
-    rowMembers.push({ id: newId(), header: header('Gesamt', 1.25), sort: [], extra: ['<KeepWithGroup>Before</KeepWithGroup>'], children: [], rowId: total.id });
+    rowMembers.push({ id: newId(), header: header(l10n.t('Total'), 1.25), sort: [], extra: ['<KeepWithGroup>Before</KeepWithGroup>'], children: [], rowId: total.id });
   }
   const t: TableItem = {
     id: newId(), type: 'table', name, dataSetName: o.dataSetName, top: box.top, left: box.left, width: 0, height: 0, style: {},

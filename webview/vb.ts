@@ -11,6 +11,7 @@
 // restored – page headers need the state as it was at the end of their page.
 
 import { EvalContext, Node, compare, evalNode, parseExpression, toBool } from './expr';
+import { l10n } from './l10n';
 
 type LoopKind = 'for' | 'do' | 'while' | 'select';
 type LoopCond = { until: boolean; cond: Node } | null;
@@ -118,11 +119,11 @@ export class CodeModule {
       if (decl) {
         let value: unknown = null;
         if (decl[2]) {
-          try { value = evalNode(this.expr(decl[2], line), this.bareContext()); } catch (e) { this.errors.push(`Zeile ${line}: ${(e as Error).message}`); }
+          try { value = evalNode(this.expr(decl[2], line), this.bareContext()); } catch (e) { this.errors.push(l10n.t('Line {0}: {1}', line, (e as Error).message)); }
         }
         this.initial.set(decl[1].toLowerCase(), value);
       } else if (!/^(option|imports)\s/i.test(text)) {
-        this.errors.push(`Zeile ${line}: nicht unterstützte Anweisung außerhalb einer Funktion: ${text}`);
+        this.errors.push(l10n.t('Line {0}: unsupported statement outside of a function: {1}', line, text));
       }
       i++;
     }
@@ -133,7 +134,7 @@ export class CodeModule {
   get functionNames(): string[] { return [...this.functions.values()].map(f => f.name); }
 
   private expr(text: string, line: number): Node {
-    try { return parseExpression(text); } catch (e) { throw new Error(`Code, Zeile ${line}: ${(e as Error).message} in „${text}“`); }
+    try { return parseExpression(text); } catch (e) { throw new Error(l10n.t('Code, line {0}: {1} in "{2}"', line, (e as Error).message, text)); }
   }
 
   /** Parses statements up to a line matching `end`; returns them and the index after the end line. */
@@ -301,8 +302,8 @@ export class CodeModule {
   /** Calls a function of the code block (Code.Name(args)). */
   call(name: string, args: unknown[], ctx: EvalContext): unknown {
     const fn = this.functions.get(name.toLowerCase());
-    if (!fn) throw new Error(`Code.${name} ist im Code-Block nicht definiert`);
-    if (this.depth > 50) throw new Error(`Code.${name}: zu tiefe Rekursion`);
+    if (!fn) throw new Error(l10n.t('Code.{0} is not defined in the code block', name));
+    if (this.depth > 50) throw new Error(l10n.t('Code.{0}: recursion too deep', name));
     const locals = new Map<string, unknown>();
     fn.params.forEach((p, i) => locals.set(p.name, i < args.length ? args[i] : p.def ? evalNode(p.def, ctx) : null));
     if (!fn.isSub) locals.set(fn.name.toLowerCase(), null);
@@ -327,7 +328,7 @@ export class CodeModule {
 
   private run(body: Stmt[], locals: Map<string, unknown>, ctx: EvalContext) {
     for (const s of body) {
-      if (++this.steps > 100000) throw new Error('Code: zu viele Anweisungen (Endlosschleife?)');
+      if (++this.steps > 100000) throw new Error(l10n.t('Code: too many statements (endless loop?)'));
       switch (s.k) {
         case 'if': {
           const branch = s.branches.find(b => b.cond === null || toBool(evalNode(b.cond, ctx)));
@@ -338,7 +339,7 @@ export class CodeModule {
         case 'exit': throw new ExitSignal();
         case 'dim': locals.set(s.name, s.expr ? evalNode(s.expr, ctx) : null); break;
         case 'expr': evalNode(s.expr, ctx); break;
-        case 'unsupported': throw new Error(`Code: nicht unterstützte Anweisung „${s.text}“`);
+        case 'unsupported': throw new Error(l10n.t('Code: unsupported statement "{0}"', s.text));
         case 'assign': {
           let value = evalNode(s.expr, ctx);
           if (s.op !== '=') {
@@ -366,7 +367,7 @@ export class CodeModule {
         case 'foreach': {
           const list = evalNode(s.list, ctx);
           const items = Array.isArray(list) ? list : typeof list === 'string' ? [...list] : list == null ? [] : null;
-          if (!items) throw new Error('Code: For Each erwartet eine Liste');
+          if (!items) throw new Error(l10n.t('Code: For Each expects a list'));
           if (s.local) locals.set(s.name, null);
           for (const item of items) {
             this.assign(s.name, item, locals);
@@ -402,7 +403,7 @@ export class CodeModule {
 
   /** Runs one loop iteration; false when the loop is left with Exit. */
   private iterate(kind: LoopKind, body: Stmt[], locals: Map<string, unknown>, ctx: EvalContext): boolean {
-    if (++this.steps > 100000) throw new Error('Code: zu viele Anweisungen (Endlosschleife?)');
+    if (++this.steps > 100000) throw new Error(l10n.t('Code: too many statements (endless loop?)'));
     try {
       this.run(body, locals, ctx);
       return true;

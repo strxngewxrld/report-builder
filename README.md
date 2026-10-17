@@ -170,6 +170,12 @@ Der Designer verhält sich wie ein eingebauter Editor:
   Zahlen, BC-Belege als Kopftexte plus Positionstabelle) und **Word**
 - Speichern, Rückgängig/Wiederholen und Hot Exit kommen von VS Code; „Als XML öffnen“ öffnet die Datei daneben, Änderungen dort erscheinen sofort
 
+## Sprachen
+Die Oberfläche folgt der Anzeigesprache von VS Code: Englisch (Standard) und Deutsch. Befehle, Menüs und Einstellungen kommen
+aus `package.nls.json` / `package.nls.de.json`, alle übrigen Texte (Meldungen, Prüfungen, Designer, Dialoge, Vorschau) aus
+`l10n/bundle.l10n.de.json`; die Extension reicht die Übersetzungen an die Webview weiter. Quelltexte im Code sind englisch
+(`l10n.t('…', …)` aus `webview/l10n.ts`); ein Unit-Test prüft, dass jeder Text übersetzt ist und Platzhalter übereinstimmen.
+
 ## Barrierefreiheit
 - Entwurfsfläche per Tastatur: Tab/Umschalt+Tab wählen das nächste/vorherige Element (Seitenkopf, Text, Seitenfuß; oben nach
   unten), Pfeiltasten verschieben, Alt+Pfeiltasten ändern die Größe (mit Umschalt fein), Eingabe oder F2 bearbeitet den Text,
@@ -186,7 +192,8 @@ npm run test:vscode    # Integrationstests im installierten VS Code (isoliertes 
                        # Speichern, externe Änderungen, AL-Kontext, Problembereich, Sprung zu AL, Vorschau mit Seitenumbruch,
                        # Befehle/Einstellungen → Designer → Statusleiste, Layouts wechseln, Label anlegen, Spalten hinzufügen,
                        # Spalte umbenennen (Eingabefelder/Auswahllisten beantwortet), PDF-Export, Tabellenbefehle
-                       # BC_RB_TIMEOUT_SCALE=3 für langsame Rechner/CI
+                       # BC_RB_TIMEOUT_SCALE=3 für langsame Rechner/CI;
+                       # BC_RB_TEST_LANGUAGE=de BC_RB_ONLY=Lokalisierung prüft das deutsche Bundle bis in die Webview
 npm run test:corpus    # alle W1-Layouts und AL-Reports der Base App aus github.com/microsoft/BCApps (nur im Speicher)
 ```
 
@@ -227,6 +234,7 @@ mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsat
 | `webview/expr.ts`, `webview/vb.ts` | Ausdrücke, Interpreter für den `<Code>`-Block |
 | `webview/outline.ts`, `webview/nested.ts` | Dokumentgliederung, Bearbeiten in unverändert gespeicherten Bereichen |
 | `webview/bc.ts` | BC-Kontext, Vorschau-Parameter und -Daten |
+| `webview/l10n.ts`, `l10n/`, `package.nls*.json` | Lokalisierung (gemeinsam für Extension und Webview), deutsche Übersetzungen |
 | `webview/components/` | Symbolleiste, Designer, Berichtsdaten, Gliederung, Eigenschaften, Dialoge, Vorschau |
 
 ## Grenzen
@@ -242,4 +250,4 @@ mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsat
 - Die Vorschau ist eine Annäherung an den Berichtsserver, nicht pixelgenau; Abfragen gegen echte Datenquellen werden nicht ausgeführt
 - Der `<Code>`-Interpreter kennt `Try`/`Catch`, `With` und Arrays mit Index-Zuweisung nicht – betroffene Funktionen melden das in der Vorschau
 - Word- und Excel-Layouts werden nicht bearbeitet (sie öffnen sich aus *Berichtsdaten › Layouts des Reports* in Word bzw. Excel)
-- Die Oberfläche ist deutsch
+- Die Oberfläche gibt es auf Englisch und Deutsch

@@ -4,6 +4,7 @@
 import { deflateRawSync } from 'node:zlib';
 
 import type { ExportBlock, ExportCell } from '../webview/render/export';
+import { l10n } from '../webview/l10n';
 export type { ExportBlock, ExportCell };
 
 // ------------------------------------------------------------------------------------------------ zip
@@ -61,7 +62,7 @@ const colName = (i: number) => { let s = ''; i++; while (i) { const m = (i - 1) 
  * One worksheet: tables keep their columns (merged cells stay merged), texts take a row of their own; numbers stay
  * numbers. Column widths follow the widest table.
  */
-export function writeXlsx(blocks: ExportBlock[], sheetName = 'Bericht'): Uint8Array {
+export function writeXlsx(blocks: ExportBlock[], sheetName = l10n.t('Report')): Uint8Array {
   const rows: string[] = [];
   const merges: string[] = [];
   let r = 0;

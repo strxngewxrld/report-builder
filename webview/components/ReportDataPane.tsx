@@ -5,13 +5,15 @@ import { post, vsContext } from '../vscode';
 import { BcDataPane } from './BcDataPane';
 import { ActionButton, Codicon } from './Icon';
 import { ImagesGroup } from './ImagesGroup';
+import { l10n } from '../l10n';
 
-export const GLOBALS: [string, string][] = [
-  ['ExecutionTime', 'Ausführungszeit'],
-  ['PageNumber', 'Seitenzahl'],
-  ['TotalPages', 'Gesamtseiten'],
-  ['ReportName', 'Berichtsname'],
-  ['ReportFolder', 'Berichtsordner'],
+/** The built-in fields (Globals!…) with their display names. */
+export const globals = (): [string, string][] => [
+  ['ExecutionTime', l10n.t('Execution Time')],
+  ['PageNumber', l10n.t('Page Number')],
+  ['TotalPages', l10n.t('Total Pages')],
+  ['ReportName', l10n.t('Report Name')],
+  ['ReportFolder', l10n.t('Report Folder')],
 ];
 
 export const dragProps = (payload: DragPayload) => ({
@@ -50,32 +52,32 @@ export function ReportDataPane() {
   return (
     <div className="pane-content">
       <div className="tree" {...vsContext({ preventDefaultContextMenuItems: true })}>
-        <Group label="Integrierte Felder" open={isOpen('globals')} onToggle={() => toggle('globals')}>
-          {GLOBALS.map(([name, label]) => (
-            <div key={name} className="tree-leaf" {...dragProps({ kind: 'global', name })} title={`=Globals!${name} – auf die Entwurfsfläche ziehen`}
+        <Group label={l10n.t('Built-in Fields')} open={isOpen('globals')} onToggle={() => toggle('globals')}>
+          {globals().map(([name, label]) => (
+            <div key={name} className="tree-leaf" {...dragProps({ kind: 'global', name })} title={l10n.t('{0} – drag onto the design surface', `=Globals!${name}`)}
               {...vsContext({ webviewSection: 'dataField', expression: `=Globals!${name}` })}>
               <Codicon name="symbol-constant" className="glyph" />{label}
             </div>
           ))}
         </Group>
 
-        <Group label="Parameter" open={isOpen('params')} onToggle={() => toggle('params')}
-          onAdd={() => ed.setDialog({ kind: 'parameter' })} addTitle="Parameter hinzufügen">
+        <Group label={l10n.t('Parameters')} open={isOpen('params')} onToggle={() => toggle('params')}
+          onAdd={() => ed.setDialog({ kind: 'parameter' })} addTitle={l10n.t('Add Parameter')}>
           {report.parameters.map(p => (
             <div key={p.id} className="tree-leaf" {...dragProps({ kind: 'parameter', name: p.name })}
               {...vsContext({ webviewSection: 'dataEntry', entryKind: 'parameter', name: p.name, expression: `=Parameters!${p.name}.Value` })}
-              onDoubleClick={() => ed.setDialog({ kind: 'parameter', name: p.name })} title={`${p.dataType} – Doppelklick zum Bearbeiten`}>
+              onDoubleClick={() => ed.setDialog({ kind: 'parameter', name: p.name })} title={l10n.t('{0} – double-click to edit', p.dataType)}>
               <Codicon name="symbol-parameter" className="glyph" />{p.name}
               <RowActions
                 onEdit={() => ed.setDialog({ kind: 'parameter', name: p.name })}
                 onDelete={() => ed.commit(r => { r.parameters = r.parameters.filter(x => x.name !== p.name); })} />
             </div>
           ))}
-          {!report.parameters.length && <div className="tree-empty">Keine Parameter</div>}
+          {!report.parameters.length && <div className="tree-empty">{l10n.t('No parameters')}</div>}
         </Group>
 
-        <Group label="Datenquellen" open={isOpen('sources')} onToggle={() => toggle('sources')}
-          onAdd={() => ed.setDialog({ kind: 'dataSource' })} addTitle="Datenquelle hinzufügen">
+        <Group label={l10n.t('Data Sources')} open={isOpen('sources')} onToggle={() => toggle('sources')}
+          onAdd={() => ed.setDialog({ kind: 'dataSource' })} addTitle={l10n.t('Add Data Source')}>
           {report.dataSources.map(d => (
             <div key={d.id} className="tree-leaf" onDoubleClick={() => ed.setDialog({ kind: 'dataSource', name: d.name })}
               {...vsContext({ webviewSection: 'dataEntry', entryKind: 'dataSource', name: d.name })}
@@ -86,11 +88,11 @@ export function ReportDataPane() {
                 onDelete={() => ed.commit(r => { r.dataSources = r.dataSources.filter(x => x.name !== d.name); })} />
             </div>
           ))}
-          {!report.dataSources.length && <div className="tree-empty">Keine Datenquellen</div>}
+          {!report.dataSources.length && <div className="tree-empty">{l10n.t('No data sources')}</div>}
         </Group>
 
         <Group label="Datasets" open={isOpen('sets')} onToggle={() => toggle('sets')}
-          onAdd={() => ed.setDialog({ kind: 'dataSet' })} addTitle="Dataset hinzufügen">
+          onAdd={() => ed.setDialog({ kind: 'dataSet' })} addTitle={l10n.t('Add Dataset')}>
           {report.dataSets.map(ds => {
             const key = `ds:${ds.name}`;
             const rows = ed.sampleData[ds.name];
@@ -99,10 +101,10 @@ export function ReportDataPane() {
                 <div className="tree-node" {...dragProps({ kind: 'dataSet', dataSet: ds.name })}
                   {...vsContext({ webviewSection: 'dataEntry', entryKind: 'dataSet', name: ds.name })}
                   onDoubleClick={() => ed.setDialog({ kind: 'dataSet', name: ds.name })}
-                  title="Auf die Entwurfsfläche ziehen, um eine Tabelle mit allen Feldern zu erstellen">
+                  title={l10n.t('Drag onto the design surface to create a table with all fields')}>
                   <Twisty open={isOpen(key)} onClick={() => toggle(key)} />
                   <Codicon name="table" className="glyph" />{ds.name}
-                  {rows && <span className="badge" title="Beispieldaten vorhanden">{rows.length}</span>}
+                  {rows && <span className="badge" title={l10n.t('Sample data available')}>{rows.length}</span>}
                   <RowActions
                     onData={() => post({ type: 'importSampleData', dataSet: ds.name })}
                     onEdit={() => ed.setDialog({ kind: 'dataSet', name: ds.name })}
@@ -117,18 +119,18 @@ export function ReportDataPane() {
                         <Codicon name={f.value ? 'symbol-operator' : 'symbol-field'} className="glyph" />{f.name}
                       </div>
                     ))}
-                    {!ds.fields.length && <div className="tree-empty">Keine Felder</div>}
+                    {!ds.fields.length && <div className="tree-empty">{l10n.t('No fields')}</div>}
                   </div>
                 )}
               </div>
             );
           })}
-          {!report.dataSets.length && <div className="tree-empty">Keine Datasets</div>}
+          {!report.dataSets.length && <div className="tree-empty">{l10n.t('No datasets')}</div>}
         </Group>
 
         <ImagesGroup open={isOpen('images')} onToggle={() => toggle('images')} />
       </div>
-      <div className="pane-hint">Felder auf die Entwurfsfläche oder in Tabellenzellen ziehen. Ein Dataset auf die Fläche ziehen erzeugt eine Tabelle.</div>
+      <div className="pane-hint">{l10n.t('Drag fields onto the design surface or into table cells. Dragging a dataset onto the surface creates a table.')}</div>
     </div>
   );
 }
@@ -149,9 +151,9 @@ export function Group(props: { label: string; open: boolean; onToggle: () => voi
 function RowActions({ onEdit, onDelete, onData }: { onEdit: () => void; onDelete: () => void; onData?: () => void }) {
   return (
     <span className="row-actions" onClick={e => e.stopPropagation()}>
-      {onData && <ActionButton icon="cloud-download" title="Vorschaudaten laden (Excel, CSV, JSON)" onClick={onData} />}
-      <ActionButton icon="edit" title="Bearbeiten" onClick={onEdit} />
-      <ActionButton icon="trash" title="Löschen" onClick={onDelete} />
+      {onData && <ActionButton icon="cloud-download" title={l10n.t('Load Preview Data (Excel, CSV, JSON)')} onClick={onData} />}
+      <ActionButton icon="edit" title={l10n.t('Edit')} onClick={onEdit} />
+      <ActionButton icon="trash" title={l10n.t('Delete')} onClick={onDelete} />
     </span>
   );
 }
