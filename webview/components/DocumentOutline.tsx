@@ -9,15 +9,16 @@ import { browserDom, serializeRdl } from '../rdl';
 import { ActionButton, Codicon } from './Icon';
 import { RichTextEditor } from './RichTextEditor';
 import { vsContext } from '../vscode';
+import { l10n } from '../l10n';
 
 /** Codicon and label per outline kind. */
-const KIND: Record<OutlineKind, [icon: string, label: string]> = {
-  Section: ['symbol-namespace', 'Abschnitt'], Rows: ['list-flat', 'Zeilengruppen'], Columns: ['split-horizontal', 'Spaltengruppen'],
-  Group: ['group-by-ref-type', 'Gruppe'], Textbox: ['symbol-text', 'Textfeld'], Rectangle: ['primitive-square', 'Rechteck'],
-  Line: ['chrome-minimize', 'Linie'], Image: ['file-media', 'Bild'], Tablix: ['table', 'Tablix'], Chart: ['graph', 'Diagramm'],
-  Subreport: ['references', 'Unterbericht'], Map: ['globe', 'Karte'], GaugePanel: ['dashboard', 'Messgerät'],
-  CustomReportItem: ['extensions', 'Benutzerdefiniert'], List: ['list-unordered', 'Liste'], Table: ['table', 'Tabelle'], Matrix: ['table', 'Matrix'],
-};
+const kinds = (): Record<OutlineKind, [icon: string, label: string]> => ({
+  Section: ['symbol-namespace', l10n.t('Section')], Rows: ['list-flat', l10n.t('Row Groups')], Columns: ['split-horizontal', l10n.t('Column Groups')],
+  Group: ['group-by-ref-type', l10n.t('Group')], Textbox: ['symbol-text', l10n.t('Textbox')], Rectangle: ['primitive-square', l10n.t('Rectangle')],
+  Line: ['chrome-minimize', l10n.t('Line')], Image: ['file-media', l10n.t('Image')], Tablix: ['table', 'Tablix'], Chart: ['graph', l10n.t('Chart')],
+  Subreport: ['references', l10n.t('Subreport')], Map: ['globe', l10n.t('Map')], GaugePanel: ['dashboard', l10n.t('Gauge')],
+  CustomReportItem: ['extensions', l10n.t('Custom')], List: ['list-unordered', l10n.t('List')], Table: ['table', l10n.t('Table')], Matrix: ['table', 'Matrix'],
+});
 
 export const SEVERITY_ICON = { error: 'error', warning: 'warning', info: 'info', hint: 'info' } as const;
 
@@ -150,17 +151,17 @@ export function DocumentOutline() {
       <div className="filter-row">
         <span className="filter-input">
           <Codicon name="filter" />
-          <input type="text" placeholder="Filtern (Name oder Ausdruck)" value={filter} aria-label="Gliederung filtern"
+          <input type="text" placeholder={l10n.t('Filter (name or expression)')} value={filter} aria-label={l10n.t('Filter outline')}
             onChange={e => setFilter(e.target.value)} onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') setFilter(''); }} />
-          {filter && <ActionButton icon="close" title="Filter löschen" onClick={() => setFilter('')} />}
+          {filter && <ActionButton icon="close" title={l10n.t('Clear Filter')} onClick={() => setFilter('')} />}
         </span>
-        <ActionButton icon="expand-all" title="Alle erweitern" onClick={() => setExpanded(new Set([...index.keys()]))} />
-        <ActionButton icon="collapse-all" title="Alle reduzieren" onClick={() => setExpanded(new Set(['#body']))} />
+        <ActionButton icon="expand-all" title={l10n.t('Expand All')} onClick={() => setExpanded(new Set([...index.keys()]))} />
+        <ActionButton icon="collapse-all" title={l10n.t('Collapse All')} onClick={() => setExpanded(new Set(['#body']))} />
       </div>
-      <div className="tree outline-tree" ref={listRef} tabIndex={0} onKeyDown={onKeyDown} role="tree" aria-label="Dokumentgliederung"
+      <div className="tree outline-tree" ref={listRef} tabIndex={0} onKeyDown={onKeyDown} role="tree" aria-label={l10n.t('Document outline')}
         {...vsContext({ preventDefaultContextMenuItems: true })}>
         {rows.map(({ node, depth }) => {
-          const [icon, label] = KIND[node.kind];
+          const [icon, label] = kinds()[node.kind];
           const hidden = node.hidden?.trim().toLowerCase();
           const open = !!visibleByFilter || expanded.has(node.key);
           const diags = node.itemName ? diagByItem.get(node.itemName) : undefined;
@@ -173,19 +174,19 @@ export function DocumentOutline() {
               onContextMenu={() => activate(node)}
               {...(loc ? vsContext({ webviewSection: 'item', itemType: loc.item.type, positioned: !!loc.container, inTable: false }) : {})}
               onDoubleClick={() => node.children.length && toggle(node.key)}
-              title={`${label}${node.hidden ? ` – ausgeblendet: ${node.hidden}` : ''}`}>
+              title={node.hidden ? l10n.t('{0} – hidden: {1}', label, node.hidden) : label}>
               <span className="indent" style={{ width: depth * 12 }} />
               <span className={`twisty ${node.children.length ? '' : 'leaf'}`} onClick={e => { e.stopPropagation(); toggle(node.key); }}>
                 <Codicon name={open ? 'chevron-down' : 'chevron-right'} />
               </span>
               <Codicon name={icon} className={`kind-icon kind-icon-${node.kind}`} />
               <span className="outline-name">{node.name}</span>
-              {node.kind === 'Textbox' && node.details[0]?.[0] === 'Wert' && (
+              {node.kind === 'Textbox' && node.details[0]?.[0] === l10n.t('Value') && (
                 <span className="tree-description">{node.details[0][1]}</span>
               )}
               <span className="grow" />
               {node.hidden && <Codicon name="eye-closed" className={`hidden-flag ${hidden === 'true' ? '' : 'conditional'}`}
-                title={hidden === 'true' ? 'Ausgeblendet' : `Bedingt ausgeblendet: ${node.hidden}`} />}
+                title={hidden === 'true' ? l10n.t('Hidden') : l10n.t('Conditionally hidden: {0}', node.hidden)} />}
               {diags && (() => {
                 const sev = worst(diags);
                 return <Codicon name={SEVERITY_ICON[sev]} className={`sev-${sev}`} title={diags.map(d => d.message).join('\n')} />;
@@ -193,13 +194,13 @@ export function DocumentOutline() {
             </div>
           );
         })}
-        {!rows.length && <div className="tree-empty">{term ? 'Keine Treffer' : 'Keine Elemente'}</div>}
+        {!rows.length && <div className="tree-empty">{term ? l10n.t('No matches') : l10n.t('No items')}</div>}
       </div>
       <div className="outline-details">
         {activeNode ? (
           <>
             <div className="outline-details-title">
-              <Codicon name={KIND[activeNode.kind][0]} className="kind-icon" /> {activeNode.name} <span className="muted">{KIND[activeNode.kind][1]}</span>
+              <Codicon name={kinds()[activeNode.kind][0]} className="kind-icon" /> {activeNode.name} <span className="muted">{kinds()[activeNode.kind][1]}</span>
             </div>
             <div className="outline-path">
               {[...(activeEntry?.ancestors ?? []).map(a => a.name), activeNode.name].join(' › ')}
@@ -216,7 +217,9 @@ export function DocumentOutline() {
             )}
             {activeNode.itemName && target !== activeNode.itemName && activeNode.kind !== 'Textbox' && (
               <div className="prop-note">
-                Liegt in einem Bereich, den der Designer unverändert speichert{target ? ` (ausgewählt: ${target})` : ''}. Textfelder darin lassen sich hier bearbeiten, alles andere über „XML anzeigen“.
+                {target
+                  ? l10n.t('Lies in a region the designer saves unchanged (selected: {0}). Textboxes in it can be edited here, everything else via "Open as XML".', target)
+                  : l10n.t('Lies in a region the designer saves unchanged. Textboxes in it can be edited here, everything else via "Open as XML".')}
               </div>
             )}
             {activeNode.kind === 'Textbox' && activeNode.itemName && target !== activeNode.itemName && rawOwner(activeEntry!) && (
@@ -224,10 +227,10 @@ export function DocumentOutline() {
             )}
             {editable?.type === 'textbox' && (
               <button className="secondary" onClick={() => ed.setDialog({
-                kind: 'expression', title: `Wert von ${editable.name}`, value: editable.value,
+                kind: 'expression', title: l10n.t('Value of {0}', editable.name), value: editable.value,
                 dataSetName: locate(report, editable.name)?.table?.dataSetName,
                 onOk: v => ed.commit(r => { (locate(r, editable.name)!.item as TextboxItem).value = v; }),
-              })}>Ausdruck bearbeiten…</button>
+              })}>{l10n.t('Edit Expression…')}</button>
             )}
           </>
         ) : (
@@ -253,25 +256,25 @@ function NestedTextboxEditor({ raw, name }: { raw: string; name: string }) {
   return (
     <div className="nested-editor">
       {tb.editableValue ? (
-        <Row label="Wert">
+        <Row label={l10n.t('Value')}>
           <span className="expr-prop">
             <PropText value={tb.value} multiline onCommit={v => set({ value: v })} />
-            <button className="fx action-item" title="Ausdruck bearbeiten…" onClick={() => ed.setDialog({
-              kind: 'expression', title: `Wert von ${name}`, value: tb.value,
+            <button className="fx action-item" title={l10n.t('Edit Expression…')} onClick={() => ed.setDialog({
+              kind: 'expression', title: l10n.t('Value of {0}', name), value: tb.value,
               dataSetName: ed.report.dataSets[0]?.name, onOk: v => set({ value: v }),
             })}><Codicon name="symbol-operator" /></button>
           </span>
         </Row>
       ) : <RichTextEditor owner={raw} name={name} />}
-      <Row label="Format"><PropText value={tb.format} placeholder="z. B. N2, dd.MM.yyyy" onCommit={v => set({ format: v })} /></Row>
-      <Row label="Schnitt">
+      <Row label={l10n.t('Format')}><PropText value={tb.format} placeholder={l10n.t('e.g. N2, dd.MM.yyyy')} onCommit={v => set({ format: v })} /></Row>
+      <Row label={l10n.t('Style')}>
         <span className="toggle-group">
-          <ActionButton icon="bold" title="Fett" checked={tb.bold} onClick={() => set({ bold: !tb.bold })} />
-          <ActionButton icon="italic" title="Kursiv" checked={tb.italic} onClick={() => set({ italic: !tb.italic })} />
+          <ActionButton icon="bold" title={l10n.t('Bold')} checked={tb.bold} onClick={() => set({ bold: !tb.bold })} />
+          <ActionButton icon="italic" title={l10n.t('Italic')} checked={tb.italic} onClick={() => set({ italic: !tb.italic })} />
         </span>
       </Row>
-      <Row label="Farbe"><PropColor value={tb.color || undefined} onCommit={v => set({ color: v })} /></Row>
-      <Row label="Ausblenden"><PropText value={tb.hidden} placeholder="leer = sichtbar, true, =Ausdruck" onCommit={v => set({ hidden: v })} /></Row>
+      <Row label={l10n.t('Color')}><PropColor value={tb.color || undefined} onCommit={v => set({ color: v })} /></Row>
+      <Row label={l10n.t('Hide')}><PropText value={tb.hidden} placeholder={l10n.t('empty = visible, true, =expression')} onCommit={v => set({ hidden: v })} /></Row>
     </div>
   );
 }

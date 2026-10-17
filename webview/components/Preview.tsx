@@ -13,6 +13,7 @@ import { post } from '../vscode';
 import { ActionButton, Codicon, DropdownAction, Separator } from './Icon';
 import { exportBlocks } from '../render/export';
 import { pagesToPdf } from '../render/pdf';
+import { l10n } from '../l10n';
 
 const S = 96;
 
@@ -118,14 +119,14 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
       // pages are built lazily: find the target in the continuous (measured) body and scroll to its page
       const body = measureRef.current;
       const target = body?.querySelector(`[data-bookmark="${CSS.escape(a.bookmark)}"]`);
-      if (!body || !target) { post({ type: 'info', message: `Lesezeichen „${a.bookmark}“ kommt in der Vorschau nicht vor.` }); return; }
+      if (!body || !target) { post({ type: 'info', message: l10n.t('Bookmark "{0}" does not occur in the preview.', a.bookmark) }); return; }
       const y = target.getBoundingClientRect().top - body.getBoundingClientRect().top;
       const index = Math.max(0, pages.findIndex(pg => y >= pg.start && y < pg.end));
       const pageH = (p.height * S + 16) * zoom;
       scrollRef.current?.scrollTo({ top: index * pageH, behavior: 'smooth' });
     } else {
       const params = a.parameters.map(([n, v]) => `${n} = ${v}`).join(', ');
-      post({ type: 'info', message: `Drillthrough zu „${a.report}“${params ? ` (${params})` : ''} – Drillthrough-Berichte führt nur der Berichtsserver aus.` });
+      post({ type: 'info', message: l10n.t('Drillthrough to "{0}"{1} – only the report server runs drillthrough reports.', a.report, params ? ` (${params})` : '') });
     }
   };
 
@@ -261,24 +262,24 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
                 )}
               </label>
             ))}
-            <button className="primary" disabled={missing.length > 0} title={missing.length ? `Wert fehlt: ${missing.map(x => x.name).join(', ')}` : undefined}
-              onClick={() => setApplied({ ...input })}>Bericht anzeigen</button>
+            <button className="primary" disabled={missing.length > 0} title={missing.length ? l10n.t('Value missing: {0}', missing.map(x => x.name).join(', ')) : undefined}
+              onClick={() => setApplied({ ...input })}>{l10n.t('View Report')}</button>
           </div>
         )}
-        <div className="toolbar" role="toolbar" aria-label="Vorschau">
+        <div className="toolbar" role="toolbar" aria-label={l10n.t('Preview')}>
           <div className="action-group">
-            <ActionButton icon="edit" title="Zurück zum Entwurf (F5)" label="Entwurf" onClick={() => ed.setMode('design')} />
+            <ActionButton icon="edit" title={l10n.t('Back to Design (F5)')} label={l10n.t('Design')} onClick={() => ed.setMode('design')} />
           </div>
           <Separator />
-          <div className="action-group" aria-label="Seiten">
-            <ActionButton icon="arrow-up" title="Vorherige Seite" disabled={shownPage <= 1} onClick={() => goTo(shownPage - 1)} />
+          <div className="action-group" aria-label={l10n.t('Pages')}>
+            <ActionButton icon="arrow-up" title={l10n.t('Previous Page')} disabled={shownPage <= 1} onClick={() => goTo(shownPage - 1)} />
             <span className="page-indicator">{shownPage} / {pages.length || 1}</span>
-            <ActionButton icon="arrow-down" title="Nächste Seite" disabled={shownPage >= pages.length} onClick={() => goTo(shownPage + 1)} />
+            <ActionButton icon="arrow-down" title={l10n.t('Next Page')} disabled={shownPage >= pages.length} onClick={() => goTo(shownPage + 1)} />
           </div>
           <Separator />
           <div className="action-group">
-            <ActionButton icon="file-pdf" title="Im Browser öffnen und drucken bzw. als PDF speichern" label="Drucken" disabled={!pages.length} onClick={() => exportPages('print')} />
-            <DropdownAction icon="export" title="Exportieren" disabled={!pages.length} items={[
+            <ActionButton icon="file-pdf" title={l10n.t('Open in the browser and print or save as PDF')} label={l10n.t('Print')} disabled={!pages.length} onClick={() => exportPages('print')} />
+            <DropdownAction icon="export" title={l10n.t('Export')} disabled={!pages.length} items={[
               { label: 'PDF (.pdf)…', icon: 'file-pdf', run: exportPdf },
               { label: 'Excel (.xlsx)…', icon: 'table', run: () => exportDocument('xlsx') },
               { label: 'Word (.docx)…', icon: 'file-text', run: () => exportDocument('docx') },
@@ -287,11 +288,11 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
           </div>
           <span className="grow" />
           <span className={`toolbar-note ${generated.length ? 'generated' : ''}`}
-            title={generated.length ? 'Echte Daten: Berichtsdaten › Vorschaudaten laden' : undefined}>
+            title={generated.length ? l10n.t('Real data: Report Data › Load Preview Data') : undefined}>
             <Codicon name={generated.length ? 'sparkle' : 'database'} />
-            {generated.length ? `Beispieldaten für ${generated.join(', ')}` : 'Geladene Daten'}
+            {generated.length ? l10n.t('Sample data for {0}', generated.join(', ')) : l10n.t('Loaded data')}
           </span>
-          {generated.length > 0 && <ActionButton icon="cloud-download" title="Vorschaudaten laden (Excel, CSV, JSON)…" onClick={() => ed.commands.get('importSampleData')?.()} />}
+          {generated.length > 0 && <ActionButton icon="cloud-download" title={l10n.t('Load Preview Data (Excel, CSV, JSON)…')} onClick={() => ed.commands.get('importSampleData')?.()} />}
         </div>
         <div className="preview-scroll" ref={scrollRef} onScroll={e => {
           const el = e.currentTarget;
@@ -308,11 +309,11 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
                 result={result} nodes={nodes} tableLeft={measured.tableLeft} forceMount={renderAll} />
             ))}
           </div>
-          {!pages.length && <div className="preview-empty">Bericht wird aufgebaut…</div>}
+          {!pages.length && <div className="preview-empty">{l10n.t('Building the report…')}</div>}
         </div>
         {result.errors.length > 0 && (
           <div className="preview-errors">
-            <b><Codicon name="warning" /> {result.errors.length} Hinweis(e) bei der Auswertung</b>
+            <b><Codicon name="warning" /> {l10n.t('{0} note(s) from the evaluation', result.errors.length)}</b>
             {result.errors.map(([where, msg]) => <div key={where}><code>{where}</code>: {msg}</div>)}
           </div>
         )}

@@ -18,8 +18,8 @@ test('Eingebettete Bilder: hinzufügen, verwenden, umbenennen, löschen', () => 
   const r = emptyReport();
   assert.equal(addEmbeddedImage(r, 'Firmen Logo.png', 'image/png', PNG), 'Firmen_Logo');
   assert.equal(addEmbeddedImage(r, 'Firmen Logo.png', 'image/png', PNG), 'Firmen_Logo2');
-  assert.equal(addEmbeddedImage(r, '1.png', 'image/png', PNG), 'Bild1');
-  assert.deepEqual(embeddedImages(r).map(i => i.name), ['Firmen_Logo', 'Firmen_Logo2', 'Bild1']);
+  assert.equal(addEmbeddedImage(r, '1.png', 'image/png', PNG), 'Image1');
+  assert.deepEqual(embeddedImages(r).map(i => i.name), ['Firmen_Logo', 'Firmen_Logo2', 'Image1']);
 
   const img = createItem(r, 'image', { left: 0, top: 0, width: 1, height: 1 }) as ImageItem;
   Object.assign(img, { source: 'Embedded', value: 'Firmen_Logo' });
@@ -36,7 +36,7 @@ test('Eingebettete Bilder: hinzufügen, verwenden, umbenennen, löschen', () => 
   assert.equal(node.src, `data:image/png;base64,${PNG}`);
 
   // rename updates the image item; invalid or taken names are refused
-  assert.ok(!renameEmbeddedImage(back, 'Firmen_Logo', 'Bild1'));
+  assert.ok(!renameEmbeddedImage(back, 'Firmen_Logo', 'Image1'));
   assert.ok(!renameEmbeddedImage(back, 'Firmen_Logo', 'mit Leerzeichen'));
   assert.ok(renameEmbeddedImage(back, 'Firmen_Logo', 'Logo'));
   assert.equal((back.body.items[0] as ImageItem).value, 'Logo');
@@ -47,8 +47,8 @@ test('Eingebettete Bilder: hinzufügen, verwenden, umbenennen, löschen', () => 
   // delete; the container goes with the last image
   assert.ok(deleteEmbeddedImage(back, 'Firmen_Logo2'));
   assert.ok(!deleteEmbeddedImage(back, 'Firmen_Logo2'));
-  assert.deepEqual(embeddedImages(back).map(i => i.name), ['Logo', 'Bild1']);
+  assert.deepEqual(embeddedImages(back).map(i => i.name), ['Logo', 'Image1']);
   deleteEmbeddedImage(back, 'Logo');
-  deleteEmbeddedImage(back, 'Bild1');
+  deleteEmbeddedImage(back, 'Image1');
   assert.ok(!serializeRdl(back, dom).includes('EmbeddedImages'));
 });

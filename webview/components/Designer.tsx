@@ -21,6 +21,7 @@ import { browserDom, serializeRdl } from '../rdl';
 import { renderReport } from '../render/engine';
 import { NodeView, RenderOptionsProvider } from '../render/RenderView';
 import { RNode } from '../render/types';
+import { l10n } from '../l10n';
 
 /** Design-mode rendering of all items by name: used for regions the designer keeps verbatim. */
 function designNodes(report: Report): Map<string, RNode> {
@@ -58,11 +59,11 @@ type DragPreview =
   | { kind: 'column'; table: string; index: number; width: number }
   | { kind: 'row'; table: string; index: number; height: number };
 
-const ROW_LABEL: Record<string, string> = {
-  header: 'Tabellenkopf', footer: 'Tabellenfuß', groupHeader: 'Gruppenkopf', groupFooter: 'Gruppenfuß', detail: 'Details',
-};
+const rowLabel = (kind: string) => ({
+  header: l10n.t('Table header'), footer: l10n.t('Table footer'), groupHeader: l10n.t('Group header'), groupFooter: l10n.t('Group footer'), detail: l10n.t('Details'),
+} as Record<string, string>)[kind] ?? kind;
 
-const SECTION_LABEL: Record<SectionKind, string> = { header: 'Seitenkopf', body: 'Text', footer: 'Seitenfuß' };
+const sectionLabel = (kind: SectionKind) => ({ header: l10n.t('Page Header'), body: l10n.t('Body'), footer: l10n.t('Page Footer') })[kind];
 
 /** Fixed text of a textbox in a Business Central layout: offered as a new AL label (context menu). */
 const literalText = (ed: { isBc: boolean }, tb: TextboxItem): Record<string, string> =>
@@ -71,12 +72,12 @@ const tableContext = (t: TableItem) => ({
   inTable: true, tableHasHeader: t.rows.some(r => r.kind === 'header'), tableHasFooter: t.rows.some(r => r.kind === 'footer'), tableColumns: t.columns.length,
 });
 
-const ITEM_TYPE: Record<string, string> = {
-  textbox: 'Textfeld', rectangle: 'Rechteck', line: 'Linie', image: 'Bild', table: 'Tabelle', raw: 'Element',
-};
+const itemType = (type: string): string => ({
+  textbox: l10n.t('Textbox'), rectangle: l10n.t('Rectangle'), line: l10n.t('Line'), image: l10n.t('Image'), table: l10n.t('Table'), raw: l10n.t('Item'),
+} as Record<string, string>)[type] ?? type;
 /** What a screen reader says for an item: type, name and (textboxes) the text or expression. */
 function itemLabel(item: ReportItem): string {
-  const kind = item.type === 'raw' ? (item.kind === 'Chart' ? 'Diagramm' : item.kind === 'Textbox' ? 'Textfeld' : item.kind) : ITEM_TYPE[item.type];
+  const kind = item.type === 'raw' ? (item.kind === 'Chart' ? l10n.t('Chart') : item.kind === 'Textbox' ? l10n.t('Textbox') : item.kind) : itemType(item.type);
   const text = item.type === 'textbox' ? item.value : item.type === 'raw' ? item.preview ?? '' : item.type === 'image' ? item.value : '';
   return `${kind} ${item.name}${text ? `: ${text}` : ''}`;
 }
@@ -84,12 +85,13 @@ function itemLabel(item: ReportItem): string {
 /** Announcement of the selection with position and size (polite live region). */
 function announce(r: Report, names: string[]): string {
   if (!names.length) return '';
-  if (names.length > 1) return `${names.length} Elemente ausgewählt`;
+  if (names.length > 1) return l10n.t('{0} items selected', names.length);
   const loc = locate(r, names[0]);
   if (!loc) return '';
-  const n = (v: number) => toUnit(v, r.unit).toLocaleString('de-DE', { maximumFractionDigits: 2 });
+  const n = (v: number) => toUnit(v, r.unit).toLocaleString(l10n.language, { maximumFractionDigits: 2 });
   const it = loc.item;
-  const where = loc.container ? `, links ${n(it.left)}, oben ${n(it.top)}, ${n(it.width)} × ${n(it.height)} ${r.unit}` : loc.cell ? `, Zeile ${loc.cell.row + 1}, Spalte ${loc.cell.col + 1}` : '';
+  const where = loc.container ? `, ${l10n.t('left {0}, top {1}, {2} × {3} {4}', n(it.left), n(it.top), n(it.width), n(it.height), r.unit)}`
+    : loc.cell ? `, ${l10n.t('row {0}, column {1}', loc.cell.row + 1, loc.cell.col + 1)}` : '';
   return `${itemLabel(it)}${where}`;
 }
 
@@ -426,7 +428,7 @@ export function Designer() {
   useCommand('editExpression', () => {
     const t = textbox();
     if (t) ed.setDialog({
-      kind: 'expression', title: `Ausdruck für ${t.tb.name}`, value: t.tb.value, dataSetName: t.dataSetName,
+      kind: 'expression', title: l10n.t('Expression for {0}', t.tb.name), value: t.tb.value, dataSetName: t.dataSetName,
       onOk: v => ed.commit(r => { (locate(r, t.tb.name)!.item as TextboxItem).value = v; }),
     });
   });
@@ -530,11 +532,10 @@ export function Designer() {
 
   return (
     <div className={`designer ${ed.tool ? 'tool-active' : ''}`} {...vsContext({ preventDefaultContextMenuItems: true, selectionCount: ed.selection.length })}
-      tabIndex={0} role="application" aria-roledescription="Entwurfsfläche" aria-describedby="designer-help"
-      aria-label="Entwurfsfläche des Berichts">
+      tabIndex={0} role="application" aria-roledescription={l10n.t('design surface')} aria-describedby="designer-help"
+      aria-label={l10n.t('Design surface of the report')}>
       <div id="designer-help" className="sr-only">
-        Tab und Umschalt+Tab wählen das nächste bzw. vorherige Element, Pfeiltasten verschieben, Alt+Pfeiltasten ändern die Größe,
-        Umschalt fein. Eingabe oder F2 bearbeitet den Text, Entf löscht, Escape hebt die Auswahl auf. Das Kontextmenü öffnet Umschalt+F10.
+        {l10n.t('Tab and Shift+Tab select the next or previous item, the arrow keys move, Alt+arrow keys resize, with Shift in small steps. Enter or F2 edits the text, Delete deletes, Escape clears the selection. Shift+F10 opens the context menu.')}
       </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{announce(report, ed.selection)}</div>
       {view.ruler && <Ruler width={reportWidth} S={S} unit={report.unit} />}
@@ -543,7 +544,7 @@ export function Designer() {
           const height = drag?.kind === 'sectionHeight' && drag.section === kind ? drag.height : section.height;
           return (
             <Fragment key={kind}>
-              {kind !== 'body' && <div className="section-label"><Codicon name={kind === 'header' ? 'layout-menubar' : 'layout-panel'} /> {SECTION_LABEL[kind]}</div>}
+              {kind !== 'body' && <div className="section-label"><Codicon name={kind === 'header' ? 'layout-menubar' : 'layout-panel'} /> {sectionLabel(kind)}</div>}
               <div
                 className={`section section-${kind}`}
                 style={{ height: height * S, ...gridStyle, ...styleToCss(section.style), border: undefined }}
@@ -557,8 +558,8 @@ export function Designer() {
                 {drag?.kind === 'frame' && drag.section === kind && (
                   <div className={drag.draw ? 'draw-frame' : 'marquee'} style={px(drag.box, S)} />
                 )}
-                <div className="section-resizer" onPointerDown={e => onSectionResize(e, kind)} title="Höhe ändern" />
-                {kind === 'body' && <div className="width-resizer" onPointerDown={onWidthResize} title="Breite ändern" />}
+                <div className="section-resizer" onPointerDown={e => onSectionResize(e, kind)} title={l10n.t('Change Height')} />
+                {kind === 'body' && <div className="width-resizer" onPointerDown={onWidthResize} title={l10n.t('Change Width')} />}
               </div>
             </Fragment>
           );
@@ -675,7 +676,7 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
         <div className={`item image ${selected ? 'selected' : ''}`} style={{ ...px(box, S), ...styleToCss(item.style) }} {...common}>
           {src
             ? <img src={src} alt="" style={imageFit(item.sizing)} draggable={false} />
-            : <div className="placeholder" title={item.value}><Codicon name="file-media" /> {item.source === 'Database' ? 'Datenbankbild' : item.source === 'Embedded' ? item.value || 'Bild' : 'Bild'}</div>}
+            : <div className="placeholder" title={item.value}><Codicon name="file-media" /> {item.source === 'Database' ? l10n.t('Database image') : item.source === 'Embedded' ? item.value || l10n.t('Image') : l10n.t('Image')}</div>}
           {handles}
         </div>
       );
@@ -688,15 +689,15 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
       const node = r.rendered.get(item.name);
       if (!node) {
         return (
-          <div className={`item raw ${selected ? 'selected' : ''}`} style={px(box, S)} {...common} title="Dieses Element wird unverändert gespeichert.">
-            <div className="placeholder"><Codicon name={RAW_ICON[item.kind] ?? 'symbol-misc'} /> {RAW_LABEL[item.kind] ?? item.kind}<small>{item.name}</small></div>
+          <div className={`item raw ${selected ? 'selected' : ''}`} style={px(box, S)} {...common} title={l10n.t('This item is saved unchanged.')}>
+            <div className="placeholder"><Codicon name={RAW_ICON[item.kind] ?? 'symbol-misc'} /> {rawLabel(item.kind) ?? item.kind}<small>{item.name}</small></div>
             {handles}
           </div>
         );
       }
       return (
         <div className={`item raw-rendered ${selected ? 'selected' : ''}`} style={{ ...px(box, S), overflow: 'visible' }} {...common}
-          title={item.kind === 'Chart' ? 'Diagramm – Doppelklick: Diagrammeigenschaften' : 'Unverändert gespeicherter Bereich – innere Elemente anklicken, Bearbeitung in der Dokumentgliederung'}
+          title={item.kind === 'Chart' ? l10n.t('Chart – double-click: chart properties') : l10n.t('Region saved unchanged – click the items inside, edit them in the document outline')}
           onDoubleClick={item.kind === 'Chart' ? e => { e.stopPropagation(); ed.setDialog({ kind: 'chart', name: item.name }); } : undefined}>
           <RenderOptionsProvider value={{
             S, showHidden: true, selected: ed.nested,
@@ -713,10 +714,10 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
   }
 }
 
-const RAW_LABEL: Record<string, string> = {
-  Chart: 'Diagramm', Tablix: 'Matrix / gruppierte Tabelle', Subreport: 'Unterbericht', Map: 'Karte',
-  GaugePanel: 'Messgerät', CustomReportItem: 'Benutzerdefiniertes Element',
-};
+const rawLabel = (kind: string): string | undefined => ({
+  Chart: l10n.t('Chart'), Tablix: l10n.t('Matrix / grouped table'), Subreport: l10n.t('Subreport'), Map: l10n.t('Map'),
+  GaugePanel: l10n.t('Gauge'), CustomReportItem: l10n.t('Custom report item'),
+} as Record<string, string>)[kind];
 const RAW_ICON: Record<string, string> = {
   Chart: 'graph', Tablix: 'table', Subreport: 'references', Map: 'globe', GaugePanel: 'dashboard', CustomReportItem: 'extensions',
 };
@@ -796,7 +797,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
       {mx.cells.map(pc => {
         const sel = ed.selection.includes(pc.item.name);
         const box = { left: pc.x * S, top: pc.y * S, width: pc.w * S, height: pc.h * S };
-        const label = pc.axis === 'corner' ? 'Ecke' : pc.axis === 'row' ? `Zeilenkopf ${pc.member?.group?.name ?? ''}` : `Spaltenkopf ${pc.member?.group?.name ?? ''}`;
+        const label = pc.axis === 'corner' ? l10n.t('Corner') : pc.axis === 'row' ? l10n.t('Row header {0}', pc.member?.group?.name ?? '') : l10n.t('Column header {0}', pc.member?.group?.name ?? '');
         if (pc.item.type !== 'textbox') {
           return (
             <div key={pc.item.id} className={`cell cell-container header-cell ${sel ? 'selected' : ''}`} style={{ position: 'absolute', ...box }} title={label}>
@@ -855,7 +856,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
       }))}
       {active && (
         <>
-          <div className="tbl-corner" title="Tabelle auswählen / verschieben" onPointerDown={e => r.onTableCornerDown(e, t)} />
+          <div className="tbl-corner" title={l10n.t('Select / Move Table')} onPointerDown={e => r.onTableCornerDown(e, t)} />
           <div className="tbl-colbar" style={{ width: width * S }}>
             {columns.map((w, ci) => (
               <div key={ci} className={`tbl-seg ${part?.kind === 'column' && part.index === ci ? 'on' : ''}`}
@@ -869,7 +870,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
             {t.rows.map((row, ri) => (
               <div key={row.id} className={`tbl-seg ${part?.kind === 'row' && part.index === ri ? 'on' : ''}`}
                 style={{ top: rowY[ri] * S, height: heights[ri] * S }}
-                title={ROW_LABEL[row.kind]}
+                title={rowLabel(row.kind)}
                 {...vsContext({ webviewSection: 'item', itemType: 'tableRow', rowId: row.id, inGroup: row.kind !== 'header' && row.kind !== 'footer', ...tableContext(t) })}
                 onPointerDown={e => { e.stopPropagation(); ed.select([t.name], { table: t.name, kind: 'row', index: ri }); }}>
                 {row.kind === 'detail' && <Codicon name="menu" className="detail-glyph" />}
@@ -878,7 +879,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
             ))}
           </div>
           {groups.map(({ g, first, last }) => (
-            <div key={g.member.id} className="tbl-group" title={`Gruppe ${g.member.group!.name}: ${g.member.group!.expressions.join(', ') || '(ohne Gruppierung)'} – Doppelklick: Eigenschaften`}
+            <div key={g.member.id} className="tbl-group" title={l10n.t('Group {0}: {1} – double-click: properties', g.member.group!.name, g.member.group!.expressions.join(', ') || l10n.t('(no grouping)'))}
               style={{ top: rowY[first] * S + 2, height: (rowY[last + 1] - rowY[first]) * S - 4, left: -16 - (depth - g.depth) * 6 }}
               onPointerDown={e => e.stopPropagation()}
               onDoubleClick={() => ed.setDialog({ kind: 'group', table: t.name, member: g.member.id })} />

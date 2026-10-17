@@ -15,6 +15,7 @@ import {
 import { formatSize, parseSize } from './units';
 import { leavesOf, syncRows } from './tablix';
 import { tableHeight, tableWidth } from './ops';
+import { l10n } from './l10n';
 
 export { NS_2010, NS_2016 };
 export const NS_RD = 'http://schemas.microsoft.com/SQLServer/reporting/reportdesigner';
@@ -486,7 +487,7 @@ export function parseRdl(input: string, dom: XmlDom = browserDom): Report {
   const root = doc.documentElement;
   if (!root || root.localName !== 'Report') {
     const err = doc.getElementsByTagName('parsererror')[0];
-    throw new Error(err ? err.textContent ?? 'Ungültiges XML' : 'Kein <Report>-Element gefunden');
+    throw new Error(err ? err.textContent ?? l10n.t('Invalid XML') : l10n.t('No <Report> element found'));
   }
   const p = new Parser(dom);
   const report = emptyReport();

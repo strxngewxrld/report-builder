@@ -1,6 +1,8 @@
 // Evaluator for the subset of SSRS (Visual Basic) expressions commonly used in reports.
 // Values starting with "=" are expressions; everything else is literal text.
 
+import { l10n } from './l10n';
+
 export type Row = Record<string, unknown>;
 
 export interface EvalContext {
@@ -70,12 +72,12 @@ function tokenize(src: string): Tok[] {
         }
         s += src[i++];
       }
-      if (src[i] !== '"') throw new Error('Nicht geschlossene Zeichenfolge');
+      if (src[i] !== '"') throw new Error(l10n.t('Unclosed string'));
       i++;
       out.push({ t: 'str', v: s });
     } else if (c === '#') {
       const end = src.indexOf('#', i + 1);
-      if (end < 0) throw new Error('Nicht geschlossenes Datumsliteral');
+      if (end < 0) throw new Error(l10n.t('Unclosed date literal'));
       out.push({ t: 'date', v: new Date(src.slice(i + 1, end)) });
       i = end + 1;
     } else if (/[A-Za-z_]/.test(c)) {
@@ -86,7 +88,7 @@ function tokenize(src: string): Tok[] {
       const two = src.slice(i, i + 2);
       if (['<>', '<=', '>='].includes(two)) { out.push({ t: 'op', v: two }); i += 2; }
       else if ('=<>&+-*/\\^(),.!'.includes(c)) { out.push({ t: 'op', v: c }); i++; }
-      else throw new Error(`Unerwartetes Zeichen '${c}'`);
+      else throw new Error(l10n.t("Unexpected character '{0}'", c));
     }
   }
   out.push({ t: 'eof' });
@@ -115,13 +117,13 @@ class ExprParser {
   private next() { return this.toks[this.i++]; }
   private isOp(v: string) { const t = this.peek(); return t.t === 'op' && t.v === v; }
   private expectOp(v: string) {
-    if (!this.isOp(v)) throw new Error(`'${v}' erwartet`);
+    if (!this.isOp(v)) throw new Error(l10n.t("'{0}' expected", v));
     this.i++;
   }
 
   parse(): Node {
     const n = this.or();
-    if (this.peek().t !== 'eof') throw new Error('Unerwartetes Ende des Ausdrucks');
+    if (this.peek().t !== 'eof') throw new Error(l10n.t('Unexpected end of the expression'));
     return n;
   }
 
@@ -172,7 +174,7 @@ class ExprParser {
 
   private ident(): string {
     const t = this.next();
-    if (t.t !== 'id') throw new Error('Bezeichner erwartet');
+    if (t.t !== 'id') throw new Error(l10n.t('Identifier expected'));
     return t.v;
   }
 
@@ -192,8 +194,8 @@ class ExprParser {
       case 'num': case 'str': case 'date': return { k: 'lit', v: t.v };
       case 'op':
         if (t.v === '(') { const n = this.or(); this.expectOp(')'); return n; }
-        throw new Error(`Unerwartetes '${t.v}'`);
-      case 'eof': throw new Error('Ausdruck unvollständig');
+        throw new Error(l10n.t("Unexpected '{0}'", t.v));
+      case 'eof': throw new Error(l10n.t('Incomplete expression'));
       case 'id': {
         const lower = t.v.toLowerCase();
         if (lower === 'true') return { k: 'lit', v: true };
@@ -238,7 +240,7 @@ export const toNum = (v: unknown): number => {
   if (typeof v === 'boolean') return v ? -1 : 0; // VB semantics
   if (v instanceof Date) return v.getTime();
   const n = Number(v);
-  if (Number.isNaN(n)) throw new Error(`'${String(v)}' ist keine Zahl`);
+  if (Number.isNaN(n)) throw new Error(l10n.t("'{0}' is not a number", String(v)));
   return n;
 };
 export const toStr = (v: unknown): string => {
@@ -269,7 +271,7 @@ function aggregate(name: string, args: Node[], ctx: EvalContext): unknown {
   if (name === 'runningvalue') {
     // RunningValue(expr, Sum, "Scope"): the aggregate over the scope's rows up to the current row
     const fn = args[1]?.k === 'id' ? args[1].name : args[1]?.k === 'call' ? args[1].name : '';
-    if (!AGGREGATES.has(fn) || fn === 'runningvalue') throw new Error('RunningValue() erwartet eine Aggregatfunktion als zweites Argument');
+    if (!AGGREGATES.has(fn) || fn === 'runningvalue') throw new Error(l10n.t('RunningValue() expects an aggregate function as its second argument'));
     const scope = args[2] ? toStr(evalNode(args[2], ctx)) : null;
     const all = scope ? ctx.scopes?.[scope] ?? ctx.dataSets[scope] ?? ctx.regionRows ?? ctx.scopeRows : ctx.regionRows ?? ctx.scopeRows;
     const upto = ctx.row && all.includes(ctx.row) ? all.slice(0, all.indexOf(ctx.row) + 1) : all;
@@ -279,10 +281,10 @@ function aggregate(name: string, args: Node[], ctx: EvalContext): unknown {
   const scopeArg = name === 'countrows' ? args[0] : args[1];
   if (scopeArg) {
     const scope = toStr(evalNode(scopeArg, ctx));
-    rows = ctx.scopes?.[scope] ?? ctx.dataSets[scope] ?? (() => { throw new Error(`Unbekannter Bereich "${scope}"`); })();
+    rows = ctx.scopes?.[scope] ?? ctx.dataSets[scope] ?? (() => { throw new Error(l10n.t('Unknown scope "{0}"', scope)); })();
   }
   if (name === 'countrows') return rows.length;
-  if (!args[0]) throw new Error(`${name}() erwartet ein Argument`);
+  if (!args[0]) throw new Error(l10n.t('{0}() expects an argument', name));
   // First(ReportItems!X.Value) / Last(...) in page sections refer to the instances on the current page
   const arg = args[0];
   if ((name === 'first' || name === 'last') && arg.k === 'coll' && arg.coll === 'reportitems') {
@@ -392,7 +394,7 @@ const FUNCTIONS: Record<string, Fn> = {
 
 function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContext): unknown {
   if (obj === CODE) {
-    if (!ctx.code) throw new Error(`Code.${name}: der Bericht hat keinen Code-Block`);
+    if (!ctx.code) throw new Error(l10n.t('Code.{0}: the report has no code block', name));
     return ctx.code.call(name, args, ctx);
   }
   if (obj === CONVERT) {
@@ -404,14 +406,14 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
       case 'toboolean': return toBool(args[0]);
       case 'todatetime': return toDate(args[0]);
     }
-    throw new Error(`Convert.${name} wird nicht unterstützt`);
+    throw new Error(l10n.t('{0} is not supported', `Convert.${name}`));
   }
   const lname = name.toLowerCase();
   if (obj === SYSTEM) {
     if (lname === 'string') return STRING_NS;
     if (lname === 'math') return MATH_NS;
     if (lname === 'convert') return CONVERT;
-    throw new Error(`System.${name} wird nicht unterstützt`);
+    throw new Error(l10n.t('{0} is not supported', `System.${name}`));
   }
   if (obj === STRING_NS) {
     switch (lname) {
@@ -422,7 +424,7 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
       case 'join': return (Array.isArray(args[1]) ? args[1] : args.slice(1)).map(toStr).join(toStr(args[0]));
       case 'format': return toStr(args[0]).replace(/\{(\d+)(?::([^}]*))?\}/g, (_m, i: string, f?: string) => formatValue(args[Number(i) + 1], f ?? '', ctx.locale));
     }
-    throw new Error(`String.${name} wird nicht unterstützt`);
+    throw new Error(l10n.t('{0} is not supported', `String.${name}`));
   }
   if (obj === MATH_NS) {
     const [a, b] = args.map(x => (isNothing(x) ? 0 : toNum(x)));
@@ -437,7 +439,7 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
       case 'pow': return a ** b;
       case 'sqrt': return Math.sqrt(a);
     }
-    throw new Error(`Math.${name} wird nicht unterstützt`);
+    throw new Error(l10n.t('{0} is not supported', `Math.${name}`));
   }
   if (Array.isArray(obj) && lname === 'length') return obj.length;
   if (obj && typeof obj === 'object' && !(obj instanceof Date) && !args.length) {
@@ -457,7 +459,7 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
     case 'day': return toDate(obj)?.getDate() ?? null;
     case 'value': return obj;
   }
-  throw new Error(`Unbekanntes Mitglied .${name}`);
+  throw new Error(l10n.t('Unknown member .{0}', name));
 }
 
 export function evalNode(n: Node, ctx: EvalContext): unknown {
@@ -476,7 +478,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       if (n.name === 'string') return STRING_NS;
       if (n.name === 'math') return MATH_NS;
       if (n.name in FUNCTIONS && ['now', 'today'].includes(n.name)) return FUNCTIONS[n.name]([], ctx);
-      throw new Error(`Unbekannter Bezeichner '${n.name}'`);
+      throw new Error(l10n.t("Unknown identifier '{0}'", n.name));
     }
     case 'coll': return collection(n, ctx);
     case 'member': return callMember(evalNode(n.obj, ctx), n.name, n.args.map(a => evalNode(a, ctx)), ctx);
@@ -487,7 +489,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
     case 'call': {
       if (AGGREGATES.has(n.name)) return aggregate(n.name, n.args, ctx);
       if (n.name === 'iif') {
-        if (n.args.length !== 3) throw new Error('IIf() erwartet 3 Argumente');
+        if (n.args.length !== 3) throw new Error(l10n.t('IIf() expects 3 arguments'));
         return toBool(evalNode(n.args[0], ctx)) ? evalNode(n.args[1], ctx) : evalNode(n.args[2], ctx);
       }
       if (n.name === 'switch') {
@@ -495,14 +497,14 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
         return null;
       }
       if (n.name === 'previous') {
-        if (!n.args[0]) throw new Error('Previous() erwartet ein Argument');
+        if (!n.args[0]) throw new Error(l10n.t('Previous() expects an argument'));
         return ctx.previousRow ? evalNode(n.args[0], { ...ctx, row: ctx.previousRow }) : null;
       }
       const args = n.args.map(a => evalNode(a, ctx));
       const user = ctx.callUser?.(n.name, args);
       if (user) return user.value;
       const fn = FUNCTIONS[n.name];
-      if (!fn) throw new Error(`Unbekannte Funktion ${n.name}()`);
+      if (!fn) throw new Error(l10n.t('Unknown function {0}()', n.name));
       return fn(args, ctx);
     }
     case 'bin': {
@@ -539,7 +541,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       }
     }
   }
-  throw new Error('Ungültiger Ausdruck');
+  throw new Error(l10n.t('Invalid expression'));
 }
 
 function collection(n: Extract<Node, { k: 'coll' }>, ctx: EvalContext): unknown {
@@ -549,23 +551,23 @@ function collection(n: Extract<Node, { k: 'coll' }>, ctx: EvalContext): unknown 
       const row = ctx.row ?? ctx.scopeRows[0] ?? (sets.length === 1 ? sets[0][0] : undefined);
       if (row === undefined) {
         if (sets.length === 1) return null; // dataset without rows
-        throw new Error(`Fields!${n.name} außerhalb eines Datenbereichs`);
+        throw new Error(l10n.t('Fields!{0} outside of a data region', n.name));
       }
       const v = row[n.name];
       return n.prop === 'isnothing' ? isNothing(v) : v ?? null;
     }
     case 'parameters': {
-      if (!(n.name in ctx.parameters)) throw new Error(`Unbekannter Parameter ${n.name}`);
+      if (!(n.name in ctx.parameters)) throw new Error(l10n.t('Unknown parameter {0}', n.name));
       return ctx.parameters[n.name];
     }
     case 'globals': return ctx.globals[n.name] ?? null;
     case 'user': return n.name.toLowerCase() === 'userid' ? 'DOMAIN\\user' : 'de-DE';
     case 'reportitems': {
       const list = ctx.reportItems?.(n.name);
-      if (!list) throw new Error(`ReportItems!${n.name} ist hier nicht verfügbar`);
+      if (!list) throw new Error(l10n.t('ReportItems!{0} is not available here', n.name));
       return list[0] ?? null;
     }
-    default: throw new Error(`Auflistung ${n.coll}! wird in der Vorschau nicht unterstützt`);
+    default: throw new Error(l10n.t('The collection {0}! is not supported in the preview', n.coll));
   }
 }
 

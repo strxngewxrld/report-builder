@@ -2,6 +2,7 @@
 // Report.extraXml; adding, renaming and deleting patch only the image concerned.
 
 import { Report, allReportItems } from './model';
+import { l10n } from './l10n';
 
 export interface EmbeddedImage { name: string; mimeType: string; data: string }
 
@@ -24,7 +25,7 @@ export const imageUrl = (img: EmbeddedImage) => `data:${img.mimeType};base64,${i
 
 /** Image names must be unique and follow the rules for RDL names (letters, digits, underscore). */
 export function imageName(r: Report, wanted: string): string {
-  const base = (wanted.replace(/\.[^.]*$/, '').replace(/[^\p{L}\p{N}_]/gu, '_').replace(/^(?=[\p{N}_])/u, 'Bild') || 'Bild').slice(0, 60);
+  const base = (wanted.replace(/\.[^.]*$/, '').replace(/[^\p{L}\p{N}_]/gu, '_').replace(/^(?=[\p{N}_])/u, l10n.t('Image')) || l10n.t('Image')).slice(0, 60);
   const taken = new Set(embeddedImages(r).map(i => i.name.toLowerCase()));
   if (!taken.has(base.toLowerCase())) return base;
   let n = 2;

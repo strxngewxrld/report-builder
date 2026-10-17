@@ -17,6 +17,7 @@ import { PropertiesPane } from './components/PropertiesPane';
 import { ReportDataPane } from './components/ReportDataPane';
 import { Toolbar } from './components/Toolbar';
 import { GroupingPane } from './components/GroupingPane';
+import { l10n } from './l10n';
 
 type FromExtension =
   | { type: 'load'; text: string; fileName: string }
@@ -32,10 +33,10 @@ const DEFAULT_VIEW: Editor['view'] = {
   zoom: 1, grid: true, snap: true, ruler: true, dataPane: true, propertiesPane: true, leftTab: 'outline', leftWidth: 280, rightWidth: 300,
 };
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const TYPE_LABEL: Record<string, string> = {
-  textbox: 'Textfeld', rectangle: 'Rechteck', line: 'Linie', image: 'Bild', table: 'Tabelle', raw: 'Element',
-};
-const TOOL_LABEL: Record<InsertTool, string> = { textbox: 'Textfeld', table: 'Tabelle', image: 'Bild', line: 'Linie', rectangle: 'Rechteck' };
+/** Names of the item types, as shown in the status bar and panes. */
+export const typeLabel = (type: string): string => ({
+  textbox: l10n.t('Textbox'), rectangle: l10n.t('Rectangle'), line: l10n.t('Line'), image: l10n.t('Image'), table: l10n.t('Table'), raw: l10n.t('Item'),
+} as Record<string, string>)[type] ?? type;
 
 const isTyping = (t: EventTarget | null) =>
   t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
@@ -248,9 +249,9 @@ export function App() {
 
   const selected = editor && selection.length === 1 ? locate(editor.report, selection[0]) : null;
   const status = tool
-    ? `$(add) ${TOOL_LABEL[tool]}: klicken oder Rahmen ziehen`
-    : selected ? `$(inspect) ${selected.item.name} (${selected.cell ? 'Tabellenzelle' : TYPE_LABEL[selected.item.type]})`
-      : selection.length ? `$(inspect) ${selection.length} Elemente` : '';
+    ? `$(add) ${l10n.t('{0}: click or drag a frame', typeLabel(tool))}`
+    : selected ? `$(inspect) ${selected.item.name} (${selected.cell ? l10n.t('Table cell') : typeLabel(selected.item.type)})`
+      : selection.length ? `$(inspect) ${l10n.t('{0} items', selection.length)}` : '';
   useEffect(() => {
     if (!report) return;
     post({
@@ -283,10 +284,10 @@ export function App() {
     return (
       <div className="load-error">
         <Codicon name="error" className="load-error-icon" />
-        <h2>Der Bericht konnte nicht geladen werden</h2>
+        <h2>{l10n.t('The report could not be loaded')}</h2>
         <pre>{loadError}</pre>
-        <p>Die Datei ist kein gültiges RDL-XML. Korrigieren Sie sie im Texteditor – der Designer lädt sie danach automatisch neu.</p>
-        <button className="primary" onClick={() => post({ type: 'openXml' })}>Als XML öffnen</button>
+        <p>{l10n.t('The file is not valid RDL XML. Correct it in the text editor – the designer then reloads it automatically.')}</p>
+        <button className="primary" onClick={() => post({ type: 'openXml' })}>{l10n.t('Open as XML')}</button>
       </div>
     );
   }
@@ -301,10 +302,10 @@ export function App() {
           {view.dataPane && <>
             <div className="pane left-pane" style={{ width: view.leftWidth }}>
               <div className="pane-header" role="tablist">
-                <button role="tab" aria-selected={view.leftTab === 'outline'} className={view.leftTab === 'outline' ? 'on' : ''} onClick={() => setView({ leftTab: 'outline' })}>Gliederung</button>
-                <button role="tab" aria-selected={view.leftTab === 'data'} className={view.leftTab === 'data' ? 'on' : ''} onClick={() => setView({ leftTab: 'data' })}>Berichtsdaten</button>
+                <button role="tab" aria-selected={view.leftTab === 'outline'} className={view.leftTab === 'outline' ? 'on' : ''} onClick={() => setView({ leftTab: 'outline' })}>{l10n.t('Outline')}</button>
+                <button role="tab" aria-selected={view.leftTab === 'data'} className={view.leftTab === 'data' ? 'on' : ''} onClick={() => setView({ leftTab: 'data' })}>{l10n.t('Report Data')}</button>
                 <span className="grow" />
-                <button className="action-item" title="Bereich ausblenden" onClick={() => setView({ dataPane: false })}><Codicon name="close" /></button>
+                <button className="action-item" title={l10n.t('Hide Pane')} onClick={() => setView({ dataPane: false })}><Codicon name="close" /></button>
               </div>
               {view.leftTab === 'outline' ? <DocumentOutline /> : <ReportDataPane />}
             </div>

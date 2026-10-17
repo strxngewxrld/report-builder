@@ -4,26 +4,58 @@ import { useEditor } from '../editor';
 import { allReportItems } from '../model';
 import { CodeModule } from '../vb';
 import { Codicon } from './Icon';
-import { GLOBALS } from './ReportDataPane';
+import { globals } from './ReportDataPane';
+import { l10n } from '../l10n';
 
 interface Suggestion { label: string; insert: string; detail?: string; icon: string }
 
-const FUNCTIONS: [string, string][] = [
-  ['IIf', 'IIf(Bedingung, Wahr, Falsch)'], ['Switch', 'Switch(Bedingung1, Wert1, …)'], ['Choose', 'Choose(Index, Wert1, …)'],
-  ['Format', 'Format(Wert, "N2")'], ['FormatNumber', 'FormatNumber(Wert, Stellen)'], ['FormatCurrency', 'FormatCurrency(Wert)'],
-  ['FormatPercent', 'FormatPercent(Wert, Stellen)'], ['FormatDateTime', 'FormatDateTime(Datum, Format)'],
-  ['Sum', 'Sum(Ausdruck, Bereich)'], ['Count', 'Count(Ausdruck, Bereich)'], ['CountDistinct', 'CountDistinct(Ausdruck)'], ['Avg', 'Avg(Ausdruck)'],
-  ['Min', 'Min(Ausdruck)'], ['Max', 'Max(Ausdruck)'], ['First', 'First(Ausdruck, Bereich)'], ['Last', 'Last(Ausdruck, Bereich)'],
-  ['RunningValue', 'RunningValue(Ausdruck, Sum, Bereich)'], ['Previous', 'Previous(Ausdruck)'], ['RowNumber', 'RowNumber(Bereich)'],
-  ['UCase', 'UCase(Text)'], ['LCase', 'LCase(Text)'], ['Trim', 'Trim(Text)'], ['Len', 'Len(Text)'], ['Left', 'Left(Text, n)'],
-  ['Right', 'Right(Text, n)'], ['Mid', 'Mid(Text, Start, n)'], ['InStr', 'InStr(Text, Suche)'], ['Replace', 'Replace(Text, Alt, Neu)'],
-  ['CStr', 'CStr(Wert)'], ['CInt', 'CInt(Wert)'], ['CDbl', 'CDbl(Wert)'], ['CDec', 'CDec(Wert)'], ['CDate', 'CDate(Wert)'], ['CBool', 'CBool(Wert)'],
-  ['IsNothing', 'IsNothing(Wert)'], ['Year', 'Year(Datum)'], ['Month', 'Month(Datum)'], ['Day', 'Day(Datum)'],
-  ['DateAdd', 'DateAdd("d", n, Datum)'], ['DateDiff', 'DateDiff("d", Von, Bis)'], ['Now', 'Now()'], ['Today', 'Today()'],
+/** Functions offered by the completion, with their (translated) signature. */
+const functions = (): [string, string][] => [
+  ['IIf', l10n.t('IIf(Condition, TrueValue, FalseValue)')],
+  ['Switch', l10n.t('Switch(Condition1, Value1, …)')],
+  ['Choose', l10n.t('Choose(Index, Value1, …)')],
+  ['Format', l10n.t('Format(Value, "N2")')],
+  ['FormatNumber', l10n.t('FormatNumber(Value, Digits)')],
+  ['FormatCurrency', l10n.t('FormatCurrency(Value)')],
+  ['FormatPercent', l10n.t('FormatPercent(Value, Digits)')],
+  ['FormatDateTime', l10n.t('FormatDateTime(Date, Format)')],
+  ['Sum', l10n.t('Sum(Expression, Scope)')],
+  ['Count', l10n.t('Count(Expression, Scope)')],
+  ['CountDistinct', l10n.t('CountDistinct(Expression)')],
+  ['Avg', l10n.t('Avg(Expression)')],
+  ['Min', l10n.t('Min(Expression)')],
+  ['Max', l10n.t('Max(Expression)')],
+  ['First', l10n.t('First(Expression, Scope)')],
+  ['Last', l10n.t('Last(Expression, Scope)')],
+  ['RunningValue', l10n.t('RunningValue(Expression, Sum, Scope)')],
+  ['Previous', l10n.t('Previous(Expression)')],
+  ['RowNumber', l10n.t('RowNumber(Scope)')],
+  ['UCase', l10n.t('UCase(Text)')],
+  ['LCase', l10n.t('LCase(Text)')],
+  ['Trim', l10n.t('Trim(Text)')],
+  ['Len', l10n.t('Len(Text)')],
+  ['Left', l10n.t('Left(Text, n)')],
+  ['Right', l10n.t('Right(Text, n)')],
+  ['Mid', l10n.t('Mid(Text, Start, n)')],
+  ['InStr', l10n.t('InStr(Text, Search)')],
+  ['Replace', l10n.t('Replace(Text, Old, New)')],
+  ['CStr', l10n.t('CStr(Value)')],
+  ['CInt', l10n.t('CInt(Value)')],
+  ['CDbl', l10n.t('CDbl(Value)')],
+  ['CDec', l10n.t('CDec(Value)')],
+  ['CDate', l10n.t('CDate(Value)')],
+  ['CBool', l10n.t('CBool(Value)')],
+  ['IsNothing', l10n.t('IsNothing(Value)')],
+  ['Year', l10n.t('Year(Date)')],
+  ['Month', l10n.t('Month(Date)')],
+  ['Day', l10n.t('Day(Date)')],
+  ['DateAdd', l10n.t('DateAdd("d", n, Date)')],
+  ['DateDiff', l10n.t('DateDiff("d", From, To)')],
+  ['Now', 'Now()'], ['Today', 'Today()'],
 ];
-const PREFIXES: [string, string][] = [
-  ['Fields!', 'Feld des Datasets'], ['Parameters!', 'Parameter, Label oder Beschriftung'], ['ReportItems!', 'Wert eines Berichtselements'],
-  ['Globals!', 'Integriertes Feld'], ['User!', 'Benutzer'], ['Code.', 'Funktion des Code-Blocks'],
+const prefixes = (): [string, string][] => [
+  ['Fields!', l10n.t('Field of the dataset')], ['Parameters!', l10n.t('Parameter, label or caption')], ['ReportItems!', l10n.t('Value of a report item')],
+  ['Globals!', l10n.t('Built-in field')], ['User!', l10n.t('User')], ['Code.', l10n.t('Function of the code block')],
 ];
 
 /** What can follow the text before the caret, and the partial word typed so far. */
@@ -45,7 +77,7 @@ function useSuggestions(dataSetName?: string) {
       walk(d.children);
     });
     walk(ed.bc?.dataItems ?? []);
-    const labels = new Map([...(ed.bc?.labels ?? []).map(l => [l.name, `Label „${l.text}“`] as const), ...(ed.bc?.captions ?? []).map(c => [c.name, `Beschriftung „${c.text}“`] as const)]);
+    const labels = new Map([...(ed.bc?.labels ?? []).map(l => [l.name, l10n.t('Label "{0}"', l.text)] as const), ...(ed.bc?.captions ?? []).map(c => [c.name, l10n.t('Caption "{0}"', c.text)] as const)]);
     const dataSets = r.dataSets.filter(d => !dataSetName || d.name === dataSetName);
     const fields = [...new Map(dataSets.flatMap(d => d.fields.map(f => [f.name, f] as const))).values()];
     let code: string[] = [];
@@ -56,16 +88,16 @@ function useSuggestions(dataSetName?: string) {
     }
     const byKind: Record<string, Suggestion[]> = {
       fields: fields.map(f => ({ label: f.name, insert: `${f.name}.Value`, icon: f.value ? 'symbol-operator' : 'symbol-field',
-        detail: alColumns.get(f.name) ?? (f.name.endsWith('Format') && fields.some(x => x.name === f.name.slice(0, -6)) ? 'Zahlenformat aus Business Central' : f.typeName.replace('System.', '')) })),
+        detail: alColumns.get(f.name) ?? (f.name.endsWith('Format') && fields.some(x => x.name === f.name.slice(0, -6)) ? l10n.t('Number format from Business Central') : f.typeName.replace('System.', '')) })),
       parameters: r.parameters.map(p => ({ label: p.name, insert: `${p.name}.Value`, icon: 'symbol-key', detail: labels.get(p.name) ?? p.dataType })),
       reportitems: allReportItems(r).filter(i => i.type === 'textbox').map(i => ({ label: i.name, insert: `${i.name}.Value`, icon: 'symbol-text' })),
-      globals: [...GLOBALS.map(([g, l]) => ({ label: g, insert: g, icon: 'symbol-constant', detail: l })),
+      globals: [...globals().map(([g, l]) => ({ label: g, insert: g, icon: 'symbol-constant', detail: l })),
         { label: 'OverallPageNumber', insert: 'OverallPageNumber', icon: 'symbol-constant' }, { label: 'OverallTotalPages', insert: 'OverallTotalPages', icon: 'symbol-constant' }],
       user: [{ label: 'UserID', insert: 'UserID', icon: 'person' }, { label: 'Language', insert: 'Language', icon: 'globe' }],
-      code: code.map(f => ({ label: f, insert: `${f}(`, icon: 'symbol-method', detail: 'Code-Block' })),
+      code: code.map(f => ({ label: f, insert: `${f}(`, icon: 'symbol-method', detail: l10n.t('Code block') })),
       word: [
-        ...PREFIXES.map(([p, d]) => ({ label: p, insert: p, icon: 'symbol-namespace', detail: d })),
-        ...FUNCTIONS.map(([f, sig]) => ({ label: f, insert: `${f}(`, icon: 'symbol-function', detail: sig })),
+        ...prefixes().map(([p, d]) => ({ label: p, insert: p, icon: 'symbol-namespace', detail: d })),
+        ...functions().map(([f, sig]) => ({ label: f, insert: `${f}(`, icon: 'symbol-function', detail: sig })),
         ...['Nothing', 'True', 'False', 'And', 'Or', 'Not', 'AndAlso', 'OrElse'].map(k => ({ label: k, insert: k, icon: 'symbol-keyword' })),
       ],
     };

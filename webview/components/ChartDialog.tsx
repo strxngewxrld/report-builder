@@ -3,9 +3,10 @@ import { Dialog, useEditor } from '../editor';
 import { validateExpression } from '../expr';
 import { RawItem, uniqueName } from '../model';
 import { locate, rawItem, sectionOf } from '../ops';
-import { CHART_KINDS, ChartAxisSpec, ChartKind, ChartSpec, PALETTES, SERIES_KINDS, chartXml, emptyAxis, isPie, patchChart, readChart } from '../charts';
+import { chartKinds, ChartAxisSpec, ChartKind, ChartSpec, PALETTES, SERIES_KINDS, chartXml, emptyAxis, isPie, patchChart, readChart } from '../charts';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
+import { l10n } from '../l10n';
 
 /** Insert / edit a chart: type, category (x axis), series with their values, title, legend, palette. */
 export function ChartDialog({ d, close, Modal, Field }: {
@@ -19,7 +20,7 @@ export function ChartDialog({ d, close, Modal, Field }: {
   const ds0 = ed.report.dataSets.find(x => x.name === 'DataSet_Result') ?? ed.report.dataSets[0];
   const [spec, setSpec] = useState<ChartSpec>(initial ?? {
     name: uniqueName(ed.report, 'Chart'), dataSetName: ds0?.name ?? '', kind: 'Column', category: '',
-    series: [{ name: 'Wert', value: '' }], title: '', legend: true, palette: 'BrightPastel',
+    series: [{ name: l10n.t('Value'), value: '' }], title: '', legend: true, palette: 'BrightPastel',
     dataLabels: false, categoryAxis: emptyAxis(), valueAxis: emptyAxis(), secondaryAxis: emptyAxis(),
   });
   const set = (p: Partial<ChartSpec>) => setSpec({ ...spec, ...p });
@@ -28,24 +29,24 @@ export function ChartDialog({ d, close, Modal, Field }: {
   const horizontal = spec.kind === 'Bar' || spec.kind === 'StackedBar';
   const bound = (v: string) => v === '' || v.startsWith('=') || Number.isFinite(Number(v.replace(',', '.')));
   const axes = [spec.valueAxis, spec.secondaryAxis];
-  const error = !/^[A-Za-z_]\w*$/.test(spec.name) ? 'Ungültiger Name'
-    : !existing && locate(ed.report, spec.name) ? `„${spec.name}“ ist schon vergeben`
-    : !spec.dataSetName ? 'Dataset wählen'
-    : !spec.series.length || spec.series.some(s => !s.value.trim()) ? 'Jede Reihe braucht einen Wert (z. B. =Sum(Fields!Betrag.Value))'
-    : axes.some(a => !bound(a.min) || !bound(a.max)) ? 'Minimum/Maximum: Zahl, =Ausdruck oder leer (automatisch)'
+  const error = !/^[A-Za-z_]\w*$/.test(spec.name) ? l10n.t('Invalid name')
+    : !existing && locate(ed.report, spec.name) ? l10n.t('"{0}" is taken already', spec.name)
+    : !spec.dataSetName ? l10n.t('Choose a dataset')
+    : !spec.series.length || spec.series.some(s => !s.value.trim()) ? l10n.t('Every series needs a value (e.g. =Sum(Fields!Amount.Value))')
+    : axes.some(a => !bound(a.min) || !bound(a.max)) ? l10n.t('Minimum/maximum: a number, =expression or empty (automatic)')
     : [spec.category, ...spec.series.map(s => s.value)].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
   const setSeries = (i: number, p: Partial<ChartSpec['series'][number]>) => set({ series: spec.series.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   const axisFields = (label: string, a: ChartAxisSpec, key: 'categoryAxis' | 'valueAxis' | 'secondaryAxis', values: boolean) => (
     <div className="form-row"><span>{label}</span>
       <div className="list-editor">
         <div className="list-row">
-          <input value={a.title} placeholder="Titel (optional)" onChange={e => set({ [key]: { ...a, title: e.target.value } })} />
-          {values && <input className="axis-format" value={a.format} placeholder="Format (N0, P0 …)" title="Zahlenformat der Achsenbeschriftung" onChange={e => set({ [key]: { ...a, format: e.target.value } })} />}
+          <input value={a.title} placeholder={l10n.t('Title (optional)')} onChange={e => set({ [key]: { ...a, title: e.target.value } })} />
+          {values && <input className="axis-format" value={a.format} placeholder={l10n.t('Format (N0, P0 …)')} title={l10n.t('Number format of the axis labels')} onChange={e => set({ [key]: { ...a, format: e.target.value } })} />}
         </div>
         {values && (
           <div className="list-row">
-            <input value={a.min} placeholder="Minimum (automatisch)" onChange={e => set({ [key]: { ...a, min: e.target.value.replace(',', '.') } })} />
-            <input value={a.max} placeholder="Maximum (automatisch)" onChange={e => set({ [key]: { ...a, max: e.target.value.replace(',', '.') } })} />
+            <input value={a.min} placeholder={l10n.t('Minimum (automatic)')} onChange={e => set({ [key]: { ...a, min: e.target.value.replace(',', '.') } })} />
+            <input value={a.max} placeholder={l10n.t('Maximum (automatic)')} onChange={e => set({ [key]: { ...a, max: e.target.value.replace(',', '.') } })} />
           </div>
         )}
       </div>
@@ -68,69 +69,69 @@ export function ChartDialog({ d, close, Modal, Field }: {
     close();
   };
   const fieldPick = (onPick: (f: string) => void, aggregate: boolean) => (
-    <select className="field-pick" value="" title="Feld wählen" onChange={e => e.target.value && onPick(aggregate ? `=Sum(Fields!${e.target.value}.Value)` : `=Fields!${e.target.value}.Value`)}>
-      <option value="">Feld…</option>
+    <select className="field-pick" value="" title={l10n.t('Choose a field')} onChange={e => e.target.value && onPick(aggregate ? `=Sum(Fields!${e.target.value}.Value)` : `=Fields!${e.target.value}.Value`)}>
+      <option value="">{l10n.t('Field…')}</option>
       {fields.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
     </select>
   );
 
   return (
-    <Modal title={existing ? `Diagrammeigenschaften – ${existing.name}` : 'Diagramm einfügen'} onOk={ok} onCancel={close} error={error} wide okLabel={existing ? 'OK' : 'Einfügen'}>
-      <div className="chart-kinds" role="radiogroup" aria-label="Diagrammtyp">
-        {CHART_KINDS.map(([k, label, icon]) => (
+    <Modal title={existing ? l10n.t('Chart Properties – {0}', existing.name) : l10n.t('Insert Chart')} onOk={ok} onCancel={close} error={error} wide okLabel={existing ? 'OK' : l10n.t('Insert')}>
+      <div className="chart-kinds" role="radiogroup" aria-label={l10n.t('Chart type')}>
+        {chartKinds().map(([k, label, icon]) => (
           <button key={k} role="radio" aria-checked={spec.kind === k} className={`chart-kind ${spec.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k as ChartKind })}>
             <Codicon name={icon} /><span>{label}</span>
           </button>
         ))}
       </div>
-      <Field label="Name"><input value={spec.name} disabled={!!existing} onChange={e => set({ name: e.target.value })} /></Field>
-      <Field label="Dataset">
+      <Field label={l10n.t('Name')}><input value={spec.name} disabled={!!existing} onChange={e => set({ name: e.target.value })} /></Field>
+      <Field label={l10n.t('Dataset')}>
         <select value={spec.dataSetName} onChange={e => set({ dataSetName: e.target.value })}>
           {ed.report.dataSets.map(x => <option key={x.name}>{x.name}</option>)}
         </select>
       </Field>
-      <div className="form-row"><span>{pie ? 'Segmente' : 'Kategorie (x-Achse)'}</span>
+      <div className="form-row"><span>{pie ? l10n.t('Segments') : l10n.t('Category (x axis)')}</span>
         <span className="expr-prop">
-          <ExpressionInput value={spec.category} onChange={v => set({ category: v })} dataSetName={spec.dataSetName} placeholder="leer = eine Kategorie, z. B. =Fields!Region.Value" />
+          <ExpressionInput value={spec.category} onChange={v => set({ category: v })} dataSetName={spec.dataSetName} placeholder={l10n.t('empty = one category, e.g. =Fields!Region.Value')} />
           {fieldPick(v => set({ category: v }), false)}
         </span>
       </div>
-      <div className="form-row"><span>{pie ? 'Wert' : 'Reihen'}</span>
+      <div className="form-row"><span>{pie ? l10n.t('Value') : l10n.t('Series')}</span>
         <div className="list-editor">
           {(pie ? spec.series.slice(0, 1) : spec.series).map((s, i) => (
             <div key={i} className="list-row">
-              <input className="series-name" value={s.name} placeholder="Name" onChange={e => setSeries(i, { name: e.target.value })} />
+              <input className="series-name" value={s.name} placeholder={l10n.t('Name')} onChange={e => setSeries(i, { name: e.target.value })} />
               <span className="expr-prop">
                 <ExpressionInput value={s.value} onChange={v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) })} dataSetName={spec.dataSetName} placeholder="=Sum(Fields!…Value)" />
                 {fieldPick(v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) }), true)}
               </span>
               {!pie && !horizontal && <>
-                <select value={s.kind ?? ''} title="Typ dieser Reihe (Kombidiagramm)" onChange={e => setSeries(i, { kind: (e.target.value || undefined) as ChartKind | undefined })}>
-                  <option value="">wie Diagramm</option>
-                  {SERIES_KINDS.map(k => <option key={k} value={k}>{CHART_KINDS.find(c => c[0] === k)![1]}</option>)}
+                <select value={s.kind ?? ''} title={l10n.t('Type of this series (combined chart)')} onChange={e => setSeries(i, { kind: (e.target.value || undefined) as ChartKind | undefined })}>
+                  <option value="">{l10n.t('as chart')}</option>
+                  {SERIES_KINDS.map(k => <option key={k} value={k}>{chartKinds().find(c => c[0] === k)![1]}</option>)}
                 </select>
-                <label className="check" title="An der zweiten Werteachse (rechts) auftragen"><input type="checkbox" checked={!!s.secondary} onChange={e => setSeries(i, { secondary: e.target.checked || undefined })} /> rechts</label>
+                <label className="check" title={l10n.t('Plot on the secondary value axis (right)')}><input type="checkbox" checked={!!s.secondary} onChange={e => setSeries(i, { secondary: e.target.checked || undefined })} /> {l10n.t('right')}</label>
               </>}
-              <ActionButton icon="trash" title="Reihe entfernen" disabled={spec.series.length <= 1} onClick={() => set({ series: spec.series.filter((_, j) => j !== i) })} />
+              <ActionButton icon="trash" title={l10n.t('Remove Series')} disabled={spec.series.length <= 1} onClick={() => set({ series: spec.series.filter((_, j) => j !== i) })} />
             </div>
           ))}
-          {!pie && <button className="secondary small" onClick={() => set({ series: [...spec.series, { name: `Reihe${spec.series.length + 1}`, value: '' }] })}><Codicon name="add" /> Reihe</button>}
+          {!pie && <button className="secondary small" onClick={() => set({ series: [...spec.series, { name: l10n.t('Series{0}', spec.series.length + 1), value: '' }] })}><Codicon name="add" /> {l10n.t('Series')}</button>}
         </div>
       </div>
-      <Field label="Titel"><input value={spec.title} onChange={e => set({ title: e.target.value })} placeholder="optional" /></Field>
-      <Field label="Darstellung">
+      <Field label={l10n.t('Title')}><input value={spec.title} onChange={e => set({ title: e.target.value })} placeholder={l10n.t('optional')} /></Field>
+      <Field label={l10n.t('Appearance')}>
         <span className="list-row">
-          <label className="check"><input type="checkbox" checked={spec.legend} onChange={e => set({ legend: e.target.checked })} /> Legende</label>
-          <label className="check"><input type="checkbox" checked={spec.dataLabels} onChange={e => set({ dataLabels: e.target.checked })} /> Datenbeschriftungen</label>
-          <select value={spec.palette} onChange={e => set({ palette: e.target.value })} title="Farbpalette">{PALETTES.map(p => <option key={p}>{p}</option>)}</select>
+          <label className="check"><input type="checkbox" checked={spec.legend} onChange={e => set({ legend: e.target.checked })} /> {l10n.t('Legend')}</label>
+          <label className="check"><input type="checkbox" checked={spec.dataLabels} onChange={e => set({ dataLabels: e.target.checked })} /> {l10n.t('Data labels')}</label>
+          <select value={spec.palette} onChange={e => set({ palette: e.target.value })} title={l10n.t('Color palette')}>{PALETTES.map(p => <option key={p}>{p}</option>)}</select>
         </span>
       </Field>
       {!pie && <>
-        {axisFields(horizontal ? 'Kategorieachse (y)' : 'Kategorieachse (x)', spec.categoryAxis, 'categoryAxis', false)}
-        {axisFields(horizontal ? 'Werteachse (x)' : 'Werteachse (y)', spec.valueAxis, 'valueAxis', true)}
-        {spec.series.some(x => x.secondary) && !horizontal && axisFields('Zweite Werteachse (rechts)', spec.secondaryAxis, 'secondaryAxis', true)}
+        {axisFields(horizontal ? l10n.t('Category axis (y)') : l10n.t('Category axis (x)'), spec.categoryAxis, 'categoryAxis', false)}
+        {axisFields(horizontal ? l10n.t('Value axis (x)') : l10n.t('Value axis (y)'), spec.valueAxis, 'valueAxis', true)}
+        {spec.series.some(x => x.secondary) && !horizontal && axisFields(l10n.t('Secondary value axis (right)'), spec.secondaryAxis, 'secondaryAxis', true)}
       </>}
-      {existing && <div className="prop-note">Geändert wird nur, was hier eingestellt ist – weitere Formatierung des Diagramms bleibt wie im Layout.</div>}
+      {existing && <div className="prop-note">{l10n.t('Only what is set here changes – further formatting of the chart stays as in the layout.')}</div>}
     </Modal>
   );
 }

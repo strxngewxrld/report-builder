@@ -14,6 +14,7 @@ import { locate } from '../ops';
 import { addChildGroup, addColumnGroup, addParentGroup, createMatrix, findMember, uniqueGroupName, usedGroupNames } from '../tablix';
 import { sectionOf } from '../ops';
 import { hiddenOf, setHidden, setToggleItem, toggleItemOf } from '../layoutTools';
+import { l10n } from '../l10n';
 
 const IDENT = /^[A-Za-z_][\w]*$/;
 
@@ -29,7 +30,7 @@ function Modal(props: { title: string; children: ReactNode; onOk?: () => void; o
   const ok = props.onOk && !props.error ? props.onOk : undefined;
   const buttons = [
     props.onOk && <button key="ok" className="primary" disabled={!!props.error} onClick={props.onOk}>{props.okLabel ?? 'OK'}</button>,
-    <button key="cancel" onClick={props.onCancel}>{props.onOk ? 'Abbrechen' : 'Schließen'}</button>,
+    <button key="cancel" onClick={props.onCancel}>{props.onOk ? l10n.t('Cancel') : l10n.t('Close')}</button>,
   ];
   return (
     <div className="modal-backdrop" onPointerDown={e => { if (e.target === e.currentTarget) props.onCancel(); }}>
@@ -41,7 +42,7 @@ function Modal(props: { title: string; children: ReactNode; onOk?: () => void; o
           const t = e.target as HTMLElement;
           if (e.key === 'Enter' && ok && t.tagName !== 'TEXTAREA' && t.tagName !== 'BUTTON' && !e.nativeEvent.isComposing) { e.preventDefault(); ok(); }
         }}>
-        <div className="modal-title"><span className="grow">{props.title}</span><ActionButton icon="close" title="Schließen (Esc)" onClick={props.onCancel} /></div>
+        <div className="modal-title"><span className="grow">{props.title}</span><ActionButton icon="close" title={l10n.t('Close (Esc)')} onClick={props.onCancel} /></div>
         <div className="modal-body">{props.children}</div>
         <div className="modal-footer">
           {props.error && <span className="modal-error"><Codicon name="error" /> {props.error}</span>}
@@ -68,23 +69,23 @@ export function Dialogs() {
     case 'group': return <GroupDialog d={dialog} close={close} />;
     case 'chart': return <ChartDialog d={dialog} close={close} Modal={Modal} Field={Field_} />;
     case 'matrix': return <MatrixDialog d={dialog} close={close} />;
-    case 'reportProperties': return <Modal title="Berichtseigenschaften" onCancel={close}><ReportProps /></Modal>;
+    case 'reportProperties': return <Modal title={l10n.t('Report Properties')} onCancel={close}><ReportProps /></Modal>;
   }
 }
 
 /** Common validation: identifier syntax and uniqueness among siblings. */
 function nameError(name: string, taken: string[], what: string): string | null {
-  if (!name) return `${what}: Name fehlt`;
-  if (!IDENT.test(name)) return `${what}: Name darf nur Buchstaben, Ziffern und _ enthalten und nicht mit einer Ziffer beginnen`;
-  if (taken.includes(name)) return `${what} „${name}“ existiert bereits`;
+  if (!name) return l10n.t('{0}: name missing', what);
+  if (!IDENT.test(name)) return l10n.t('{0}: the name may only contain letters, digits and _ and must not start with a digit', what);
+  if (taken.includes(name)) return l10n.t('{0} "{1}" already exists', what, name);
   return null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 
-const PROVIDERS: [string, string][] = [
-  ['SQL', 'Microsoft SQL Server'], ['SQLAZURE', 'Microsoft Azure SQL-Datenbank'], ['OLEDB', 'OLE DB'], ['ODBC', 'ODBC'],
-  ['ORACLE', 'Oracle'], ['XML', 'XML'], ['SHAREPOINTLIST', 'SharePoint-Liste'], ['ENTERDATA', 'Daten eingeben'],
+const providers = (): [string, string][] => [
+  ['SQL', 'Microsoft SQL Server'], ['SQLAZURE', l10n.t('Microsoft Azure SQL Database')], ['OLEDB', 'OLE DB'], ['ODBC', 'ODBC'],
+  ['ORACLE', 'Oracle'], ['XML', 'XML'], ['SHAREPOINTLIST', l10n.t('SharePoint List')], ['ENTERDATA', l10n.t('Enter Data')],
 ];
 
 function DataSourceDialog({ name, close }: { name?: string; close: () => void }) {
@@ -95,7 +96,7 @@ function DataSourceDialog({ name, close }: { name?: string; close: () => void })
     connectString: 'Data Source=localhost;Initial Catalog=AdventureWorks', extra: [], connExtra: [],
   });
   const shared = d.sharedReference !== undefined;
-  const error = nameError(d.name, ed.report.dataSources.filter(x => x !== existing).map(x => x.name), 'Datenquelle');
+  const error = nameError(d.name, ed.report.dataSources.filter(x => x !== existing).map(x => x.name), l10n.t('Data source'));
 
   const ok = () => {
     ed.commit(r => {
@@ -110,22 +111,22 @@ function DataSourceDialog({ name, close }: { name?: string; close: () => void })
   };
 
   return (
-    <Modal title={existing ? 'Datenquelleneigenschaften' : 'Neue Datenquelle'} onOk={ok} onCancel={close} error={error}>
-      <Field_ label="Name"><input autoFocus value={d.name} onChange={e => setD({ ...d, name: e.target.value })} /></Field_>
+    <Modal title={existing ? l10n.t('Data Source Properties') : l10n.t('New Data Source')} onOk={ok} onCancel={close} error={error}>
+      <Field_ label={l10n.t('Name')}><input autoFocus value={d.name} onChange={e => setD({ ...d, name: e.target.value })} /></Field_>
       <div className="radio-group">
-        <label><input type="radio" checked={shared} onChange={() => setD({ ...d, sharedReference: '/Datenquellen/' })} /> Freigegebene Datenquelle verwenden</label>
-        <label><input type="radio" checked={!shared} onChange={() => setD({ ...d, sharedReference: undefined })} /> In meinen Bericht eingebettete Verbindung</label>
+        <label><input type="radio" checked={shared} onChange={() => setD({ ...d, sharedReference: `/${l10n.t('Data Sources')}/` })} /> {l10n.t('Use a shared data source')}</label>
+        <label><input type="radio" checked={!shared} onChange={() => setD({ ...d, sharedReference: undefined })} /> {l10n.t('Use a connection embedded in my report')}</label>
       </div>
       {shared ? (
-        <Field_ label="Pfad"><input value={d.sharedReference} onChange={e => setD({ ...d, sharedReference: e.target.value })} placeholder="/Datenquellen/AdventureWorks" /></Field_>
+        <Field_ label={l10n.t('Path')}><input value={d.sharedReference} onChange={e => setD({ ...d, sharedReference: e.target.value })} placeholder={`/${l10n.t('Data Sources')}/AdventureWorks`} /></Field_>
       ) : (
         <>
-          <Field_ label="Verbindungstyp">
+          <Field_ label={l10n.t('Connection type')}>
             <select value={d.provider} onChange={e => setD({ ...d, provider: e.target.value })}>
-              {[...new Set([d.provider, ...PROVIDERS.map(p => p[0])])].map(p => <option key={p} value={p}>{PROVIDERS.find(x => x[0] === p)?.[1] ?? p}</option>)}
+              {[...new Set([d.provider, ...providers().map(p => p[0])])].map(p => <option key={p} value={p}>{providers().find(x => x[0] === p)?.[1] ?? p}</option>)}
             </select>
           </Field_>
-          <Field_ label="Verbindungszeichenfolge">
+          <Field_ label={l10n.t('Connection string')}>
             <textarea rows={3} value={d.connectString} onChange={e => setD({ ...d, connectString: e.target.value })} spellCheck={false} />
           </Field_>
         </>
@@ -168,8 +169,8 @@ function DataSetDialog({ name, close }: { name?: string; close: () => void }) {
   const sample = ed.sampleData[d.name];
   const fieldNames = d.fields.map(f => f.name);
   const error = nameError(d.name, ed.report.dataSets.filter(x => x !== existing).map(x => x.name), 'Dataset')
-    ?? (d.fields.some(f => !IDENT.test(f.name)) ? 'Ungültiger Feldname' : null)
-    ?? (new Set(fieldNames).size !== fieldNames.length ? 'Feldnamen müssen eindeutig sein' : null);
+    ?? (d.fields.some(f => !IDENT.test(f.name)) ? l10n.t('Invalid field name') : null)
+    ?? (new Set(fieldNames).size !== fieldNames.length ? l10n.t('Field names must be unique') : null);
 
   const setField = (i: number, patch: Partial<Field>) => setD({ ...d, fields: d.fields.map((f, j) => (i === j ? { ...f, ...patch } : f)) });
   const mergeFields = (found: Field[]) => setD({
@@ -195,58 +196,58 @@ function DataSetDialog({ name, close }: { name?: string; close: () => void }) {
   };
 
   return (
-    <Modal title={existing ? 'Dataseteigenschaften' : 'Neues Dataset'} onOk={ok} onCancel={close} error={error} wide>
+    <Modal title={existing ? l10n.t('Dataset Properties') : l10n.t('New Dataset')} onOk={ok} onCancel={close} error={error} wide>
       <div className="tabs">
-        <button className={tab === 'query' ? 'on' : ''} onClick={() => setTab('query')}>Abfrage</button>
-        <button className={tab === 'fields' ? 'on' : ''} onClick={() => setTab('fields')}>Felder ({d.fields.length})</button>
+        <button className={tab === 'query' ? 'on' : ''} onClick={() => setTab('query')}>{l10n.t('Query')}</button>
+        <button className={tab === 'fields' ? 'on' : ''} onClick={() => setTab('fields')}>{l10n.t('Fields ({0})', d.fields.length)}</button>
       </div>
       {tab === 'query' ? (
         <>
-          <Field_ label="Name"><input autoFocus value={d.name} onChange={e => setD({ ...d, name: e.target.value })} /></Field_>
-          <Field_ label="Datenquelle">
+          <Field_ label={l10n.t('Name')}><input autoFocus value={d.name} onChange={e => setD({ ...d, name: e.target.value })} /></Field_>
+          <Field_ label={l10n.t('Data source')}>
             <select value={d.dataSourceName} onChange={e => setD({ ...d, dataSourceName: e.target.value })}>
-              {!ed.report.dataSources.some(s => s.name === d.dataSourceName) && <option value={d.dataSourceName}>{d.dataSourceName || '(keine)'}</option>}
+              {!ed.report.dataSources.some(s => s.name === d.dataSourceName) && <option value={d.dataSourceName}>{d.dataSourceName || l10n.t('(none)')}</option>}
               {ed.report.dataSources.map(s => <option key={s.id}>{s.name}</option>)}
             </select>
           </Field_>
-          <Field_ label="Abfrage">
+          <Field_ label={l10n.t('Query')}>
             <textarea className="code" rows={10} value={d.commandText} spellCheck={false} onChange={e => setD({ ...d, commandText: e.target.value })} />
           </Field_>
           <div className="button-row">
-            <button onClick={() => { mergeFields(fieldsFromSql(d.commandText)); setTab('fields'); }}>Felder aus Abfrage ableiten</button>
+            <button onClick={() => { mergeFields(fieldsFromSql(d.commandText)); setTab('fields'); }}>{l10n.t('Derive Fields from Query')}</button>
           </div>
         </>
       ) : (
         <>
           <table className="grid">
-            <thead><tr><th>Feldname</th><th>Feldquelle</th><th>Typ</th><th /></tr></thead>
+            <thead><tr><th>{l10n.t('Field name')}</th><th>{l10n.t('Field source')}</th><th>{l10n.t('Type')}</th><th /></tr></thead>
             <tbody>
               {d.fields.map((f, i) => (
                 <tr key={i}>
                   <td><input value={f.name} onChange={e => setField(i, { name: e.target.value })} /></td>
                   <td>
                     {f.value !== undefined
-                      ? <input value={f.value} title="Berechnetes Feld" onChange={e => setField(i, { value: e.target.value })} />
+                      ? <input value={f.value} title={l10n.t('Calculated field')} onChange={e => setField(i, { value: e.target.value })} />
                       : <input value={f.dataField} onChange={e => setField(i, { dataField: e.target.value })} />}
                   </td>
                   <td>
                     <select value={f.typeName} onChange={e => setField(i, { typeName: e.target.value })}>
-                      {[...new Set([f.typeName, ...TYPES])].map(t => <option key={t} value={t}>{t ? t.replace('System.', '') : '(nicht angegeben)'}</option>)}
+                      {[...new Set([f.typeName, ...TYPES])].map(t => <option key={t} value={t}>{t ? t.replace('System.', '') : l10n.t('(not specified)')}</option>)}
                     </select>
                   </td>
-                  <td><ActionButton icon="trash" title="Entfernen" onClick={() => setD({ ...d, fields: d.fields.filter((_, j) => j !== i) })} /></td>
+                  <td><ActionButton icon="trash" title={l10n.t('Remove')} onClick={() => setD({ ...d, fields: d.fields.filter((_, j) => j !== i) })} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="button-row">
-            <button onClick={() => setD({ ...d, fields: [...d.fields, { name: uniqueIn(fieldNames, 'Field'), dataField: '', typeName: 'System.String' }] })}>Abfragefeld hinzufügen</button>
-            <button onClick={() => setD({ ...d, fields: [...d.fields, { name: uniqueIn(fieldNames, 'Calculated'), dataField: '', typeName: 'System.String', value: '=' }] })}>Berechnetes Feld hinzufügen</button>
-            <button onClick={() => post({ type: 'importSampleData', dataSet: d.name })}>Beispieldaten laden (Excel, CSV, JSON)…</button>
-            <button disabled={!sample?.length} onClick={() => mergeFields(inferFields(sample))}>Felder aus Beispieldaten übernehmen</button>
+            <button onClick={() => setD({ ...d, fields: [...d.fields, { name: uniqueIn(fieldNames, 'Field'), dataField: '', typeName: 'System.String' }] })}>{l10n.t('Add Query Field')}</button>
+            <button onClick={() => setD({ ...d, fields: [...d.fields, { name: uniqueIn(fieldNames, 'Calculated'), dataField: '', typeName: 'System.String', value: '=' }] })}>{l10n.t('Add Calculated Field')}</button>
+            <button onClick={() => post({ type: 'importSampleData', dataSet: d.name })}>{l10n.t('Load Sample Data (Excel, CSV, JSON)…')}</button>
+            <button disabled={!sample?.length} onClick={() => mergeFields(inferFields(sample))}>{l10n.t('Take Fields from Sample Data')}</button>
           </div>
           <div className="prop-note">
-            {sample ? `${sample.length} Zeilen Beispieldaten für die Vorschau vorhanden.` : 'Ohne Beispieldaten erzeugt die Vorschau Platzhalterwerte. Beispieldaten (Excel, CSV oder JSON) werden neben dem Bericht als <Name>.data.json gespeichert.'}
+            {sample ? l10n.t('{0} rows of sample data available for the preview.', sample.length) : l10n.t('Without sample data the preview generates placeholder values. Sample data (Excel, CSV or JSON) is saved next to the report as <Name>.data.json.')}
           </div>
         </>
       )}
@@ -263,7 +264,7 @@ function ParameterDialog({ name, close }: { name?: string; close: () => void }) 
     id: newId(), name: uniqueIn(ed.report.parameters.map(x => x.name), 'ReportParameter'),
     dataType: 'String', prompt: '', defaultValue: '', allowBlank: false, nullable: false, extra: [],
   });
-  const error = nameError(p.name, ed.report.parameters.filter(x => x !== existing).map(x => x.name), 'Parameter');
+  const error = nameError(p.name, ed.report.parameters.filter(x => x !== existing).map(x => x.name), l10n.t('Parameter'));
 
   const ok = () => {
     ed.commit(r => {
@@ -278,19 +279,19 @@ function ParameterDialog({ name, close }: { name?: string; close: () => void }) 
   };
 
   return (
-    <Modal title={existing ? 'Berichtsparametereigenschaften' : 'Neuer Berichtsparameter'} onOk={ok} onCancel={close} error={error}>
-      <Field_ label="Name"><input autoFocus value={p.name} onChange={e => setP({ ...p, name: e.target.value })} /></Field_>
-      <Field_ label="Eingabeaufforderung"><input value={p.prompt} placeholder={p.name} onChange={e => setP({ ...p, prompt: e.target.value })} /></Field_>
-      <Field_ label="Datentyp">
+    <Modal title={existing ? l10n.t('Report Parameter Properties') : l10n.t('New Report Parameter')} onOk={ok} onCancel={close} error={error}>
+      <Field_ label={l10n.t('Name')}><input autoFocus value={p.name} onChange={e => setP({ ...p, name: e.target.value })} /></Field_>
+      <Field_ label={l10n.t('Prompt')}><input value={p.prompt} placeholder={p.name} onChange={e => setP({ ...p, prompt: e.target.value })} /></Field_>
+      <Field_ label={l10n.t('Data type')}>
         <select value={p.dataType} onChange={e => setP({ ...p, dataType: e.target.value as ParameterType })}>
-          <option value="String">Text</option><option value="Integer">Ganze Zahl</option><option value="Float">Gleitkommazahl</option>
-          <option value="DateTime">Datum/Uhrzeit</option><option value="Boolean">Boolesch</option>
+          <option value="String">{l10n.t('Text')}</option><option value="Integer">{l10n.t('Integer')}</option><option value="Float">{l10n.t('Float')}</option>
+          <option value="DateTime">{l10n.t('Date/Time')}</option><option value="Boolean">{l10n.t('Boolean')}</option>
         </select>
       </Field_>
-      <Field_ label="Standardwert"><input value={p.defaultValue} placeholder="(kein Standardwert)" onChange={e => setP({ ...p, defaultValue: e.target.value })} /></Field_>
-      <label className="check"><input type="checkbox" checked={p.allowBlank} onChange={e => setP({ ...p, allowBlank: e.target.checked })} /> Leeren Wert zulassen ("")</label>
-      <label className="check"><input type="checkbox" checked={p.nullable} onChange={e => setP({ ...p, nullable: e.target.checked })} /> NULL-Wert zulassen</label>
-      {p.extra.length > 0 && <div className="prop-note">Verfügbare Werte und weitere Einstellungen aus der Datei bleiben erhalten.</div>}
+      <Field_ label={l10n.t('Default value')}><input value={p.defaultValue} placeholder={l10n.t('(no default value)')} onChange={e => setP({ ...p, defaultValue: e.target.value })} /></Field_>
+      <label className="check"><input type="checkbox" checked={p.allowBlank} onChange={e => setP({ ...p, allowBlank: e.target.checked })} /> {l10n.t('Allow blank value ("")')}</label>
+      <label className="check"><input type="checkbox" checked={p.nullable} onChange={e => setP({ ...p, nullable: e.target.checked })} /> {l10n.t('Allow null value')}</label>
+      {p.extra.length > 0 && <div className="prop-note">{l10n.t('Available values and further settings from the file are kept.')}</div>}
     </Modal>
   );
 }
@@ -304,13 +305,13 @@ function renameParameterRefs(r: Report, from: string, to: string) {
 
 // ---------------------------------------------------------------------------------------------------------------
 
-const FUNCTIONS: [string, string][] = [
-  ['Sum(Fields!X.Value)', 'Summe'], ['Avg(Fields!X.Value)', 'Mittelwert'], ['Count(Fields!X.Value)', 'Anzahl'],
-  ['CountDistinct(Fields!X.Value)', 'Anzahl eindeutig'], ['Min(Fields!X.Value)', 'Minimum'], ['Max(Fields!X.Value)', 'Maximum'],
-  ['First(Fields!X.Value)', 'Erster Wert'], ['IIf(Bedingung, Wahr, Falsch)', 'Wenn-Dann'], ['Format(Wert, "N2")', 'Formatieren'],
-  ['FormatCurrency(Wert)', 'Als Währung'], ['FormatPercent(Wert, 1)', 'Als Prozent'], ['UCase(Text)', 'Großbuchstaben'],
-  ['Left(Text, 3)', 'Links'], ['Len(Text)', 'Länge'], ['Today()', 'Heute'], ['Now()', 'Jetzt'], ['Year(Datum)', 'Jahr'],
-  ['DateAdd("d", 1, Datum)', 'Datum addieren'], ['IsNothing(Wert)', 'Ist leer'], ['RowNumber(Nothing)', 'Zeilennummer'],
+const functions = (): [string, string][] => [
+  ['Sum(Fields!X.Value)', l10n.t('Sum')], ['Avg(Fields!X.Value)', l10n.t('Average')], ['Count(Fields!X.Value)', l10n.t('Count')],
+  ['CountDistinct(Fields!X.Value)', l10n.t('Count distinct')], ['Min(Fields!X.Value)', l10n.t('Minimum')], ['Max(Fields!X.Value)', l10n.t('Maximum')],
+  ['First(Fields!X.Value)', l10n.t('First value')], [l10n.t('IIf(Condition, TrueValue, FalseValue)'), l10n.t('If-then')], [l10n.t('Format(Value, "N2")'), l10n.t('Format a value')],
+  [l10n.t('FormatCurrency(Value)'), l10n.t('As currency')], [l10n.t('FormatPercent(Value, 1)'), l10n.t('As percent')], [l10n.t('UCase(Text)'), l10n.t('Upper case')],
+  [l10n.t('Left(Text, 3)'), l10n.t('Left')], [l10n.t('Len(Text)'), l10n.t('Length')], ['Today()', l10n.t('Today')], ['Now()', l10n.t('Now')], [l10n.t('Year(Date)'), l10n.t('Year')],
+  [l10n.t('DateAdd("d", 1, Date)'), l10n.t('Add to date')], [l10n.t('IsNothing(Value)'), l10n.t('Is empty')], ['RowNumber(Nothing)', l10n.t('Row number')],
 ];
 const OPERATORS = ['&', '+', '-', '*', '/', '=', '<>', '<', '>', 'And', 'Or', 'Not'];
 
@@ -337,7 +338,7 @@ function ExpressionDialog({ d, close }: { d: Extract<Dialog, { kind: 'expression
         d.dataSetName ? `Fields!${f.name}.Value` : `First(Fields!${f.name}.Value, "${ds.name}")`, `${ds.name}.${f.name}`] as [string, string]));
       case 'params': return ed.report.parameters.map(p => [`Parameters!${p.name}.Value`, p.name]);
       case 'globals': return ['ExecutionTime', 'PageNumber', 'TotalPages', 'ReportName', 'ReportFolder'].map(g => [`Globals!${g}`, g]);
-      case 'functions': return FUNCTIONS.map(([f, l]) => [f, `${f.split('(')[0]} – ${l}`]);
+      case 'functions': return functions().map(([f, l]) => [f, `${f.split('(')[0]} – ${l}`]);
       case 'operators': return OPERATORS.map(o => [` ${o} `, o]);
     }
   }, [category, dataSets, d.dataSetName, ed.report.parameters]);
@@ -351,26 +352,26 @@ function ExpressionDialog({ d, close }: { d: Extract<Dialog, { kind: 'expression
     const ctx: EvalContext = {
       row: scope[0] ?? null, scopeRows: scope, dataSets: sets,
       parameters: Object.fromEntries(ed.report.parameters.map(p => [p.name, p.defaultValue || null])),
-      globals: { ExecutionTime: new Date(), PageNumber: 1, TotalPages: 1, ReportName: 'Bericht', ReportFolder: '/' },
+      globals: { ExecutionTime: new Date(), PageNumber: 1, TotalPages: 1, ReportName: l10n.t('Report'), ReportFolder: '/' },
     };
-    try { return formatValue(evaluate(value, ctx), ''); } catch (e) { return `Fehler: ${(e as Error).message}`; }
+    try { return formatValue(evaluate(value, ctx), ''); } catch (e) { return l10n.t('Error: {0}', (e as Error).message); }
   }, [value, error, ed.report, ed.sampleData, d.dataSetName]);
 
   return (
     <Modal title={d.title} onOk={() => { d.onOk(value === '=' ? '' : value); close(); }} onCancel={close} error={error} wide>
       <ExpressionInput inputRef={el => { ref.current = el as HTMLTextAreaElement | null; }} className="code expr-editor" multiline rows={5} autoFocus
         dataSetName={d.dataSetName} value={value} onChange={setValue} />
-      <div className="expr-hint">Strg+Leertaste zeigt Vorschläge; nach <code>Fields!</code>, <code>Parameters!</code>, <code>Code.</code> … automatisch.</div>
-      <div className="expr-result">{result !== null && <>Ergebnis{d.dataSetName ? ' (erste Zeile)' : ''}: <code>{toStr(result) || '(leer)'}</code></>}</div>
+      <div className="expr-hint">{l10n.t('Ctrl+Space shows suggestions; after {0} automatically.', 'Fields!, Parameters!, Code. …')}</div>
+      <div className="expr-result">{result !== null && <>{d.dataSetName ? l10n.t('Result (first row)') : l10n.t('Result')}: <code>{toStr(result) || l10n.t('(empty)')}</code></>}</div>
       <div className="expr-picker">
         <div className="expr-cats">
-          {([['fields', 'Felder'], ['params', 'Parameter'], ['globals', 'Integrierte Felder'], ['functions', 'Funktionen'], ['operators', 'Operatoren']] as const).map(([k, l]) => (
+          {([['fields', l10n.t('Fields')], ['params', l10n.t('Parameters')], ['globals', l10n.t('Built-in Fields')], ['functions', l10n.t('Functions')], ['operators', l10n.t('Operators')]] as const).map(([k, l]) => (
             <button key={k} className={category === k ? 'on' : ''} onClick={() => setCategory(k)}>{l}</button>
           ))}
         </div>
         <div className="expr-items">
           {items.map(([code, label]) => <button key={code + label} title={code} onClick={() => insert(code)}>{label}</button>)}
-          {!items.length && <div className="tree-empty">Keine Einträge</div>}
+          {!items.length && <div className="tree-empty">{l10n.t('No entries')}</div>}
         </div>
       </div>
     </Modal>
@@ -385,9 +386,12 @@ function uniqueIn(names: string[], prefix: string) {
 
 const OPERATORS_FILTER: [string, string][] = [
   ['Equal', '='], ['NotEqual', '<>'], ['GreaterThan', '>'], ['GreaterThanOrEqual', '>='], ['LessThan', '<'], ['LessThanOrEqual', '<='],
-  ['Like', 'Like'], ['In', 'In'], ['Between', 'Zwischen'], ['TopN', 'Top N'], ['BottomN', 'Bottom N'],
+  ['Like', 'Like'], ['In', 'In'], ['Between', 'Between'], ['TopN', 'Top N'], ['BottomN', 'Bottom N'],
 ];
-const BREAKS: [BreakLocation, string][] = [['', 'Kein Seitenumbruch'], ['Between', 'Zwischen den Gruppen'], ['Start', 'Vor jeder Gruppe'], ['End', 'Nach jeder Gruppe'], ['StartAndEnd', 'Vor und nach jeder Gruppe']];
+const breaks = (): [BreakLocation, string][] => [
+  ['', l10n.t('No page break')], ['Between', l10n.t('Between the groups')], ['Start', l10n.t('Before each group')], ['End', l10n.t('After each group')],
+  ['StartAndEnd', l10n.t('Before and after each group')],
+];
 const RESET = '<ResetPageNumber>true</ResetPageNumber>';
 
 /** Add Group / Group Properties of Report Builder: grouping, header/footer rows, sorting, filters, page breaks, visibility. */
@@ -411,9 +415,9 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
 
   // group names share one namespace with data sets and report items
   const taken = new Set([...usedGroupNames(ed.report), ...[...ed.report.dataSets.map(x => x.name), ...allReportItems(ed.report).map(i => i.name)].map(n => n.toLowerCase())]);
-  const error = !IDENT.test(name) ? 'Ungültiger Gruppenname'
-    : name.toLowerCase() !== existing?.group?.name.toLowerCase() && taken.has(name.toLowerCase()) ? `„${name}“ ist schon vergeben`
-    : !details && !expressions.some(e => e.trim()) ? 'Gruppieren nach: mindestens ein Ausdruck'
+  const error = !IDENT.test(name) ? l10n.t('Invalid group name')
+    : name.toLowerCase() !== existing?.group?.name.toLowerCase() && taken.has(name.toLowerCase()) ? l10n.t('"{0}" is taken already', name)
+    : !details && !expressions.some(e => e.trim()) ? l10n.t('Group by: at least one expression')
     : [...expressions, ...sort.map(x => x.value), ...filters.map(f => f.expression)].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
 
   const apply = (m: RowMember) => {
@@ -448,51 +452,51 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
   const exprInput = (value: string, onChange: (v: string) => void, placeholder = '=Fields!…Value') => (
     <span className="expr-prop">
       <ExpressionInput value={value} onChange={onChange} dataSetName={table.dataSetName} placeholder={placeholder} />
-      <select className="field-pick" value="" title="Feld wählen" onChange={e => e.target.value && onChange(`=Fields!${e.target.value}.Value`)}>
-        <option value="">Feld…</option>
+      <select className="field-pick" value="" title={l10n.t('Choose a field')} onChange={e => e.target.value && onChange(`=Fields!${e.target.value}.Value`)}>
+        <option value="">{l10n.t('Field…')}</option>
         {fieldOptions.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
       </select>
     </span>
   );
 
   return (
-    <Modal title={d.create ? ({ parent: 'Übergeordnete Gruppe hinzufügen', child: 'Untergeordnete Gruppe hinzufügen', column: 'Spaltengruppe hinzufügen' })[d.create.mode] : `Gruppeneigenschaften – ${existing?.group?.name}`}
-      onOk={ok} onCancel={close} error={error} wide okLabel={d.create ? 'Hinzufügen' : 'OK'}>
-      <Field_ label="Name"><input autoFocus value={name} onChange={e => setName(e.target.value)} /></Field_>
-      {details ? <div className="prop-note">Detailgruppe: eine Zeile je Datensatz – Sortierung, Filter und Sichtbarkeit gelten für die Details.</div> : (
-        <div className="form-row"><span>Gruppieren nach</span>
+    <Modal title={d.create ? ({ parent: l10n.t('Add Parent Group'), child: l10n.t('Add Child Group'), column: l10n.t('Add Column Group') })[d.create.mode] : l10n.t('Group Properties – {0}', existing?.group?.name ?? '')}
+      onOk={ok} onCancel={close} error={error} wide okLabel={d.create ? l10n.t('Add') : 'OK'}>
+      <Field_ label={l10n.t('Name')}><input autoFocus value={name} onChange={e => setName(e.target.value)} /></Field_>
+      {details ? <div className="prop-note">{l10n.t('Details group: one row per record – sorting, filters and visibility apply to the details.')}</div> : (
+        <div className="form-row"><span>{l10n.t('Group by')}</span>
           <div className="list-editor">
             {expressions.map((e, i) => (
               <div key={i} className="list-row">
                 {exprInput(e, v => setExpressions(expressions.map((x, j) => (j === i ? v : x))))}
-                <ActionButton icon="trash" title="Entfernen" disabled={expressions.length <= 1} onClick={() => setExpressions(expressions.filter((_, j) => j !== i))} />
+                <ActionButton icon="trash" title={l10n.t('Remove')} disabled={expressions.length <= 1} onClick={() => setExpressions(expressions.filter((_, j) => j !== i))} />
               </div>
             ))}
-            <button className="secondary small" onClick={() => setExpressions([...expressions, ''])}><Codicon name="add" /> Ausdruck</button>
+            <button className="secondary small" onClick={() => setExpressions([...expressions, ''])}><Codicon name="add" /> {l10n.t('Expression')}</button>
           </div>
         </div>
       )}
-      {d.create?.mode === 'column' && <div className="prop-note">Die Spalte wiederholt sich je Gruppenwert; eine Kopfzeile über der Tabelle zeigt den Wert. Werte in der Spalte meist als Aggregat, z. B. =Sum(Fields!Betrag.Value).</div>}
+      {d.create?.mode === 'column' && <div className="prop-note">{l10n.t('The column repeats for each group value; a header row above the table shows the value. Values in the column are usually aggregates, e.g. =Sum(Fields!Amount.Value).')}</div>}
       {d.create && d.create.mode !== 'column' && <>
-        <label className="check"><input type="checkbox" checked={header} onChange={e => setHeader(e.target.checked)} /> Gruppenkopf hinzufügen</label>
-        <label className="check"><input type="checkbox" checked={footer} onChange={e => setFooter(e.target.checked)} /> Gruppenfuß hinzufügen (z. B. für Summen)</label>
+        <label className="check"><input type="checkbox" checked={header} onChange={e => setHeader(e.target.checked)} /> {l10n.t('Add group header')}</label>
+        <label className="check"><input type="checkbox" checked={footer} onChange={e => setFooter(e.target.checked)} /> {l10n.t('Add group footer (e.g. for totals)')}</label>
       </>}
-      <div className="form-row"><span>Sortierung</span>
+      <div className="form-row"><span>{l10n.t('Sorting')}</span>
         <div className="list-editor">
           {sort.map((x, i) => (
             <div key={i} className="list-row">
               {exprInput(x.value, v => setSort(sort.map((y, j) => (j === i ? { ...y, value: v } : y))))}
               <select value={x.descending ? 'd' : 'a'} onChange={e => setSort(sort.map((y, j) => (j === i ? { ...y, descending: e.target.value === 'd' } : y)))}>
-                <option value="a">Aufsteigend</option><option value="d">Absteigend</option>
+                <option value="a">{l10n.t('Ascending')}</option><option value="d">{l10n.t('Descending')}</option>
               </select>
-              <ActionButton icon="trash" title="Entfernen" onClick={() => setSort(sort.filter((_, j) => j !== i))} />
+              <ActionButton icon="trash" title={l10n.t('Remove')} onClick={() => setSort(sort.filter((_, j) => j !== i))} />
             </div>
           ))}
-          <button className="secondary small" onClick={() => setSort([...sort, { value: expressions[0] || '', descending: false }])}><Codicon name="add" /> Sortierung</button>
+          <button className="secondary small" onClick={() => setSort([...sort, { value: expressions[0] || '', descending: false }])}><Codicon name="add" /> {l10n.t('Sorting')}</button>
         </div>
       </div>
-      <div className="form-row"><span>Filter</span>
-        {verbatimFilters ? <div className="prop-note">Die Filter dieser Gruppe nutzen erweiterte Optionen und bleiben unverändert (bearbeitbar über „Als XML öffnen“).</div> : (
+      <div className="form-row"><span>{l10n.t('Filter')}</span>
+        {verbatimFilters ? <div className="prop-note">{l10n.t('The filters of this group use advanced options and stay unchanged (editable via "Open as XML").')}</div> : (
           <div className="list-editor">
             {filters.map((f, i) => (
               <div key={i} className="list-row">
@@ -500,30 +504,30 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
                 <select value={f.operator} onChange={e => setFilters(filters.map((y, j) => (j === i ? { ...y, operator: e.target.value } : y)))}>
                   {OPERATORS_FILTER.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
-                <input className="filter-value" value={f.values.join(', ')} placeholder="Wert" title="Mehrere Werte (In) durch Komma trennen"
+                <input className="filter-value" value={f.values.join(', ')} placeholder={l10n.t('Value')} title={l10n.t('Separate several values (In) with commas')}
                   onChange={e => setFilters(filters.map((y, j) => (j === i ? { ...y, values: f.operator === 'In' || f.operator === 'Between' ? e.target.value.split(/\s*,\s*/) : [e.target.value] } : y)))} />
-                <ActionButton icon="trash" title="Entfernen" onClick={() => setFilters(filters.filter((_, j) => j !== i))} />
+                <ActionButton icon="trash" title={l10n.t('Remove')} onClick={() => setFilters(filters.filter((_, j) => j !== i))} />
               </div>
             ))}
-            <button className="secondary small" onClick={() => setFilters([...filters, { expression: '', operator: 'Equal', values: [''] }])}><Codicon name="add" /> Filter</button>
+            <button className="secondary small" onClick={() => setFilters([...filters, { expression: '', operator: 'Equal', values: [''] }])}><Codicon name="add" /> {l10n.t('Filter')}</button>
           </div>
         )}
       </div>
       {!details && (
-        <div className="form-row"><span>Seitenumbruch</span>
+        <div className="form-row"><span>{l10n.t('Page break')}</span>
           <div className="list-editor">
-            <select value={pageBreak} onChange={e => setPageBreak(e.target.value as BreakLocation)}>{BREAKS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-            <label className="check"><input type="checkbox" disabled={!pageBreak} checked={reset && !!pageBreak} onChange={e => setReset(e.target.checked)} /> Seitenzahl je Gruppe neu beginnen (z. B. je Beleg)</label>
+            <select value={pageBreak} onChange={e => setPageBreak(e.target.value as BreakLocation)}>{breaks().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+            <label className="check"><input type="checkbox" disabled={!pageBreak} checked={reset && !!pageBreak} onChange={e => setReset(e.target.checked)} /> {l10n.t('Restart page numbers for each group (e.g. per document)')}</label>
           </div>
         </div>
       )}
-      <Field_ label="Ausblenden">
-        <ExpressionInput value={hidden} onChange={setHiddenValue} dataSetName={table.dataSetName} placeholder="leer = sichtbar, true oder =Ausdruck" />
+      <Field_ label={l10n.t('Hide')}>
+        <ExpressionInput value={hidden} onChange={setHiddenValue} dataSetName={table.dataSetName} placeholder={l10n.t('empty = visible, true or =expression')} />
       </Field_>
-      <Field_ label="Umschalten durch">
+      <Field_ label={l10n.t('Toggled by')}>
         <ToggleSelect value={toggle} onChange={setToggle} />
       </Field_>
-      <div className="prop-note">Drilldown: „Ausblenden“ auf true und ein Textfeld der Gruppe darüber als Schalter – in der Vorschau und in Business Central klappt jeder Eintrag einzeln auf.</div>
+      <div className="prop-note">{l10n.t('Drilldown: "Hide" set to true and a textbox of the group above as toggle – in the preview and in Business Central each entry expands on its own.')}</div>
     </Modal>
   );
 }
@@ -539,11 +543,11 @@ function MatrixDialog({ d, close }: { d: Extract<Dialog, { kind: 'matrix' }>; cl
   const [rowTotal, setRowTotal] = useState(true);
   const [columnTotal, setColumnTotal] = useState(true);
   const fields = ed.report.dataSets.find(x => x.name === dataSetName)?.fields ?? [];
-  const error = !dataSetName ? 'Dataset wählen' : !rowGroup.trim() || !columnGroup.trim() ? 'Zeilen- und Spaltengruppierung angeben' : !value.trim() ? 'Wert angeben, z. B. =Sum(Fields!Betrag.Value)'
+  const error = !dataSetName ? l10n.t('Choose a dataset') : !rowGroup.trim() || !columnGroup.trim() ? l10n.t('Specify the row and column grouping') : !value.trim() ? l10n.t('Specify a value, e.g. =Sum(Fields!Amount.Value)')
     : [rowGroup, columnGroup, value].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
   const pick = (set: (v: string) => void, sum: boolean) => (
-    <select className="field-pick" value="" title="Feld wählen" onChange={e => e.target.value && set(sum ? `=Sum(Fields!${e.target.value}.Value)` : `=Fields!${e.target.value}.Value`)}>
-      <option value="">Feld…</option>{fields.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+    <select className="field-pick" value="" title={l10n.t('Choose a field')} onChange={e => e.target.value && set(sum ? `=Sum(Fields!${e.target.value}.Value)` : `=Fields!${e.target.value}.Value`)}>
+      <option value="">{l10n.t('Field…')}</option>{fields.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
     </select>
   );
   const row = (label: string, v: string, set: (v: string) => void, sum: boolean, placeholder: string) => (
@@ -562,13 +566,13 @@ function MatrixDialog({ d, close }: { d: Extract<Dialog, { kind: 'matrix' }>; cl
     close();
   };
   return (
-    <Modal title="Matrix einfügen" onOk={ok} onCancel={close} error={error} wide okLabel="Einfügen">
-      <Field_ label="Dataset"><select value={dataSetName} onChange={e => setDataSetName(e.target.value)}>{ed.report.dataSets.map(x => <option key={x.name}>{x.name}</option>)}</select></Field_>
-      {row('Zeilen gruppieren nach', rowGroup, setRowGroup, false, '=Fields!Kunde.Value')}
-      {row('Spalten gruppieren nach', columnGroup, setColumnGroup, false, '=Fields!Monat.Value')}
-      {row('Wert', value, setValue, true, '=Sum(Fields!Betrag.Value)')}
-      <label className="check"><input type="checkbox" checked={rowTotal} onChange={e => setRowTotal(e.target.checked)} /> Gesamtzeile</label>
-      <label className="check"><input type="checkbox" checked={columnTotal} onChange={e => setColumnTotal(e.target.checked)} /> Gesamtspalte</label>
+    <Modal title={l10n.t('Insert Matrix')} onOk={ok} onCancel={close} error={error} wide okLabel={l10n.t('Insert')}>
+      <Field_ label={l10n.t('Dataset')}><select value={dataSetName} onChange={e => setDataSetName(e.target.value)}>{ed.report.dataSets.map(x => <option key={x.name}>{x.name}</option>)}</select></Field_>
+      {row(l10n.t('Group rows by'), rowGroup, setRowGroup, false, l10n.t('=Fields!Customer.Value'))}
+      {row(l10n.t('Group columns by'), columnGroup, setColumnGroup, false, l10n.t('=Fields!Month.Value'))}
+      {row(l10n.t('Value'), value, setValue, true, l10n.t('=Sum(Fields!Amount.Value)'))}
+      <label className="check"><input type="checkbox" checked={rowTotal} onChange={e => setRowTotal(e.target.checked)} /> {l10n.t('Total row')}</label>
+      <label className="check"><input type="checkbox" checked={columnTotal} onChange={e => setColumnTotal(e.target.checked)} /> {l10n.t('Total column')}</label>
     </Modal>
   );
 }

@@ -3,6 +3,7 @@
 // It is built from the RDL XML so nothing the designer passes through verbatim is invisible.
 
 import { XmlDom, child, elements, joinRuns, text } from './rdl';
+import { l10n } from './l10n';
 
 export type OutlineKind =
   | 'Section' | 'Rows' | 'Columns' | 'Group'
@@ -48,23 +49,23 @@ function itemNode(el: Element): OutlineNode {
   const details: [string, string][] = [];
   const add = (label: string, value: string | undefined) => { if (value) details.push([label, value]); };
 
-  if (kind === 'Textbox') add('Wert', textboxValue(el));
-  if (kind === 'Image') add('Bild', `${text(el, 'Source') ?? ''}: ${text(el, 'Value') ?? ''}`);
-  if (kind === 'Subreport') add('Unterbericht', text(el, 'ReportName'));
-  add('Dataset', text(el, 'DataSetName'));
+  if (kind === 'Textbox') add(l10n.t('Value'), textboxValue(el));
+  if (kind === 'Image') add(l10n.t('Image'), `${text(el, 'Source') ?? ''}: ${text(el, 'Value') ?? ''}`);
+  if (kind === 'Subreport') add(l10n.t('Subreport'), text(el, 'ReportName'));
+  add(l10n.t('Dataset'), text(el, 'DataSetName'));
   const hidden = text(el, 'Visibility', 'Hidden');
-  add('Ausgeblendet', hidden);
-  add('Umschalten durch', text(el, 'Visibility', 'ToggleItem'));
+  add(l10n.t('Hidden'), hidden);
+  add(l10n.t('Toggled by'), text(el, 'Visibility', 'ToggleItem'));
   const pos = ['Left', 'Top', 'Width', 'Height'].map(k => text(el, k));
-  if (pos.every(Boolean)) add('Position', `${pos[0]}, ${pos[1]} – ${pos[2]} × ${pos[3]}`);
+  if (pos.every(Boolean)) add(l10n.t('Position'), `${pos[0]}, ${pos[1]} – ${pos[2]} × ${pos[3]}`);
 
   let children: OutlineNode[];
   if (kind === 'Tablix') {
     const rows = memberNodes(child(el, 'TablixRowHierarchy', 'TablixMembers'));
     const cols = memberNodes(child(el, 'TablixColumnHierarchy', 'TablixMembers'));
     children = [
-      ...(rows.length ? [{ key: `rows:${name}`, kind: 'Rows' as const, name: 'Zeilengruppen', details: [], children: rows }] : []),
-      ...(cols.length ? [{ key: `cols:${name}`, kind: 'Columns' as const, name: 'Spaltengruppen', details: [], children: cols }] : []),
+      ...(rows.length ? [{ key: `rows:${name}`, kind: 'Rows' as const, name: l10n.t('Row Groups'), details: [], children: rows }] : []),
+      ...(cols.length ? [{ key: `cols:${name}`, kind: 'Columns' as const, name: l10n.t('Column Groups'), details: [], children: cols }] : []),
       // corner and body cells; header cells of the hierarchies are listed under their groups
       ...itemsIn(el, ['TablixRowHierarchy', 'TablixColumnHierarchy']),
     ];
@@ -85,14 +86,14 @@ function memberNodes(members: Element | undefined): OutlineNode[] {
     if (!g) return inner;
     const name = g.getAttribute('Name') ?? '';
     const exprs = elements(child(g, 'GroupExpressions'), 'GroupExpression').map(e => e.textContent ?? '');
-    const details: [string, string][] = [['Gruppieren nach', exprs.length ? exprs.join(', ') : '(Detaildaten)']];
+    const details: [string, string][] = [[l10n.t('Group by'), exprs.length ? exprs.join(', ') : l10n.t('(detail data)')]];
     const filters = elements(child(g, 'Filters'), 'Filter').map(f => `${text(f, 'FilterExpression')} ${text(f, 'Operator')} ${elements(child(f, 'FilterValues')).map(v => v.textContent).join(', ')}`);
-    if (filters.length) details.push(['Filter', filters.join('; ')]);
+    if (filters.length) details.push([l10n.t('Filter'), filters.join('; ')]);
     const sort = elements(child(m, 'SortExpressions'), 'SortExpression').map(s => `${text(s, 'Value')}${text(s, 'Direction') === 'Descending' ? ' ↓' : ''}`);
-    if (sort.length) details.push(['Sortierung', sort.join(', ')]);
-    if (child(g, 'PageBreak')) details.push(['Seitenumbruch', text(g, 'PageBreak', 'BreakLocation') ?? 'ja']);
+    if (sort.length) details.push([l10n.t('Sorting'), sort.join(', ')]);
+    if (child(g, 'PageBreak')) details.push([l10n.t('Page break'), text(g, 'PageBreak', 'BreakLocation') ?? l10n.t('yes')]);
     const hidden = text(m, 'Visibility', 'Hidden');
-    if (hidden) details.push(['Ausgeblendet', hidden]);
+    if (hidden) details.push([l10n.t('Hidden'), hidden]);
     return [{ key: `group:${name}`, kind: 'Group' as const, name, hidden, details, children: inner }];
   });
 }
@@ -103,10 +104,10 @@ export function buildOutline(xml: string, dom: XmlDom): OutlineNode[] {
   const page = child(section, 'Page') ?? root;
   const out: OutlineNode[] = [];
   const header = child(page, 'PageHeader');
-  if (header) out.push({ key: '#header', kind: 'Section', name: 'Seitenkopf', details: [], children: itemsIn(child(header, 'ReportItems')) });
-  out.push({ key: '#body', kind: 'Section', name: 'Text', details: [], children: itemsIn(child(child(section, 'Body'), 'ReportItems')) });
+  if (header) out.push({ key: '#header', kind: 'Section', name: l10n.t('Page Header'), details: [], children: itemsIn(child(header, 'ReportItems')) });
+  out.push({ key: '#body', kind: 'Section', name: l10n.t('Body'), details: [], children: itemsIn(child(child(section, 'Body'), 'ReportItems')) });
   const footer = child(page, 'PageFooter');
-  if (footer) out.push({ key: '#footer', kind: 'Section', name: 'Seitenfuß', details: [], children: itemsIn(child(footer, 'ReportItems')) });
+  if (footer) out.push({ key: '#footer', kind: 'Section', name: l10n.t('Page Footer'), details: [], children: itemsIn(child(footer, 'ReportItems')) });
   return out;
 }
 

@@ -30,7 +30,7 @@ test('unknown references with positions and items', () => {
   assert.deepEqual(codes(issues), ['unknown-field', 'unknown-field', 'unknown-code', 'unknown-item']);
   assert.equal(broken.substr(issues[0].offset, issues[0].length), 'Descripton_Line');
   assert.equal(issues[0].item, 'Description_Line');
-  assert.match(issues[1].message, /Groß-\/Kleinschreibung.*Quantity_Line/);
+  assert.match(issues[1].message, /upper and lower case.*Quantity_Line/);
   assert.equal(issues[2].item, 'PageHdr_DocNo');
 });
 
@@ -38,7 +38,7 @@ test('AL ahead of or behind the layout', () => {
   // the layout uses the new column before the project was built
   const usesNew = layout.replace('=Fields!Description_Line.Value', '=Fields!YourReference.Value');
   const stale = lintLayout(usesNew, al).find(i => i.code === 'stale-field')!;
-  assert.match(stale.message, /Projekt neu erstellen/);
+  assert.match(stale.message, /Build the project/);
 
   // a column removed in AL is still in the layout dataset and used
   const removed: AlExpectation = { ...al, fields: al.fields.filter(f => f !== 'Paid') };
@@ -49,7 +49,7 @@ test('AL ahead of or behind the layout', () => {
 test('unused AL columns and labels', () => {
   const unused = lintAlUsage(report, [layout]).map(u => u.message);
   // LineNo_Line is used by the line filter; only the column added after the last build is unused
-  assert.deepEqual(unused, ['Spalte „YourReference“ wird in keinem RDLC-Layout dieses Reports verwendet.']);
+  assert.deepEqual(unused, ['Column "YourReference" is not used in any RDLC layout of this report.']);
 });
 
 test('innermost item at an offset', () => {

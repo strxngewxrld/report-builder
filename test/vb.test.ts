@@ -163,8 +163,8 @@ Public Function Fine()
   Return 2
 End Function`);
   assert.equal(evaluate('=Code.Fine()', ctx(code)), 2);
-  assert.throws(() => evaluate('=Code.Loop1()', ctx(code)), /nicht unterstützt/);
-  assert.throws(() => evaluate('=Code.Missing()', ctx(code)), /nicht definiert/);
+  assert.throws(() => evaluate('=Code.Loop1()', ctx(code)), /unsupported statement/);
+  assert.throws(() => evaluate('=Code.Missing()', ctx(code)), /not defined/);
 });
 
 test('Convert, Choose/Split, Previous, ReportItems, named scopes', () => {
@@ -274,5 +274,5 @@ End Function`);
   assert.equal(ev('=Code.Grade(10)'), 'C');
   ev('=Code.AddUp(3)');
   assert.equal(ev('=Code.SumTo(0)'), 0);
-  assert.throws(() => ev('=Code.Forever()'), /Endlosschleife/);
+  assert.throws(() => ev('=Code.Forever()'), /endless loop/);
 });

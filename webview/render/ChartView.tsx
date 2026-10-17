@@ -4,6 +4,7 @@
 import type { CSSProperties } from 'react';
 import { formatValue } from '../expr';
 import { RChart } from './types';
+import { l10n } from '../l10n';
 
 const PALETTES: Record<string, string[]> = {
   BrightPastel: ['#418CF0', '#FCB441', '#E0400A', '#056492', '#BFBFBF', '#1A3B69', '#FFE382', '#129CDD', '#CA6B4B', '#005CDB'],
@@ -208,7 +209,7 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
           <text x={13} y={8} {...font}>{l.length > (legendW - 16) / 5.5 ? `${l.slice(0, Math.max(1, Math.floor((legendW - 16) / 5.5) - 1))}…` : l}</text>
         </g>
       ))}
-      {chart.sample && <text x={W - 4} y={H - 4} textAnchor="end" {...font} fontSize={9} fill="#999">Beispielwerte</text>}
+      {chart.sample && <text x={W - 4} y={H - 4} textAnchor="end" {...font} fontSize={9} fill="#999">{l10n.t('Sample values')}</text>}
     </svg>
   );
 }

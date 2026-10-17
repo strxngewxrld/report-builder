@@ -43,7 +43,7 @@ test('aggregates with implicit and explicit scope', () => {
   assert.equal(ev('=Avg(Fields!Umsatz.Value)'), 175.25);
   assert.equal(ev('=First(Fields!Name.Value)'), 'Anna');
   assert.equal(ev('=Last(Fields!Name.Value)'), 'Anna');
-  assert.throws(() => ev('=Sum(Fields!Umsatz.Value, "Nope")'), /Bereich/);
+  assert.throws(() => ev('=Sum(Fields!Umsatz.Value, "Nope")'), /Unknown scope/);
 });
 
 test('functions', () => {
@@ -62,9 +62,9 @@ test('functions', () => {
 test('errors', () => {
   // outside a data region: implicit First() over the only dataset, an error with several datasets
   assert.equal(ev('=Fields!Name.Value', null), 'Anna');
-  assert.throws(() => evaluate('=Fields!Name.Value', { ...ctx(null), scopeRows: [], dataSets: { A: rows, B: rows } }), /Datenbereich/);
-  assert.throws(() => ev('=Foo(1)'), /Unbekannte Funktion/);
-  assert.match(validateExpression('=1 +') ?? '', /unvollständig/);
+  assert.throws(() => evaluate('=Fields!Name.Value', { ...ctx(null), scopeRows: [], dataSets: { A: rows, B: rows } }), /outside of a data region/);
+  assert.throws(() => ev('=Foo(1)'), /Unknown function/);
+  assert.match(validateExpression('=1 +') ?? '', /Incomplete expression/);
   assert.equal(validateExpression('=Sum(Fields!X.Value)'), null);
   assert.equal(validateExpression('kein Ausdruck'), null);
 });

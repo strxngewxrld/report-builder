@@ -11,6 +11,7 @@ import { parseSize } from '../units';
 import { CodeModule } from '../vb';
 import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RGauge, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
 import { axesOf, readAxis } from '../charts';
+import { l10n } from '../l10n';
 
 export interface RenderOptions {
   dom: XmlDom;
@@ -30,9 +31,12 @@ export interface RenderOptions {
 }
 
 const ITEMS = new Set(['Textbox', 'Rectangle', 'Line', 'Image', 'Tablix', 'Chart', 'Subreport', 'Map', 'GaugePanel', 'CustomReportItem']);
-const PLACEHOLDER: Record<string, string> = {
-  Chart: 'Diagramm', Subreport: 'Unterbericht', Map: 'Karte', GaugePanel: 'Messgerät', CustomReportItem: 'Benutzerdefiniertes Element',
-};
+/** Names of report items shown as placeholders (translated when used). */
+const placeholderName = (kind: string): string | undefined => ({
+  Chart: l10n.t('Chart'), Subreport: l10n.t('Subreport'), Map: l10n.t('Map'), GaugePanel: l10n.t('Gauge'), CustomReportItem: l10n.t('Custom report item'),
+} as Record<string, string>)[kind];
+/** What an expression that fails shows (like the report server's #Error). */
+export const ERROR_VALUE = () => l10n.t('#Error');
 const FONT_WEIGHT: Record<string, number> = {
   thin: 100, extralight: 200, light: 300, normal: 400, medium: 500, semibold: 600, bold: 700, extrabold: 800, heavy: 900,
 };
@@ -116,7 +120,7 @@ class Engine {
       row: null, scopeRows: [], dataSets: opts.data ?? {}, parameters: opts.parameters ?? {},
       globals: {
         ExecutionTime: opts.now ?? new Date(), PageNumber: 1, TotalPages: 1, OverallPageNumber: 1, OverallTotalPages: 1,
-        ReportName: opts.reportName ?? 'Bericht', ReportFolder: '/', ReportServerUrl: '', RenderFormat: { Name: 'RPL', IsInteractive: true },
+        ReportName: opts.reportName ?? l10n.t('Report'), ReportFolder: '/', ReportServerUrl: '', RenderFormat: { Name: 'RPL', IsInteractive: true },
       },
       code: this.code,
       reportItems: n => (this.last.has(n) ? [this.last.get(n)] : this.itemNames.has(n) ? [] : undefined),
@@ -178,7 +182,7 @@ class Engine {
       return evaluate(value, ctx);
     } catch (e) {
       if (!this.errors.has(where)) this.errors.set(where, (e as Error).message);
-      return '#Fehler';
+      return ERROR_VALUE();
     }
   }
 
@@ -195,8 +199,8 @@ class Engine {
     if (v === undefined || v === '') return undefined;
     if (!v.startsWith('=')) return v;
     if (this.design) return undefined;
-    const r = this.eval(v, ctx, `${where} (Stil)`);
-    return isNothing(r) || r === '#Fehler' ? undefined : toStr(r);
+    const r = this.eval(v, ctx, l10n.t('{0} (style)', where));
+    return isNothing(r) || r === ERROR_VALUE() ? undefined : toStr(r);
   }
 
   /** CSS for a <Style>: fonts, colors, padding, alignment and borders (Border plus per-side overrides). */
@@ -250,7 +254,7 @@ class Engine {
       top: parseSize(text(el, 'Top')), left: parseSize(text(el, 'Left')),
       width: parseSize(text(el, 'Width')), height: parseSize(text(el, 'Height')),
     };
-    const hidden = this.visible(child(el, 'Visibility'), ctx, ctx, `${name} (Sichtbarkeit)`);
+    const hidden = this.visible(child(el, 'Visibility'), ctx, ctx, l10n.t('{0} (visibility)', name));
     const keepTogether = (text(el, 'KeepTogether') ?? '').toLowerCase() === 'true';
     const base = { key: this.key(), name, ...box, hidden, seq: this.code?.version ?? 0, keepTogether, ...this.actionInfo(el, ctx, name) };
     switch (el.localName) {
@@ -271,8 +275,8 @@ class Engine {
       case 'Image': return { ...base, kind: 'image', css: this.styleCss(child(el, 'Style'), ctx, name), src: this.imageSrc(el, ctx, name), sizing: text(el, 'Sizing') ?? 'AutoSize' };
       case 'Tablix': return this.tablix(el, ctx, base, cell !== null || ctx.regionRows !== undefined);
       case 'Chart': return this.chart(el, ctx, base);
-      case 'GaugePanel': return this.gauge(el, ctx, base) ?? { ...base, kind: 'placeholder', css: {}, label: `Messgerät „${name}“` };
-      default: return { ...base, kind: 'placeholder', css: {}, label: `${PLACEHOLDER[el.localName] ?? el.localName} „${name}“` };
+      case 'GaugePanel': return this.gauge(el, ctx, base) ?? { ...base, kind: 'placeholder', css: {}, label: l10n.t('Gauge "{0}"', name) };
+      default: return { ...base, kind: 'placeholder', css: {}, label: l10n.t('{0} "{1}"', placeholderName(el.localName) ?? el.localName, name) };
     }
   }
 
@@ -281,9 +285,9 @@ class Engine {
     if (this.design) return {};
     const out: Pick<RNode, 'action' | 'bookmark'> = {};
     const bookmark = text(el, 'Bookmark');
-    if (bookmark) out.bookmark = toStr(this.eval(bookmark, ctx, `${name} (Lesezeichen)`));
+    if (bookmark) out.bookmark = toStr(this.eval(bookmark, ctx, l10n.t('{0} (bookmark)', name)));
     const action = elements(child(el, 'ActionInfo', 'Actions'), 'Action')[0];
-    const where = `${name} (Aktion)`;
+    const where = l10n.t('{0} (action)', name);
     const link = text(action, 'Hyperlink');
     const mark = text(action, 'BookmarkLink');
     const dt = child(action, 'Drillthrough');
@@ -302,7 +306,7 @@ class Engine {
     if (this.design) return '';
     const source = text(el, 'Source') ?? 'External';
     const value = toStr(this.eval(text(el, 'Value') ?? '', ctx, name));
-    if (!value || value === '#Fehler') return '';
+    if (!value || value === ERROR_VALUE()) return '';
     if (source === 'Embedded') return this.images[value] ?? '';
     if (source === 'Database') return /^data:/.test(value) ? value : `data:${text(el, 'MIMEType') ?? 'image/png'};base64,${value}`;
     return value;
@@ -342,7 +346,7 @@ class Engine {
     };
     if (!this.design && this.toggleSources.has(name)) {
       const key = this.toggleKey(name, ctx);
-      const initial = this.evalBool(child(el, 'ToggleImage', 'InitialState'), ctx, `${name} (Umschaltbild)`);
+      const initial = this.evalBool(child(el, 'ToggleImage', 'InitialState'), ctx, l10n.t('{0} (toggle image)', name));
       node.toggle = { key, expanded: initial !== !!this.opts.toggled?.has(key) };
     }
     if (!this.design && child(el, 'UserSort')) node.userSort = { name, direction: this.opts.userSort?.[name] };
@@ -363,7 +367,7 @@ class Engine {
     const op = (text(f, 'Operator') ?? 'Equal').toLowerCase();
     const literal = (v: Element, c: EvalContext) => {
       const t = v.textContent ?? '';
-      if (t.startsWith('=')) return this.eval(t, c, `${where} (Filter)`);
+      if (t.startsWith('=')) return this.eval(t, c, l10n.t('{0} (filter)', where));
       const type = v.getAttribute('DataType');
       if (type === 'Integer' || type === 'Float') return Number(t);
       if (type === 'Boolean') return t.toLowerCase() === 'true';
@@ -380,7 +384,7 @@ class Engine {
     }
     return rows.filter(row => {
       const c = { ...ctxFor([row]), row };
-      const lhs = this.eval(expr, c, `${where} (Filter)`);
+      const lhs = this.eval(expr, c, l10n.t('{0} (filter)', where));
       const vals = valuesEl.map(v => literal(v, c));
       const cmp = (v: unknown) => cmpSafe(lhs, typeof lhs === 'number' && typeof v === 'string' && v !== '' ? Number(v) : v);
       switch (op) {
@@ -406,7 +410,7 @@ class Engine {
     const ds = text(el, 'DataSetName');
     // a nested region works on the rows of its enclosing scope; a top-level one on its dataset
     let rows: Row[] = nested ? ctx.scopeRows : ds ? this.base.dataSets[ds] ?? [] : [];
-    if (!nested && ds && !(ds in this.base.dataSets) && !this.design) this.errors.set(name, `Dataset „${ds}“ hat keine Daten`);
+    if (!nested && ds && !(ds in this.base.dataSets) && !this.design) this.errors.set(name, l10n.t('Dataset "{0}" has no data', ds));
     const regionCtx = (r: Row[]): EvalContext => ({ ...ctx, row: r[0] ?? null, scopeRows: r, regionRows: rows, scopes: { ...ctx.scopes, [name]: rows } });
     rows = this.filter(child(el, 'Filters'), rows, regionCtx, name);
     const rctx = regionCtx(rows);
@@ -525,7 +529,7 @@ class Engine {
           instances = this.groupInstances(m, group, scopeRows, c, gname, region);
           // interactive sort: the named scope, else the outermost groups of the data region
           const sorts = userSorts.filter(u => (u.scope ? u.scope === gname : !inherited.sorted));
-          if (sorts.length) instances = this.sortInstances(instances, sorts.map(u => ({ value: u.expr, descending: u.descending })), `${gname || region} (interaktive Sortierung)`);
+          if (sorts.length) instances = this.sortInstances(instances, sorts.map(u => ({ value: u.expr, descending: u.descending })), l10n.t('{0} (interactive sort)', gname || region));
         }
         const sortedHere = inherited.sorted || (!!group && userSorts.some(u => !u.scope));
         const pb = child(group, 'PageBreak');
@@ -533,7 +537,7 @@ class Engine {
         const reset = (text(pb, 'ResetPageNumber') ?? '').toLowerCase() === 'true';
         instances.forEach((inst, i) => {
           // a toggled member belongs to the instance around it (c): each document/group expands on its own
-          if (this.visible(child(m, 'Visibility'), inst.ctx, c, `${gname || region} (Sichtbarkeit)`)) return;
+          if (this.visible(child(m, 'Visibility'), inst.ctx, c, l10n.t('{0} (visibility)', gname || region))) return;
           const start = leaves.length;
           const breakHere = !this.design && ((loc === 'between' && i > 0) || loc === 'start' || loc === 'startandend'
             || ((loc === 'end' || loc === 'startandend') && i > 0));
@@ -580,11 +584,11 @@ class Engine {
       const spec = readAxis(a);
       const num = (v: string) => {
         if (v === '') return undefined;
-        const n = Number(this.eval(v, ctx, `${name} (Achse)`));
+        const n = Number(this.eval(v, ctx, l10n.t('{0} (axis)', name)));
         return Number.isFinite(n) ? n : undefined;
       };
       return {
-        title: spec.title ? toStr(this.eval(spec.title, ctx, `${name} (Achsentitel)`)) || undefined : undefined,
+        title: spec.title ? toStr(this.eval(spec.title, ctx, l10n.t('{0} (axis title)', name))) || undefined : undefined,
         format: spec.format || undefined, min: num(spec.min), max: num(spec.max),
       };
     };
@@ -604,7 +608,7 @@ class Engine {
     };
     if (this.design) {
       out.categories = ['A', 'B', 'C', 'D'];
-      out.series = seriesEls.map((s, i) => ({ name: s.getAttribute('Name') ?? `Reihe ${i + 1}`, ...typeOf(s), values: [3, 5, 2, 4].map(v => v + i) }));
+      out.series = seriesEls.map((s, i) => ({ name: s.getAttribute('Name') ?? l10n.t('Series {0}', i + 1), ...typeOf(s), values: [3, 5, 2, 4].map(v => v + i) }));
       return out;
     }
     const dsName = text(el, 'DataSetName') ?? '';
@@ -621,7 +625,7 @@ class Engine {
           ? this.groupInstances(m, group, rs, c, group.getAttribute('Name') ?? '', name)
           : [{ rows: rs, ctx: c }];
         for (const inst of instances) {
-          const label = toStr(this.eval(text(m, 'Label') ?? '', inst.ctx, `${name} (Beschriftung)`));
+          const label = toStr(this.eval(text(m, 'Label') ?? '', inst.ctx, l10n.t('{0} (label)', name)));
           const kids = child(m, 'ChartMembers');
           if (kids && elements(kids, 'ChartMember').length) res.push(...leaves(kids, inst.rows, inst.ctx, `${path}${label} `));
           else res.push({ label: `${path}${label}`.trim(), rows: inst.rows, ctx: inst.ctx, member: m });
@@ -643,11 +647,11 @@ class Engine {
       const values = categories.map(c => {
         const both = c.rows.filter(r => inSeries.has(r));
         if (!both.length) return null;
-        const v = this.eval(y, { ...c.ctx, scopeRows: both, row: both[0], scopes: { ...c.ctx.scopes, ...s.ctx.scopes } }, `${name} (Datenpunkt)`);
+        const v = this.eval(y, { ...c.ctx, scopeRows: both, row: both[0], scopes: { ...c.ctx.scopes, ...s.ctx.scopes } }, l10n.t('{0} (data point)', name));
         const n = typeof v === 'number' ? v : Number(v);
         return Number.isFinite(n) ? n : null;
       });
-      out.series.push({ name: s.label || seriesEl.getAttribute('Name') || `Reihe ${i + 1}`, ...typeOf(seriesEl), values });
+      out.series.push({ name: s.label || seriesEl.getAttribute('Name') || l10n.t('Series {0}', i + 1), ...typeOf(seriesEl), values });
     });
     return out;
   }
@@ -669,7 +673,7 @@ class Engine {
     const c: EvalContext = { ...ctx, scopeRows: rows, row: rows[0] ?? null };
     const num = (v: string | undefined, fallback: number) => {
       if (v === undefined || v === '') return fallback;
-      const n = Number(this.eval(v, c, `${name} (Messgerät)`));
+      const n = Number(this.eval(v, c, l10n.t('{0} (gauge)', name)));
       return Number.isFinite(n) ? n : fallback;
     };
     const min = num(text(scale, 'MinimumValue', 'Value'), 0);
@@ -740,7 +744,7 @@ class Engine {
     } else {
       const map = new Map<string, Row[]>();
       for (const r of rows) {
-        const k = JSON.stringify(exprs.map(e => this.eval(e, { ...c, row: r }, `${gname} (Gruppierung)`)));
+        const k = JSON.stringify(exprs.map(e => this.eval(e, { ...c, row: r }, l10n.t('{0} (grouping)', gname))));
         if (!map.has(k)) map.set(k, []);
         map.get(k)!.push(r);
       }
@@ -756,7 +760,7 @@ class Engine {
     }
     const sorts = elements(child(member, 'SortExpressions'), 'SortExpression');
     if (sorts.length) {
-      instances = this.sortInstances(instances, sorts.map(s => ({ value: text(s, 'Value') ?? '', descending: (text(s, 'Direction') ?? '') === 'Descending' })), `${gname || region} (Sortierung)`);
+      instances = this.sortInstances(instances, sorts.map(s => ({ value: text(s, 'Value') ?? '', descending: (text(s, 'Direction') ?? '') === 'Descending' })), l10n.t('{0} (sorting)', gname || region));
     }
     return instances;
   }

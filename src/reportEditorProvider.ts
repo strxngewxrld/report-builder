@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { parseCsv } from './csv';
 import { parseXlsx } from './xlsx';
 import { EditorProbe, probes, testing } from './testing';
+import { l10n, localization } from '../webview/l10n';
 import { LayoutService } from './layoutService';
 import { BcContext } from '../webview/bc';
 import { ExportBlock, writeDocx, writeXlsx } from './ooxml';
@@ -206,11 +207,11 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           }
           case 'savePdf': {
             const target = await vscode.window.showSaveDialog({
-              defaultUri: vscode.Uri.joinPath(document.uri, '..', `${msg.name}.pdf`), filters: { PDF: ['pdf'] }, saveLabel: 'Als PDF exportieren',
+              defaultUri: vscode.Uri.joinPath(document.uri, '..', `${msg.name}.pdf`), filters: { PDF: ['pdf'] }, saveLabel: l10n.t('Export as PDF'),
             });
             if (!target) break;
             await vscode.workspace.fs.writeFile(target, Buffer.from(msg.data, 'base64'));
-            const action = await vscode.window.showInformationMessage(`PDF gespeichert: ${vscode.workspace.asRelativePath(target)}`, 'Öffnen');
+            const action = await vscode.window.showInformationMessage(l10n.t('PDF saved: {0}', vscode.workspace.asRelativePath(target)), l10n.t('Open'));
             if (action) await vscode.env.openExternal(target);
             break;
           }
@@ -224,7 +225,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           case 'openLink':
             // only web and mail links: a report expression must not open local files or run protocol handlers
             if (/^(https?|mailto):/i.test(msg.url)) await vscode.env.openExternal(vscode.Uri.parse(msg.url, true));
-            else vscode.window.showWarningMessage(`Link wird nicht geöffnet (nur http, https und mailto): ${msg.url}`);
+            else vscode.window.showWarningMessage(l10n.t('The link is not opened (only http, https and mailto): {0}', msg.url));
             break;
         }
     };
@@ -271,9 +272,9 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   private async importSampleData(reportUri: vscode.Uri, dataSet: string): Promise<boolean> {
     const picked = await vscode.window.showOpenDialog({
       canSelectMany: false,
-      openLabel: 'Vorschaudaten laden',
-      title: `Vorschaudaten für ${dataSet}`,
-      filters: { 'Daten': ['xlsx', 'csv', 'json'] },
+      openLabel: l10n.t('Load Preview Data'),
+      title: l10n.t('Preview Data for {0}', dataSet),
+      filters: { [l10n.t('Data')]: ['xlsx', 'csv', 'json'] },
     });
     if (!picked?.[0]) return false;
     const path = picked[0].path.toLowerCase();
@@ -281,7 +282,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     try {
       // large Excel exports take a moment: show progress like VS Code does for its own long-running work
       rows = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: `Vorschaudaten werden gelesen: ${picked[0].path.split('/').pop()}` },
+        { location: vscode.ProgressLocation.Notification, title: l10n.t('Reading preview data: {0}', picked[0].path.split('/').pop()) },
         async () => {
           const bytes = await vscode.workspace.fs.readFile(picked[0]);
           if (path.endsWith('.xlsx')) return parseXlsx(bytes);
@@ -289,17 +290,17 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           return path.endsWith('.csv') ? parseCsv(content) : JSON.parse(content);
         });
     } catch (e) {
-      vscode.window.showErrorMessage(`Datei konnte nicht gelesen werden: ${(e as Error).message}`);
+      vscode.window.showErrorMessage(l10n.t('The file could not be read: {0}', (e as Error).message));
       return false;
     }
     if (!Array.isArray(rows)) {
-      vscode.window.showErrorMessage('Erwartet wird eine Excel- oder CSV-Datei mit Kopfzeile oder ein JSON-Array von Objekten.');
+      vscode.window.showErrorMessage(l10n.t('Expected an Excel or CSV file with a header row or a JSON array of objects.'));
       return false;
     }
     const data = await this.readSampleData(reportUri);
     data[dataSet] = rows;
     await vscode.workspace.fs.writeFile(sampleDataUri(reportUri), new TextEncoder().encode(JSON.stringify(data, null, 2) + '\n'));
-    vscode.window.showInformationMessage(`${rows.length} Zeilen für ${dataSet} in ${sampleDataUri(reportUri).path.split('/').pop()} gespeichert.`);
+    vscode.window.showInformationMessage(l10n.t('{0} rows for {1} saved in {2}.', rows.length, dataSet, sampleDataUri(reportUri).path.split('/').pop()));
     return true;
   }
 
@@ -309,13 +310,13 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     const name = reportUri.path.split('/').pop()!.replace(/\.rdlc?$/i, '');
     const target = await vscode.window.showSaveDialog({
       defaultUri: reportUri.with({ path: reportUri.path.replace(/\.rdlc?$/i, xlsx ? '.xlsx' : '.docx') }),
-      filters: xlsx ? { 'Excel-Arbeitsmappe': ['xlsx'] } : { 'Word-Dokument': ['docx'] },
-      saveLabel: 'Exportieren',
+      filters: xlsx ? { [l10n.t('Excel Workbook')]: ['xlsx'] } : { [l10n.t('Word Document')]: ['docx'] },
+      saveLabel: l10n.t('Export'),
     });
     if (!target) return;
     const bytes = xlsx ? writeXlsx(msg.blocks, name) : writeDocx(msg.blocks, msg.page);
     await vscode.workspace.fs.writeFile(target, bytes);
-    const open = await vscode.window.showInformationMessage(`Exportiert nach ${vscode.workspace.asRelativePath(target)}`, 'Öffnen');
+    const open = await vscode.window.showInformationMessage(l10n.t('Exported to {0}', vscode.workspace.asRelativePath(target)), l10n.t('Open'));
     if (open) await vscode.env.openExternal(target);
   }
 
@@ -326,7 +327,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     });
     if (!target) return;
     await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(html));
-    const open = await vscode.window.showInformationMessage(`Exportiert nach ${target.fsPath}`, 'Öffnen');
+    const open = await vscode.window.showInformationMessage(l10n.t('Exported to {0}', target.fsPath), l10n.t('Open'));
     if (open) await vscode.env.openExternal(target);
   }
 
@@ -334,7 +335,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     const asset = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', name));
     const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
     return `<!DOCTYPE html>
-<html lang="de">
+<html lang="${vscode.env.language}">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
@@ -345,6 +346,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
 </head>
 <body>
   <div id="root"></div>
+  <script type="application/json" id="l10n">${JSON.stringify(localization()).replace(/</g, '\\u003c')}</script>
   <script nonce="${nonce}" src="${asset('webview.js')}"></script>
 </body>
 </html>`;
@@ -361,19 +363,19 @@ const IMAGE_TYPES: Record<string, string> = {
 /** Lets the user pick an image file to embed (Report data › Images); returns it base64-encoded. */
 async function pickImage(near: vscode.Uri): Promise<{ name: string; mimeType: string; data: string } | undefined> {
   const [uri] = await vscode.window.showOpenDialog({
-    canSelectMany: false, defaultUri: vscode.Uri.joinPath(near, '..'), openLabel: 'Einbetten',
-    filters: { Bilder: Object.keys(IMAGE_TYPES) },
+    canSelectMany: false, defaultUri: vscode.Uri.joinPath(near, '..'), openLabel: l10n.t('Embed'),
+    filters: { [l10n.t('Images')]: Object.keys(IMAGE_TYPES) },
   }) ?? [];
   if (!uri) return undefined;
   const file = uri.path.split('/').pop()!;
   const mimeType = IMAGE_TYPES[file.split('.').pop()!.toLowerCase()];
   if (!mimeType) {
-    vscode.window.showErrorMessage(`${file}: Bildformat wird nicht unterstützt (PNG, JPEG, GIF, BMP, SVG).`);
+    vscode.window.showErrorMessage(l10n.t('{0}: image format not supported (PNG, JPEG, GIF, BMP, SVG).', file));
     return undefined;
   }
   const bytes = await vscode.workspace.fs.readFile(uri);
   if (bytes.length > 2 * 1024 * 1024) {
-    const go = await vscode.window.showWarningMessage(`${file} ist ${Math.round(bytes.length / 1024)} KB groß – eingebettete Bilder vergrößern das Layout entsprechend.`, 'Trotzdem einbetten');
+    const go = await vscode.window.showWarningMessage(l10n.t('{0} is {1} KB – embedded images make the layout larger by as much.', file, Math.round(bytes.length / 1024)), l10n.t('Embed Anyway'));
     if (!go) return undefined;
   }
   return { name: file, mimeType, data: Buffer.from(bytes).toString('base64') };

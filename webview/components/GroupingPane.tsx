@@ -4,8 +4,11 @@ import { locate } from '../ops';
 import { columnGroupList, groupList, rowsOfMember } from '../tablix';
 import { vsContext } from '../vscode';
 import { ActionButton, Codicon, DropdownAction } from './Icon';
+import { l10n } from '../l10n';
 
-const BREAK_LABEL: Record<string, string> = { Between: 'Umbruch zwischen', Start: 'Umbruch davor', End: 'Umbruch danach', StartAndEnd: 'Umbruch davor/danach' };
+const breakLabel = (location: string) => ({
+  Between: l10n.t('Break between'), Start: l10n.t('Break before'), End: l10n.t('Break after'), StartAndEnd: l10n.t('Break before/after'),
+} as Record<string, string>)[location] ?? location;
 
 /** The table of the selection (the table itself, a cell or a selected row/column). */
 export function selectedTable(ed: ReturnType<typeof useEditor>): TableItem | null {
@@ -27,21 +30,21 @@ export function GroupingPane() {
   return (
     <div className="grouping-pane" {...vsContext({ preventDefaultContextMenuItems: true })}>
       <div className="grouping-head">
-        <span className="pane-title">Gruppierung</span>
+        <span className="pane-title">{l10n.t('Grouping')}</span>
         <span className="pane-description">{t.name}</span>
         <span className="grow" />
-        <DropdownAction icon="add" title="Gruppe hinzufügen" items={[
-          { label: 'Übergeordnete Gruppe…', icon: 'arrow-up', run: run('table.addParentGroup') },
-          { label: 'Untergeordnete Gruppe…', icon: 'arrow-down', run: run('table.addChildGroup') },
-          { label: 'Spaltengruppe…', icon: 'split-horizontal', run: run('table.addColumnGroup') },
+        <DropdownAction icon="add" title={l10n.t('Add Group')} items={[
+          { label: l10n.t('Parent Group…'), icon: 'arrow-up', run: run('table.addParentGroup') },
+          { label: l10n.t('Child Group…'), icon: 'arrow-down', run: run('table.addChildGroup') },
+          { label: l10n.t('Column Group…'), icon: 'split-horizontal', run: run('table.addColumnGroup') },
         ]} />
       </div>
       {columnGroupList(t).length > 0 && (
-        <div className="grouping-list column-groups" role="tree" aria-label="Spaltengruppen">
-          <div className="grouping-sub">Spaltengruppen</div>
+        <div className="grouping-list column-groups" role="tree" aria-label={l10n.t('Column groups')}>
+          <div className="grouping-sub">{l10n.t('Column Groups')}</div>
           {columnGroupList(t).map(({ member, depth }) => (
             <div key={member.id} role="treeitem" className="group-chip" style={{ marginLeft: depth * 16 }} tabIndex={0}
-              title={`Spaltengruppe ${member.group!.name} – Doppelklick: Eigenschaften`}
+              title={l10n.t('Column group {0} – double-click: properties', member.group!.name)}
               onDoubleClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })}
               onKeyDown={e => { if (e.key === 'Enter') ed.setDialog({ kind: 'group', table: t.name, member: member.id }); }}>
               {depth > 0 && <Codicon name="arrow-small-right" className="group-nest" />}
@@ -50,17 +53,17 @@ export function GroupingPane() {
               {member.group!.expressions.length > 0 && <span className="group-meta">{member.group!.expressions.join(', ')}</span>}
               {member.sort.length > 0 && <span className="group-meta"><Codicon name="arrow-swap" /> {member.sort.map(s => `${s.value}${s.descending ? ' ↓' : ''}`).join(', ')}</span>}
               <span className="grow" />
-              <ActionButton icon="settings-gear" title="Gruppeneigenschaften…" onClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })} />
-              <DropdownAction icon="trash" title="Spaltengruppe löschen" items={[
-                { label: 'Nur Gruppe löschen', icon: 'ungroup-by-ref-type', run: () => ed.commands.get('table.deleteColumnGroupOnly')?.({ member: member.id }) },
-                { label: 'Gruppe und Spalten löschen', icon: 'trash', run: () => ed.commands.get('table.deleteColumnGroup')?.({ member: member.id }) },
+              <ActionButton icon="settings-gear" title={l10n.t('Group Properties…')} onClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })} />
+              <DropdownAction icon="trash" title={l10n.t('Delete Column Group')} items={[
+                { label: l10n.t('Delete Group Only'), icon: 'ungroup-by-ref-type', run: () => ed.commands.get('table.deleteColumnGroupOnly')?.({ member: member.id }) },
+                { label: l10n.t('Delete Group and Columns'), icon: 'trash', run: () => ed.commands.get('table.deleteColumnGroup')?.({ member: member.id }) },
               ]} />
             </div>
           ))}
-          <div className="grouping-sub">Zeilengruppen</div>
+          <div className="grouping-sub">{l10n.t('Row Groups')}</div>
         </div>
       )}
-      <div className="grouping-list" role="tree" aria-label="Zeilengruppen">
+      <div className="grouping-list" role="tree" aria-label={l10n.t('Row groups')}>
         {groups.map(({ member, depth, details }) => {
           const g = member.group!;
           const rows = rowsOfMember(member);
@@ -70,20 +73,20 @@ export function GroupingPane() {
           };
           return (
             <div key={member.id} role="treeitem" className="group-chip" style={{ marginLeft: depth * 16 }} tabIndex={0}
-              title={`${details ? 'Detailgruppe' : 'Gruppe'} ${g.name} – Doppelklick: Eigenschaften`}
+              title={details ? l10n.t('Details group {0} – double-click: properties', g.name) : l10n.t('Group {0} – double-click: properties', g.name)}
               onClick={selectRows}
               onDoubleClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })}
               onKeyDown={e => { if (e.key === 'Enter') ed.setDialog({ kind: 'group', table: t.name, member: member.id }); }}
               {...vsContext({ webviewSection: 'item', itemType: 'tableGroup', inTable: true, inGroup: !details, rowId: rows[0] ?? '' })}>
               {depth > 0 && <Codicon name="arrow-small-right" className="group-nest" />}
               <Codicon name={details ? 'list-flat' : 'group-by-ref-type'} className="group-icon" />
-              <span className="group-name">{details ? `(Details)` : g.name}</span>
+              <span className="group-name">{details ? l10n.t('(Details)') : g.name}</span>
               {g.expressions.length > 0 && <span className="group-meta">{g.expressions.join(', ')}</span>}
-              {member.sort.length > 0 && <span className="group-meta" title="Sortierung"><Codicon name="arrow-swap" /> {member.sort.map(s => `${s.value}${s.descending ? ' ↓' : ''}`).join(', ')}</span>}
-              {g.filters.length > 0 && <span className="group-meta" title="Filter"><Codicon name="filter" /> {g.filters.length}</span>}
-              {g.pageBreak && <span className="group-meta">{BREAK_LABEL[g.pageBreak]}</span>}
+              {member.sort.length > 0 && <span className="group-meta" title={l10n.t('Sorting')}><Codicon name="arrow-swap" /> {member.sort.map(s => `${s.value}${s.descending ? ' ↓' : ''}`).join(', ')}</span>}
+              {g.filters.length > 0 && <span className="group-meta" title={l10n.t('Filter')}><Codicon name="filter" /> {g.filters.length}</span>}
+              {g.pageBreak && <span className="group-meta">{breakLabel(g.pageBreak)}</span>}
               <span className="grow" />
-              <ActionButton icon="settings-gear" title="Gruppeneigenschaften…" onClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })} />
+              <ActionButton icon="settings-gear" title={l10n.t('Group Properties…')} onClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })} />
             </div>
           );
         })}
