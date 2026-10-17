@@ -534,3 +534,5 @@ table.grid input, table.grid select { width: 100%; }
 .item.table .header-cell { background-color: color-mix(in srgb, var(--select) 6%, transparent); }
 
 .preview [data-action] { cursor: pointer; }
+.image-thumb { width: 16px; height: 16px; object-fit: contain; }
+.image-entry input { flex: 1; min-width: 0; }

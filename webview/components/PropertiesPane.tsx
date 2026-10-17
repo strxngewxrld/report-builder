@@ -10,6 +10,7 @@ import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
 import { RichTextEditor } from './RichTextEditor';
 import { partsDiffer, toRichText, toSimpleText } from '../richtext';
+import { embeddedImages } from '../images';
 import {
   ItemAction, actionOf, bookmarkOf, hiddenOf, printsOn, setAction, setBookmark, setHidden, setPrintsOn, setToggleItem, setUserSort, toggleItemOf,
   userSortOf,
@@ -300,6 +301,7 @@ function TextboxProps({ tb, dataSetName }: { tb: TextboxItem; dataSetName?: stri
 
 function ImageProps({ img, update }: { img: ImageItem; update: (fn: (it: ReportItem) => void) => void }) {
   const set = (fn: (i: ImageItem) => void) => update(it => fn(it as ImageItem));
+  const images = embeddedImages(useEditor().report);
   return (
     <>
       <Row label="Quelle">
@@ -307,9 +309,22 @@ function ImageProps({ img, update }: { img: ImageItem; update: (fn: (it: ReportI
           <option value="External">Extern (URL)</option><option value="Embedded">Eingebettet</option><option value="Database">Datenbank</option>
         </select>
       </Row>
-      <Row label={img.source === 'External' ? 'URL' : img.source === 'Embedded' ? 'Bildname' : 'Feld'}>
-        <PropText value={img.value} placeholder={img.source === 'External' ? 'https://…' : ''} onCommit={v => set(i => { i.value = v; })} />
-      </Row>
+      {img.source === 'Embedded' && !img.value.startsWith('=') ? (
+        <Row label="Bild">
+          <select value={img.value} onChange={e => {
+            if (e.target.value === '*add') post({ type: 'pickImage' });
+            else set(i => { i.value = e.target.value; });
+          }}>
+            {!images.some(i => i.name === img.value) && <option value={img.value}>{img.value || '(keines)'}</option>}
+            {images.map(i => <option key={i.name} value={i.name}>{i.name}</option>)}
+            <option value="*add">Bild einbetten…</option>
+          </select>
+        </Row>
+      ) : (
+        <Row label={img.source === 'External' ? 'URL' : img.source === 'Embedded' ? 'Bildname' : 'Feld'}>
+          <PropText value={img.value} placeholder={img.source === 'External' ? 'https://…' : ''} onCommit={v => set(i => { i.value = v; })} />
+        </Row>
+      )}
       <Row label="Größe">
         <select value={img.sizing} onChange={e => set(i => { i.sizing = e.target.value as ImageItem['sizing']; })}>
           <option value="AutoSize">Automatisch</option><option value="Fit">Anpassen</option>

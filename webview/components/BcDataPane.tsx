@@ -3,6 +3,7 @@ import { BcDataItem } from '../bc';
 import { useEditor } from '../editor';
 import { post, vsContext } from '../vscode';
 import { GLOBALS, Group, Twisty, dragProps } from './ReportDataPane';
+import { ImagesGroup } from './ImagesGroup';
 import { ActionButton, Codicon } from './Icon';
 
 /**
@@ -131,6 +132,8 @@ export function BcDataPane() {
             </div>
           ))}
         </Group>
+
+        <ImagesGroup open={isOpen('images')} onToggle={() => toggle('images')} />
 
         <Group label="Vorschaudaten" open={isOpen('data')} onToggle={() => toggle('data')}>
           <div className="prop-note">

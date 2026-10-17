@@ -4,6 +4,7 @@ import { DRAG_MIME, DragPayload, setCurrentDrag, useCommand, useEditor } from '.
 import { post, vsContext } from '../vscode';
 import { BcDataPane } from './BcDataPane';
 import { ActionButton, Codicon } from './Icon';
+import { ImagesGroup } from './ImagesGroup';
 
 export const GLOBALS: [string, string][] = [
   ['ExecutionTime', 'Ausführungszeit'],
@@ -124,6 +125,8 @@ export function ReportDataPane() {
           })}
           {!report.dataSets.length && <div className="tree-empty">Keine Datasets</div>}
         </Group>
+
+        <ImagesGroup open={isOpen('images')} onToggle={() => toggle('images')} />
       </div>
       <div className="pane-hint">Felder auf die Entwurfsfläche oder in Tabellenzellen ziehen. Ein Dataset auf die Fläche ziehen erzeugt eine Tabelle.</div>
     </div>
