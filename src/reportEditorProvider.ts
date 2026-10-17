@@ -52,6 +52,8 @@ type FromWebview =
   | { type: 'print'; html: string }
   | { type: 'openXml' }
   | { type: 'error'; message: string }
+  | { type: 'info'; message: string }
+  | { type: 'openLink'; url: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -190,6 +192,14 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
             break;
           case 'error':
             vscode.window.showErrorMessage(msg.message);
+            break;
+          case 'info':
+            vscode.window.showInformationMessage(msg.message);
+            break;
+          case 'openLink':
+            // only web and mail links: a report expression must not open local files or run protocol handlers
+            if (/^(https?|mailto):/i.test(msg.url)) await vscode.env.openExternal(vscode.Uri.parse(msg.url, true));
+            else vscode.window.showWarningMessage(`Link wird nicht geöffnet (nur http, https und mailto): ${msg.url}`);
             break;
         }
     };

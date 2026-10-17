@@ -20,6 +20,8 @@ export type ToExtension =
   | { type: 'print'; html: string }
   | { type: 'openXml' }
   | { type: 'error'; message: string }
+  | { type: 'info'; message: string }
+  | { type: 'openLink'; url: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }

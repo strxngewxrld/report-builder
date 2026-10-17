@@ -9,7 +9,10 @@ import { fromUnit, toUnit } from '../units';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
 import { RichTextEditor } from './RichTextEditor';
-import { hiddenOf, printsOn, setHidden, setPrintsOn, setToggleItem, setUserSort, toggleItemOf, userSortOf } from '../layoutTools';
+import {
+  ItemAction, actionOf, bookmarkOf, hiddenOf, printsOn, setAction, setBookmark, setHidden, setPrintsOn, setToggleItem, setUserSort, toggleItemOf,
+  userSortOf,
+} from '../layoutTools';
 import { allReportItems } from '../model';
 import { leafOfRow, memberProp, setMemberProp } from '../tablix';
 import { post } from '../vscode';
@@ -168,6 +171,12 @@ export function PropertiesPane({ width }: { width: number }) {
             <Row label="Umschalten durch">
               <ToggleSelect value={toggleItemOf(single)} exclude={single.name} onChange={v => ed.commit(r => setToggleItem(locate(r, single.name)!.item, v))} />
             </Row>
+          </Category>
+        )}
+
+        {single && (single.type === 'textbox' || single.type === 'image') && (
+          <Category title="Aktion">
+            <ActionProps item={single} dataSetName={loc?.table?.dataSetName} />
           </Category>
         )}
 
@@ -367,6 +376,60 @@ export function ReportProps() {
         )}
       </Category>
     </div>
+  );
+}
+
+/** Action on click (hyperlink, bookmark link, drillthrough) and the item's own bookmark. */
+function ActionProps({ item, dataSetName }: { item: ReportItem; dataSetName?: string }) {
+  const ed = useEditor();
+  const action = actionOf(item);
+  const set = (a: ItemAction) => ed.commit(r => setAction(locate(r, item.name)!.item, a));
+  const params = action.kind === 'drillthrough' ? action.parameters : [];
+  return (
+    <>
+      <Row label="Bei Klick">
+        <select value={action.kind} onChange={e => {
+          const kind = e.target.value as ItemAction['kind'];
+          set(kind === 'none' ? { kind } : kind === 'drillthrough' ? { kind, report: '', parameters: [] }
+            : { kind, value: 'value' in action ? action.value : '' });
+        }}>
+          <option value="none">Keine Aktion</option>
+          <option value="hyperlink">Gehe zu URL</option>
+          <option value="bookmarkLink">Gehe zu Lesezeichen</option>
+          <option value="drillthrough">Gehe zu Bericht (Drillthrough)</option>
+        </select>
+      </Row>
+      {(action.kind === 'hyperlink' || action.kind === 'bookmarkLink') && (
+        <Row label={action.kind === 'hyperlink' ? 'URL' : 'Lesezeichen'}>
+          <PropText value={action.value} expression dataSetName={dataSetName}
+            placeholder={action.kind === 'hyperlink' ? 'https://… oder =Ausdruck' : 'Name oder =Ausdruck'}
+            invalid={action.value.startsWith('=') ? validateExpression(action.value) : null}
+            onCommit={v => set({ ...action, value: v })} />
+        </Row>
+      )}
+      {action.kind === 'drillthrough' && <>
+        <Row label="Bericht">
+          <PropText value={action.report} placeholder="Name des Zielberichts" onCommit={v => set({ ...action, report: v })} />
+        </Row>
+        {params.map((p, i) => (
+          <div key={i} className="prop-row action-param">
+            <PropText value={p.name} placeholder="Parameter" onCommit={v => set({ ...action, parameters: params.map((q, k) => (k === i ? { ...q, name: v } : q)) })} />
+            <PropText value={p.value} placeholder="Wert oder =Ausdruck" expression dataSetName={dataSetName}
+              onCommit={v => set({ ...action, parameters: params.map((q, k) => (k === i ? { ...q, value: v } : q)) })} />
+            <ActionButton icon="trash" title="Parameter entfernen" onClick={() => set({ ...action, parameters: params.filter((_, k) => k !== i) })} />
+          </div>
+        ))}
+        <Row label="Parameter">
+          <button className="secondary small" onClick={() => set({ ...action, parameters: [...params, { name: `Parameter${params.length + 1}`, value: '' }] })}>
+            <Codicon name="add" /> Hinzufügen
+          </button>
+        </Row>
+      </>}
+      <Row label="Lesezeichen (Ziel)">
+        <PropText value={bookmarkOf(item)} expression dataSetName={dataSetName} placeholder="Ziel für „Gehe zu Lesezeichen“"
+          onCommit={v => ed.commit(r => setBookmark(locate(r, item.name)!.item, v))} />
+      </Row>
+    </>
   );
 }
 

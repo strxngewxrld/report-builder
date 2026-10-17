@@ -7,7 +7,7 @@ import { browserDom, serializeRdl } from '../rdl';
 import { renderReport } from '../render/engine';
 import { Measured, PageSlice, paginate } from '../render/paginate';
 import { Flow, NodeView, RenderOptionsProvider } from '../render/RenderView';
-import { PageInfo, RNode, RTable } from '../render/types';
+import { PageInfo, RAction, RNode, RTable } from '../render/types';
 import { bindRows, mockRows, numericFieldsFromLayout } from '../sampleData';
 import { post } from '../vscode';
 import { ActionButton, Codicon, DropdownAction, Separator } from './Icon';
@@ -109,6 +109,24 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
   });
   // like the report server: one sort at a time, clicking again reverses it
   const onSort = (name: string) => setUserSort(prev => ({ [name]: prev[name] === 'Ascending' ? 'Descending' : 'Ascending' }));
+  // actions: URLs open outside VS Code, bookmark links scroll to the target, drillthrough needs the report server
+  const onAction = (a: RAction) => {
+    if (a.kind === 'hyperlink') {
+      if (a.url) post({ type: 'openLink', url: a.url });
+    } else if (a.kind === 'bookmarkLink') {
+      // pages are built lazily: find the target in the continuous (measured) body and scroll to its page
+      const body = measureRef.current;
+      const target = body?.querySelector(`[data-bookmark="${CSS.escape(a.bookmark)}"]`);
+      if (!body || !target) { post({ type: 'info', message: `Lesezeichen „${a.bookmark}“ kommt in der Vorschau nicht vor.` }); return; }
+      const y = target.getBoundingClientRect().top - body.getBoundingClientRect().top;
+      const index = Math.max(0, pages.findIndex(pg => y >= pg.start && y < pg.end));
+      const pageH = (p.height * S + 16) * zoom;
+      scrollRef.current?.scrollTo({ top: index * pageH, behavior: 'smooth' });
+    } else {
+      const params = a.parameters.map(([n, v]) => `${n} = ${v}`).join(', ');
+      post({ type: 'info', message: `Drillthrough zu „${a.report}“${params ? ` (${params})` : ''} – Drillthrough-Berichte führt nur der Berichtsserver aus.` });
+    }
+  };
 
   const result = useMemo(() => renderReport(xml, {
     dom: browserDom, mode: 'preview', data, reportName: fileName.replace(/\.rdlc?$/i, ''),
@@ -200,7 +218,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
   useCommand('exportHtml', () => pages.length && exportPages('html'));
 
   return (
-    <RenderOptionsProvider value={{ S, onToggle, onSort }}>
+    <RenderOptionsProvider value={{ S, onToggle, onSort, onAction }}>
       <div className="preview">
         {!isBc && report.parameters.length > 0 && (
           <div className="param-bar">

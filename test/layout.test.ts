@@ -4,7 +4,11 @@ import { readFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { createItem } from '../webview/ops';
 import { emptyReport, TextboxItem } from '../webview/model';
-import { alignItems, centerInContainer, distribute, hiddenOf, makeSameSize, printsOn, setHidden, setPrintsOn } from '../webview/layoutTools';
+import {
+  actionOf, alignItems, bookmarkOf, centerInContainer, distribute, hiddenOf, makeSameSize, printsOn, setAction, setBookmark, setHidden, setPrintsOn,
+} from '../webview/layoutTools';
+import { renderReport } from '../webview/render/engine';
+import { RBox } from '../webview/render/types';
 import { XmlDom, parseRdl, serializeRdl } from '../webview/rdl';
 
 const dom: XmlDom = {
@@ -133,4 +137,42 @@ test('Umschalten (ToggleItem) und interaktive Sortierung (UserSort) setzen, Rest
   assert.deepEqual(tb.extra, ['<UserSort><SortExpression>=Fields!B.Value</SortExpression><SortExpressionScope>G</SortExpressionScope></UserSort>']);
   setUserSort(tb, '');
   assert.deepEqual(tb.extra, []);
+});
+
+test('Aktionen: Hyperlink, Lesezeichen, Drillthrough – schreiben, lesen, in der Vorschau auswerten', () => {
+  const r = emptyReport();
+  const tb = createItem(r, 'textbox', { left: 0, top: 0, width: 2, height: 0.25 }) as TextboxItem;
+  tb.value = 'Link';
+  r.body.items.push(tb);
+  assert.deepEqual(actionOf(tb), { kind: 'none' });
+  assert.ok(setAction(tb, { kind: 'hyperlink', value: '="https://example.com/?a=1&b=" & 2' }));
+  assert.ok(!setAction(tb, { kind: 'hyperlink', value: '="https://example.com/?a=1&b=" & 2' }));
+  assert.ok(setBookmark(tb, 'Anfang'));
+  assert.equal(bookmarkOf(tb), 'Anfang');
+
+  const xml = serializeRdl(r, dom);
+  assert.match(xml, /<ActionInfo>\s*<Actions>\s*<Action>\s*<Hyperlink>="https:\/\/example.com\/\?a=1&amp;b=" &amp; 2<\/Hyperlink>/);
+  const back = parseRdl(xml, dom);
+  const tb2 = back.body.items[0] as TextboxItem;
+  assert.deepEqual(actionOf(tb2), { kind: 'hyperlink', value: '="https://example.com/?a=1&b=" & 2' });
+  assert.equal(serializeRdl(back, dom), xml);
+
+  const node = renderReport(xml, { dom, mode: 'preview', data: {}, reportName: 'R', parameters: {} }).body.nodes[0] as RBox;
+  assert.deepEqual(node.action, { kind: 'hyperlink', url: 'https://example.com/?a=1&b=2' });
+  assert.equal(node.bookmark, 'Anfang');
+
+  // drillthrough with parameters; switching back to none removes <ActionInfo>
+  setAction(tb2, { kind: 'drillthrough', report: 'Kundenkarte', parameters: [{ name: 'No', value: '="10000"' }, { name: ' ', value: 'x' }] });
+  assert.deepEqual(actionOf(tb2), { kind: 'drillthrough', report: 'Kundenkarte', parameters: [{ name: 'No', value: '="10000"' }] });
+  const dt = renderReport(serializeRdl(back, dom), { dom, mode: 'preview', data: {}, reportName: 'R', parameters: {} }).body.nodes[0] as RBox;
+  assert.deepEqual(dt.action, { kind: 'drillthrough', report: 'Kundenkarte', parameters: [['No', '10000']] });
+  setAction(tb2, { kind: 'bookmarkLink', value: 'Anfang' });
+  assert.deepEqual(actionOf(tb2), { kind: 'bookmarkLink', value: 'Anfang' });
+  setAction(tb2, { kind: 'none' });
+  assert.ok(!(tb2.extra ?? []).some(x => x.includes('ActionInfo')));
+
+  // an ActionInfo with further actions keeps them
+  tb2.extra = ['<ActionInfo><Actions><Action><Hyperlink>a</Hyperlink></Action><Action><Hyperlink>b</Hyperlink></Action></Actions></ActionInfo>'];
+  setAction(tb2, { kind: 'hyperlink', value: 'c' });
+  assert.deepEqual(tb2.extra, ['<ActionInfo><Actions><Action><Hyperlink>c</Hyperlink></Action><Action><Hyperlink>b</Hyperlink></Action></Actions></ActionInfo>']);
 });
