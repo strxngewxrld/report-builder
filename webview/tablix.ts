@@ -438,6 +438,94 @@ export function setMemberProp(m: RowMember, tag: string, value: string | undefin
   } else if (el) m.extra.unshift(el);
 }
 
+// ------------------------------------------------------------------------------------------------ column groups
+
+const headerTextbox = (r: Report, value: string, taken: Set<string>, bold: boolean): TextboxItem => {
+  const tb = makeTextbox(r, value, taken);
+  taken.add(tb.name);
+  tb.style = { ...tb.style, BorderStyle: 'Solid', BorderColor: 'LightGrey', BorderWidth: '1pt', ...(bold ? { FontWeight: 'Bold' } : {}) };
+  return tb;
+};
+
+/** Why a column group cannot be added to column `col` (null: it can). */
+export function columnGroupBlocker(t: TableItem, col: number): string | null {
+  const leaf = leavesOf(t.columnMembers)[col];
+  if (!leaf) return 'Keine Spalte gewählt';
+  if (headerLevels(t.columnMembers).length) return 'Die Tabelle hat schon Spaltenköpfe – für Kreuztabellen „Matrix einfügen“ verwenden';
+  if (!t.columnMembers.includes(leaf) || leaf.group) return 'Die Spalte gehört schon zu einer Spaltengruppe';
+  return null;
+}
+
+/**
+ * Adds a column group around column `col` (Report Builder: Add Group › Column Group › Parent Group): the column
+ * repeats per group instance, a header row above the table shows the group value. The other columns get an empty
+ * header cell, so every column has the same header levels. Works on tables without column headers.
+ */
+export function addColumnGroup(r: Report, t: TableItem, col: number, opts: { name: string; expression: string }): RowMember | null {
+  if (columnGroupBlocker(t, col)) return null;
+  const leaf = leavesOf(t.columnMembers)[col];
+  const taken = new Set<string>();
+  const size = 0.25;
+  for (const m of t.columnMembers) if (m !== leaf) m.header = { size, cell: headerTextbox(r, '', taken, true) };
+  const group: RowMember = {
+    id: newId(), group: newGroup(opts.name, opts.expression ? [opts.expression] : []),
+    header: { size, cell: headerTextbox(r, opts.expression, taken, true) },
+    sort: opts.expression ? [{ value: opts.expression, descending: false }] : [], extra: [], children: [leaf],
+  };
+  t.columnMembers.splice(t.columnMembers.indexOf(leaf), 1, group);
+  syncCorner(r, t);
+  return group;
+}
+
+/**
+ * Removes a column group. With `columns` its columns go too (not all columns of the table); otherwise the member
+ * stays as a static column member and its header keeps showing (the group value is cleared). A header row left with
+ * only empty static cells is removed.
+ */
+export function deleteColumnGroup(r: Report, t: TableItem, memberId: string, columns: boolean): boolean {
+  const m = [...walkMembers(t.columnMembers)].find(e => e.member.id === memberId)?.member;
+  if (!m?.group) return false;
+  if (columns) {
+    const leaves = leavesOf(t.columnMembers);
+    const mine = leavesOf([m]).map(l => leaves.indexOf(l)).filter(i => i >= 0).sort((a, b) => b - a);
+    if (mine.length >= t.columns.length) return false;
+    for (const i of mine) deleteColumn(t, i);
+  } else {
+    const exprs = m.group!.expressions;
+    m.group = undefined;
+    m.sort = [];
+    const cell = m.header?.cell;
+    if (cell?.type === 'textbox' && exprs.includes(cell.value)) cell.value = '';
+  }
+  dropEmptyHeaderLevel(t);
+  syncCorner(r, t);
+  return true;
+}
+
+/** Removes the top column header level when all its cells are empty textboxes of static members. */
+function dropEmptyHeaderLevel(t: TableItem) {
+  const top = t.columnMembers;
+  if (!top.length || !top.every(m => !m.group && m.header?.cell.type === 'textbox' && !m.header.cell.value)) return;
+  for (const m of top) m.header = undefined;
+}
+
+/**
+ * Keeps the corner in step with the header levels: it exists when the table has row and column headers (one cell
+ * spanning the row header columns for a new corner).
+ */
+export function syncCorner(r: Report, t: TableItem) {
+  const rowLevels = headerLevels(t.rowMembers).length, colLevels = headerLevels(t.columnMembers).length;
+  if (!rowLevels || !colLevels) { t.corner = undefined; return; }
+  if (t.corner?.length) return;
+  const cell = headerTextbox(r, '', new Set(), true);
+  if (rowLevels > 1) cell.colSpan = rowLevels;
+  t.corner = Array.from({ length: colLevels }, (_, i) => Array.from({ length: rowLevels }, (_, k) =>
+    i === 0 && k === 0 ? { item: cell, rowSpan: colLevels > 1 ? colLevels : undefined } : { item: null }));
+}
+
+/** The leaf member of column `col` (its properties: visibility, toggle). */
+export const columnLeaf = (t: TableItem, col: number) => leavesOf(t.columnMembers)[col];
+
 // ------------------------------------------------------------------------------------------------ matrix layout
 
 export interface PlacedCell { item: ReportItem; x: number; y: number; w: number; h: number; member?: RowMember; axis: 'row' | 'column' | 'corner' }

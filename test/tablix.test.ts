@@ -236,3 +236,47 @@ test('Matrix: anlegen, stabil speichern, Kreuztabelle in der Vorschau, Kopfzelle
   assert.deepEqual(grid[2].slice(1), ['20', '', '', '20'], 'B: Lampe 20');
   assert.deepEqual(grid[3].slice(1), ['20', '50', '100', '170']);
 });
+
+test('Spaltengruppe zu einer Tabelle hinzufügen, Vorschau, löschen (nur Gruppe / mit Spalten); Spalte ausblenden', async () => {
+  const { addColumnGroup, columnGroupBlocker, columnGroupList, columnLeaf, deleteColumnGroup } = await import('../webview/tablix');
+  const { setHidden } = await import('../webview/layoutTools');
+  const { r, t } = report();
+  // Amount per document number across the columns
+  const amount = t.rows.find(x => x.kind === 'detail')!.cells[2] as TextboxItem;
+  amount.value = '=Sum(Fields!Amount.Value)';
+  assert.equal(columnGroupBlocker(t, 2), null);
+  const g = addColumnGroup(r, t, 2, { name: 'Belege', expression: '=Fields!DocNo.Value' })!;
+  assert.ok(g);
+  assert.deepEqual(columnGroupList(t).map(x => x.member.group!.name), ['Belege']);
+  assert.match(columnGroupBlocker(t, 0) ?? '', /Spaltenköpfe/);
+  assert.equal(t.corner, undefined, 'ohne Zeilenköpfe keine Ecke');
+
+  const { xml, t: back } = roundTrip(r);
+  assert.match(xml, /<TablixColumnHierarchy>\s*<TablixMembers>\s*<TablixMember>\s*<TablixHeader>/);
+  assert.equal(columnGroupList(back).length, 1);
+  const out = renderReport(xml, { dom, mode: 'preview', data: { Lines: rows }, reportName: 'R', parameters: {} });
+  const table = out.body.nodes[0] as RTable;
+  // header row with the group values, then the table: 2 static + 2 group columns (A, B)
+  assert.equal(table.columns.length, 4);
+  const texts = (row: RTable['rows'][number]) => row.cells.map(c => (c.node && c.node.kind === 'box' ? c.node.paragraphs?.map(p => p.runs.map(x => x.text).join('')).join('') : ''));
+  assert.deepEqual(texts(table.rows[0]), ['', '', 'A', 'B']);
+
+  // hide a column: the preview leaves it out
+  setHidden(columnLeaf(back, 0), 'true');
+  const hidden = renderReport(serializeRdl({ ...r, body: { ...r.body, items: [back] } }, dom), { dom, mode: 'preview', data: { Lines: rows }, reportName: 'R', parameters: {} });
+  assert.equal((hidden.body.nodes[0] as RTable).columns.length, 3);
+
+  // delete only the group: the column stays, the empty header row goes
+  const r2 = structuredClone(r);
+  const t2 = r2.body.items[0] as TableItem;
+  assert.ok(deleteColumnGroup(r2, t2, g.id, false));
+  assert.equal(t2.columns.length, 3);
+  assert.equal(columnGroupList(t2).length, 0);
+  assert.ok(t2.columnMembers.every(m => !m.header));
+  // delete with columns
+  assert.ok(deleteColumnGroup(r, t, g.id, true));
+  assert.equal(t.columns.length, 2);
+  assert.ok(t.columnMembers.every(m => !m.header));
+  assert.ok(t.rows.every(row => cellLayout(row).reduce((n, c) => n + c.span, 0) === 2));
+  roundTrip(r);
+});

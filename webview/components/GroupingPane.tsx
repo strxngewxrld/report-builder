@@ -33,6 +33,7 @@ export function GroupingPane() {
         <DropdownAction icon="add" title="Gruppe hinzufügen" items={[
           { label: 'Übergeordnete Gruppe…', icon: 'arrow-up', run: run('table.addParentGroup') },
           { label: 'Untergeordnete Gruppe…', icon: 'arrow-down', run: run('table.addChildGroup') },
+          { label: 'Spaltengruppe…', icon: 'split-horizontal', run: run('table.addColumnGroup') },
         ]} />
       </div>
       {columnGroupList(t).length > 0 && (
@@ -50,6 +51,10 @@ export function GroupingPane() {
               {member.sort.length > 0 && <span className="group-meta"><Codicon name="arrow-swap" /> {member.sort.map(s => `${s.value}${s.descending ? ' ↓' : ''}`).join(', ')}</span>}
               <span className="grow" />
               <ActionButton icon="settings-gear" title="Gruppeneigenschaften…" onClick={() => ed.setDialog({ kind: 'group', table: t.name, member: member.id })} />
+              <DropdownAction icon="trash" title="Spaltengruppe löschen" items={[
+                { label: 'Nur Gruppe löschen', icon: 'ungroup-by-ref-type', run: () => ed.commands.get('table.deleteColumnGroupOnly')?.({ member: member.id }) },
+                { label: 'Gruppe und Spalten löschen', icon: 'trash', run: () => ed.commands.get('table.deleteColumnGroup')?.({ member: member.id }) },
+              ]} />
             </div>
           ))}
           <div className="grouping-sub">Zeilengruppen</div>

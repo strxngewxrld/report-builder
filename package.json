@@ -445,6 +445,21 @@
         "category": "Business Central Report Builder"
       },
       {
+        "command": "bcReportBuilder.table.addColumnGroup",
+        "title": "Spaltengruppe hinzufügen…",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteColumnGroup",
+        "title": "Spaltengruppe und Spalten löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
+        "command": "bcReportBuilder.table.deleteColumnGroupOnly",
+        "title": "Nur Spaltengruppe löschen",
+        "category": "Business Central Report Builder"
+      },
+      {
         "command": "bcReportBuilder.table.groupProperties",
         "title": "Gruppeneigenschaften…",
         "category": "Business Central Report Builder"
@@ -843,6 +858,18 @@
         },
         {
           "command": "bcReportBuilder.table.addChildGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.addColumnGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumnGroup",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumnGroupOnly",
           "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
         },
         {
@@ -1368,6 +1395,10 @@
           "group": "1_add@2"
         },
         {
+          "command": "bcReportBuilder.table.addColumnGroup",
+          "group": "1_add@3"
+        },
+        {
           "command": "bcReportBuilder.table.groupProperties",
           "when": "inGroup",
           "group": "2_edit@1"
@@ -1391,6 +1422,16 @@
           "command": "bcReportBuilder.table.deleteGroupOnly",
           "when": "inGroup",
           "group": "3_delete@2"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumnGroupOnly",
+          "when": "inColumnGroup",
+          "group": "4_column@1"
+        },
+        {
+          "command": "bcReportBuilder.table.deleteColumnGroup",
+          "when": "inColumnGroup",
+          "group": "4_column@2"
         }
       ],
       "editor/context": [

@@ -16,7 +16,7 @@ const WEBVIEW_COMMANDS = [
   'editText', 'editExpression', 'cut', 'copy', 'paste', 'delete', 'bringToFront', 'sendToBack',
   'table.insertColumnLeft', 'table.insertColumnRight', 'table.deleteColumn', 'table.toggleHeaderRow', 'table.toggleFooterRow', 'table.select',
   'importSampleData', 'data.edit', 'data.delete', 'exportExcel', 'exportWord', 'insert.chart', 'insert.matrix', 'chart.properties',
-  ...['addParentGroup', 'addChildGroup', 'groupProperties', 'addGroupHeader', 'addGroupFooter', 'deleteGroup', 'deleteGroupOnly',
+  ...['addParentGroup', 'addChildGroup', 'addColumnGroup', 'deleteColumnGroup', 'deleteColumnGroupOnly', 'groupProperties', 'addGroupHeader', 'addGroupFooter', 'deleteGroup', 'deleteGroupOnly',
     'insertRowAbove', 'insertRowBelow', 'insertRowOutsideAbove', 'insertRowOutsideBelow', 'deleteRow', 'mergeCells', 'splitCell'].map(c => `table.${c}`),
   ...['alignLeft', 'alignCenter', 'alignRight', 'alignTop', 'alignMiddle', 'alignBottom', 'sameWidth', 'sameHeight', 'sameSize',
     'distributeHorizontal', 'distributeVertical', 'centerHorizontal', 'centerVertical'].map(c => `layout.${c}`),

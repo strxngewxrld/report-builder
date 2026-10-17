@@ -13,7 +13,7 @@ export type Dialog =
   | { kind: 'expression'; title: string; value: string; dataSetName?: string; onOk: (value: string) => void }
   | { kind: 'reportProperties' }
   /** Properties of a row group (member id), or a new group next to a row. */
-  | { kind: 'group'; table: string; member?: string; create?: { rowId: string; mode: 'parent' | 'child' } }
+  | { kind: 'group'; table: string; member?: string; create?: { rowId: string; mode: 'parent' | 'child' } | { column: number; mode: 'column' } }
   /** Insert a chart (create: where) or edit an existing one (name). */
   | { kind: 'chart'; name?: string; create?: { section: 'header' | 'body' | 'footer'; top: number; left: number } }
   | { kind: 'matrix'; create: { section: 'header' | 'body' | 'footer'; top: number; left: number } };

@@ -16,7 +16,7 @@ import {
   userSortOf,
 } from '../layoutTools';
 import { allReportItems } from '../model';
-import { leafOfRow, memberProp, setMemberProp } from '../tablix';
+import { columnLeaf, leafOfRow, memberProp, setMemberProp } from '../tablix';
 import { post } from '../vscode';
 
 export const FONTS = ['Arial', 'Calibri', 'Cambria', 'Consolas', 'Courier New', 'Georgia', 'Segoe UI', 'Segoe UI Light', 'Segoe UI Semibold', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
@@ -349,9 +349,7 @@ function TableProps({ t }: { t: TableItem }) {
       </Row>
       <Row label="Kopfzeile"><input type="checkbox" checked={t.rows.some(r => r.kind === 'header')} onChange={() => set((tt, r) => toggleTableRow(r, tt, 'header'))} /></Row>
       <Row label="Fußzeile"><input type="checkbox" checked={t.rows.some(r => r.kind === 'footer')} onChange={() => set((tt, r) => toggleTableRow(r, tt, 'footer'))} /></Row>
-      {part?.kind === 'column' && (
-        <Row label={`Spalte ${part.index + 1}`}><PropSize value={t.columns[part.index]} min={0.1} onCommit={v => set(tt => { tt.columns[part.index] = v; })} /></Row>
-      )}
+      {part?.kind === 'column' && <ColumnProps t={t} index={part.index} />}
       {part?.kind === 'row' && t.rows[part.index] && <RowProps t={t} index={part.index} />}
     </>
   );
@@ -454,6 +452,35 @@ function ActionProps({ item, dataSetName }: { item: ReportItem; dataSetName?: st
         <PropText value={bookmarkOf(item)} expression dataSetName={dataSetName} placeholder="Ziel für „Gehe zu Lesezeichen“"
           onCommit={v => ed.commit(r => setBookmark(locate(r, item.name)!.item, v))} />
       </Row>
+    </>
+  );
+}
+
+/** A selected table column: width, visibility and toggle (properties of its leaf TablixMember). */
+function ColumnProps({ t, index }: { t: TableItem; index: number }) {
+  const ed = useEditor();
+  const leaf = columnLeaf(t, index);
+  const setMember = (fn: (m: RowMember) => void) => ed.commit(r => {
+    const m = columnLeaf(locate(r, t.name)!.item as TableItem, index);
+    if (!m) return false;
+    fn(m);
+  });
+  return (
+    <>
+      <Row label={`Spalte ${index + 1}`}>
+        <PropSize value={t.columns[index]} min={0.1} onCommit={v => ed.commit(r => { (locate(r, t.name)!.item as TableItem).columns[index] = v; })} />
+      </Row>
+      {leaf && <>
+        <Row label="Ausblenden">
+          <PropText value={hiddenOf(leaf)} placeholder="leer = sichtbar, true oder =Ausdruck" expression dataSetName={t.dataSetName}
+            invalid={hiddenOf(leaf).startsWith('=') ? validateExpression(hiddenOf(leaf)) : null}
+            onCommit={v => setMember(m => setHidden(m, v))} />
+        </Row>
+        <Row label="Umschalten durch">
+          <ToggleSelect value={toggleItemOf(leaf)} onChange={v => setMember(m => setToggleItem(m, v))} />
+        </Row>
+        {leaf.group && <div className="prop-note">Die Spalte wiederholt sich je Wert der Spaltengruppe „{leaf.group.name}“.</div>}
+      </>}
     </>
   );
 }
