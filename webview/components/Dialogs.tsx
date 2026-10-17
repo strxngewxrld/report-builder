@@ -11,7 +11,7 @@ import { ExpressionInput } from './ExpressionInput';
 import { ChartDialog } from './ChartDialog';
 import { BreakLocation, RowMember, SortExpression, TableFilter, TableItem } from '../model';
 import { locate } from '../ops';
-import { addChildGroup, addParentGroup, createMatrix, findMember, uniqueGroupName, usedGroupNames } from '../tablix';
+import { addChildGroup, addColumnGroup, addParentGroup, createMatrix, findMember, uniqueGroupName, usedGroupNames } from '../tablix';
 import { sectionOf } from '../ops';
 import { hiddenOf, setHidden, setToggleItem, toggleItemOf } from '../layoutTools';
 
@@ -431,7 +431,9 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
       const t = locate(r, d.table)!.item as TableItem;
       if (d.create) {
         const opts = { name, expression: expressions[0]?.trim() ?? '', header, footer };
-        const m = d.create.mode === 'parent' ? addParentGroup(r, t, d.create.rowId, opts) : addChildGroup(r, t, d.create.rowId, opts);
+        const c = d.create;
+        const m = c.mode === 'column' ? addColumnGroup(r, t, c.column, opts)
+          : c.mode === 'parent' ? addParentGroup(r, t, c.rowId, opts) : addChildGroup(r, t, c.rowId, opts);
         if (!m) return false;
         apply(m);
       } else {
@@ -454,7 +456,7 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
   );
 
   return (
-    <Modal title={d.create ? (d.create.mode === 'parent' ? 'Übergeordnete Gruppe hinzufügen' : 'Untergeordnete Gruppe hinzufügen') : `Gruppeneigenschaften – ${existing?.group?.name}`}
+    <Modal title={d.create ? ({ parent: 'Übergeordnete Gruppe hinzufügen', child: 'Untergeordnete Gruppe hinzufügen', column: 'Spaltengruppe hinzufügen' })[d.create.mode] : `Gruppeneigenschaften – ${existing?.group?.name}`}
       onOk={ok} onCancel={close} error={error} wide okLabel={d.create ? 'Hinzufügen' : 'OK'}>
       <Field_ label="Name"><input autoFocus value={name} onChange={e => setName(e.target.value)} /></Field_>
       {details ? <div className="prop-note">Detailgruppe: eine Zeile je Datensatz – Sortierung, Filter und Sichtbarkeit gelten für die Details.</div> : (
@@ -470,7 +472,8 @@ function GroupDialog({ d, close }: { d: Extract<Dialog, { kind: 'group' }>; clos
           </div>
         </div>
       )}
-      {d.create && <>
+      {d.create?.mode === 'column' && <div className="prop-note">Die Spalte wiederholt sich je Gruppenwert; eine Kopfzeile über der Tabelle zeigt den Wert. Werte in der Spalte meist als Aggregat, z. B. =Sum(Fields!Betrag.Value).</div>}
+      {d.create && d.create.mode !== 'column' && <>
         <label className="check"><input type="checkbox" checked={header} onChange={e => setHeader(e.target.checked)} /> Gruppenkopf hinzufügen</label>
         <label className="check"><input type="checkbox" checked={footer} onChange={e => setFooter(e.target.checked)} /> Gruppenfuß hinzufügen (z. B. für Summen)</label>
       </>}

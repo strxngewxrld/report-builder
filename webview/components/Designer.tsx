@@ -13,9 +13,10 @@ import { styleToCss, textAlign, verticalAlign } from '../styleCss';
 import { PX_PER_IN } from '../units';
 import { Codicon } from './Icon';
 import {
-  addGroupRow, cellAt, cellLayout, deleteGroup, matrixLayout, deleteRow, groupList, groupOfRow, insertRow, isDetails, leafOfRow, mergeCells, rowsOfMember, splitCell,
+  addGroupRow, cellAt, cellLayout, columnGroupBlocker, columnGroupList, columnLeaf, deleteColumnGroup, deleteGroup, leavesOf, matrixLayout, deleteRow, groupList,
+  groupOfRow, insertRow, isDetails, leafOfRow, mergeCells, rowsOfMember, splitCell,
 } from '../tablix';
-import { vsContext } from '../vscode';
+import { post, vsContext } from '../vscode';
 import { browserDom, serializeRdl } from '../rdl';
 import { renderReport } from '../render/engine';
 import { NodeView, RenderOptionsProvider } from '../render/RenderView';
@@ -69,6 +70,12 @@ const literalText = (ed: { isBc: boolean }, tb: TextboxItem): Record<string, str
 const tableContext = (t: TableItem) => ({
   inTable: true, tableHasHeader: t.rows.some(r => r.kind === 'header'), tableHasFooter: t.rows.some(r => r.kind === 'footer'), tableColumns: t.columns.length,
 });
+
+/** Whether column `col` repeats in a column group (context key for "Delete column group"). */
+const columnGrouped = (t: TableItem, col: number) => {
+  const leaf = columnLeaf(t, col);
+  return !!leaf && columnGroupList(t).some(g => leavesOf([g.member]).includes(leaf));
+};
 
 const normalize = (x0: number, y0: number, x1: number, y1: number): Box =>
   ({ left: Math.min(x0, x1), top: Math.min(y0, y1), width: Math.abs(x1 - x0), height: Math.abs(y1 - y0) });
@@ -407,6 +414,30 @@ export function Designer() {
   useCommand('table.toggleHeaderRow', withTable((r, t) => toggleTableRow(r, t, 'header')));
   useCommand('table.toggleFooterRow', withTable((r, t) => toggleTableRow(r, t, 'footer')));
   useCommand('table.select', () => { const target = tableTarget(); if (target) ed.select([target.table.name]); });
+  useCommand('table.addColumnGroup', () => {
+    const target = tableTarget();
+    if (!target) return;
+    const blocker = columnGroupBlocker(target.table, target.col);
+    if (blocker) post({ type: 'info', message: blocker });
+    else ed.setDialog({ kind: 'group', table: target.table.name, create: { column: target.col, mode: 'column' } });
+  });
+  /** The column group a command applies to: given by id (grouping pane) or the innermost one around the column. */
+  const columnGroupTarget = (arg?: unknown) => {
+    const target = tableTarget();
+    if (!target) return null;
+    const id = (arg as { member?: string } | undefined)?.member;
+    const groups = columnGroupList(target.table).map(g => g.member);
+    const leaf = columnLeaf(target.table, target.col);
+    const around = groups.filter(g => leavesOf([g]).includes(leaf!)).pop();
+    const member = id ? groups.find(g => g.id === id) : around;
+    return member ? { table: target.table, member } : null;
+  };
+  const removeColumnGroup = (columns: boolean) => (arg?: unknown) => {
+    const x = columnGroupTarget(arg);
+    if (x) ed.commit(r => deleteColumnGroup(r, locate(r, x.table.name)!.item as TableItem, x.member.id, columns));
+  };
+  useCommand('table.deleteColumnGroup', removeColumnGroup(true));
+  useCommand('table.deleteColumnGroupOnly', removeColumnGroup(false));
 
   /** Table and row a row command applies to: the row of the context menu, of the selected cell or the selected row. */
   const rowTarget = (arg?: unknown) => {
@@ -758,7 +789,10 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
       {t.rows.map((row, ri) => cellLayout(row).map(({ cell, col: ci, span }) => {
         const sel = ed.selection.includes(cell.name)
           || (part?.kind === 'column' && part.index >= ci && part.index < ci + span) || (part?.kind === 'row' && part.index === ri);
-        const rowCtx = { rowId: row.id, inGroup: row.kind !== 'header' && row.kind !== 'footer', merged: span > 1, canMerge: mergeable && ed.selection.includes(cell.name) };
+        const rowCtx = {
+          rowId: row.id, inGroup: row.kind !== 'header' && row.kind !== 'footer', merged: span > 1, canMerge: mergeable && ed.selection.includes(cell.name),
+          inColumnGroup: columnGrouped(t, ci),
+        };
         const cellBox = { left: colX[ci] * S, top: rowY[ri] * S, width: (colX[ci + span] - colX[ci]) * S, height: heights[ri] * S };
         if (cell.type !== 'textbox') {
           // a list cell: rectangle with items (BC document header, nested lines table), image, nested table …
