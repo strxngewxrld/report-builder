@@ -6,6 +6,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState } from 're
 import type { CSSProperties, MouseEvent as RMouseEvent } from 'react';
 import { RAction, RNode, RTable } from './types';
 import { ChartView } from './ChartView';
+import { GaugeView } from './GaugeView';
 
 /** Pixels per inch and optional interaction (designer). */
 export interface ViewOptions {
@@ -184,6 +185,12 @@ export function NodeView({ node, shift = 0, inCell = false }: { node: RNode; shi
       return (
         <div {...common} data-leaf="" style={{ ...pos, height: node.height * S, ...hidden, ...selected }}>
           <ChartView chart={node} S={S} style={{ display: 'block' }} />
+        </div>
+      );
+    case 'gauge':
+      return (
+        <div {...common} data-leaf="" style={{ ...pos, height: node.height * S, ...hidden, ...selected }}>
+          <GaugeView gauge={node} S={S} style={{ display: 'block' }} />
         </div>
       );
     case 'placeholder':

@@ -39,6 +39,7 @@ export function exportBlocks(result: RenderResult): ExportBlock[] {
         if (text) out.push({ kind: 'text', text, bold: boldOf(n) || undefined, size: sizeOf(n), align: alignOf(n) });
       } else if (n.kind === 'box') visit(n.children ?? []);
       else if (n.kind === 'table') table(n);
+      else if (n.kind === 'gauge' && n.value !== null) out.push({ kind: 'text', text: `${n.name}: ${n.value}` });
       else if (n.kind === 'chart' && n.series.length) {
         // a chart's values as a table: categories × series
         out.push({ kind: 'table', columns: [1.5, ...n.series.map(() => 1)], rows: [

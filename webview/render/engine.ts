@@ -9,7 +9,7 @@ import { EvalContext, Row, compare, designLabel, evaluate, formatValue, isNothin
 import { XmlDom, child, elements, text } from '../rdl';
 import { parseSize } from '../units';
 import { CodeModule } from '../vb';
-import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
+import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RGauge, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
 import { axesOf, readAxis } from '../charts';
 
 export interface RenderOptions {
@@ -271,6 +271,7 @@ class Engine {
       case 'Image': return { ...base, kind: 'image', css: this.styleCss(child(el, 'Style'), ctx, name), src: this.imageSrc(el, ctx, name), sizing: text(el, 'Sizing') ?? 'AutoSize' };
       case 'Tablix': return this.tablix(el, ctx, base, cell !== null || ctx.regionRows !== undefined);
       case 'Chart': return this.chart(el, ctx, base);
+      case 'GaugePanel': return this.gauge(el, ctx, base) ?? { ...base, kind: 'placeholder', css: {}, label: `Messgerät „${name}“` };
       default: return { ...base, kind: 'placeholder', css: {}, label: `${PLACEHOLDER[el.localName] ?? el.localName} „${name}“` };
     }
   }
@@ -649,6 +650,43 @@ class Engine {
       out.series.push({ name: s.label || seriesEl.getAttribute('Name') || `Reihe ${i + 1}`, ...typeOf(seriesEl), values });
     });
     return out;
+  }
+
+  /**
+   * A gauge panel: the first radial or linear gauge, its first scale (minimum, maximum, ranges) and the first pointer's
+   * value, evaluated on the panel's dataset (or the enclosing scope). Null when there is no gauge in it.
+   */
+  private gauge(el: Element, ctx: EvalContext, base: Omit<RGauge, 'kind' | 'css' | 'shape' | 'value' | 'min' | 'max' | 'ranges' | 'sample'>): RGauge | null {
+    const name = base.name;
+    const radial = elements(child(el, 'RadialGauges'), 'RadialGauge')[0];
+    const linear = elements(child(el, 'LinearGauges'), 'LinearGauge')[0];
+    const gauge = radial ?? linear;
+    if (!gauge) return null;
+    const scale = elements(child(gauge, 'GaugeScales'))[0];
+    const pointer = elements(child(scale, 'GaugePointers'))[0];
+    const dsName = text(el, 'DataSetName') ?? '';
+    const rows = ctx.regionRows ? ctx.scopeRows : this.opts.data?.[dsName] ?? [];
+    const c: EvalContext = { ...ctx, scopeRows: rows, row: rows[0] ?? null };
+    const num = (v: string | undefined, fallback: number) => {
+      if (v === undefined || v === '') return fallback;
+      const n = Number(this.eval(v, c, `${name} (Messgerät)`));
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const min = num(text(scale, 'MinimumValue', 'Value'), 0);
+    const max = num(text(scale, 'MaximumValue', 'Value'), 100);
+    const valueExpr = text(pointer, 'GaugeInputValue', 'Value');
+    const value = this.design ? min + (max - min) * 0.6 : valueExpr === undefined ? null : num(valueExpr, NaN);
+    return {
+      ...base, kind: 'gauge', css: this.styleCss(child(el, 'Style'), ctx, name), shape: radial ? 'radial' : 'linear',
+      value: value === null || Number.isNaN(value) ? null : value, min, max: max > min ? max : min + 1, sample: this.design,
+      format: text(pointer, 'GaugeInputValue', 'Style', 'Format') ?? text(scale, 'Style', 'Format') ?? undefined,
+      ranges: elements(child(scale, 'ScaleRanges'), 'ScaleRange')
+        .filter(r => (text(r, 'Hidden') ?? '').toLowerCase() !== 'true')
+        .map(r => ({
+          start: num(text(r, 'StartValue', 'Value'), min), end: num(text(r, 'EndValue', 'Value'), max),
+          color: this.styleValue(text(r, 'Style', 'BackgroundColor'), c, name) ?? '#c0c0c0',
+        })),
+    };
   }
 
   /** Interactive sorts the user activated on textboxes of this data region (not of nested ones). */
