@@ -24,6 +24,7 @@ export type ToExtension =
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
   | { type: 'openLayout'; uri: string }
+  | { type: 'savePdf'; name: string; data: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }

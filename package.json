@@ -15,6 +15,7 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -520,6 +521,12 @@
         "category": "Business Central Report Builder"
       },
       {
+        "command": "bcReportBuilder.exportPdf",
+        "title": "Als PDF exportieren (.pdf)…",
+        "category": "Business Central Report Builder",
+        "icon": "$(file-pdf)"
+      },
+      {
         "command": "bcReportBuilder.exportExcel",
         "title": "Als Excel exportieren (.xlsx)…",
         "category": "Business Central Report Builder",
@@ -921,6 +928,10 @@
           "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview"
         },
         {
+          "command": "bcReportBuilder.exportPdf",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
+        },
+        {
           "command": "bcReportBuilder.exportExcel",
           "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview"
         },
@@ -1043,6 +1054,11 @@
           "submenu": "bcReportBuilder.layout",
           "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode != preview && bcReportBuilder.hasSelection",
           "group": "2_report@0"
+        },
+        {
+          "command": "bcReportBuilder.exportPdf",
+          "when": "activeCustomEditorId == bcReportBuilder.designer && bcReportBuilder.mode == preview",
+          "group": "3_data@1"
         },
         {
           "command": "bcReportBuilder.exportExcel",
