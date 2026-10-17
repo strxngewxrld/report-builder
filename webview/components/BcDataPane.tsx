@@ -42,7 +42,7 @@ export function BcDataPane() {
               <div key={c.name} className={`tree-leaf field ${c.inLayout ? '' : 'not-built'}`}
                 {...dragProps({ kind: 'field', dataSet: dataSet?.name ?? 'DataSet_Result', field: c.name, typeName: typeOf(c.name) })}
                 onDoubleClick={() => reveal(c.line, c.character)}
-                {...vsContext({ webviewSection: 'alSymbol', line: c.line, character: c.character, expression: `=Fields!${c.name}.Value` })}
+                {...vsContext({ webviewSection: 'alSymbol', line: c.line, character: c.character, expression: `=Fields!${c.name}.Value`, column: c.name })}
                 title={`${c.name} = ${c.source}${c.includeCaption ? ' (mit Beschriftung)' : ''}${c.inLayout ? '' : '\nNoch nicht im Layout-Dataset – Projekt erstellen'}\nDoppelklick öffnet die Definition`}>
                 <Codicon name="symbol-field" className="glyph" />{c.name}
                 {!c.inLayout && <span className="badge warn" title="Projekt erstellen, damit der Compiler das Layout-Dataset aktualisiert">Build</span>}

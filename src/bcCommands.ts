@@ -3,11 +3,13 @@
 // report in the web client, navigating from AL to the layout, and editing the layout's <Code> block in a VB editor.
 
 import * as vscode from 'vscode';
-import { LabelOptions, applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, TextInsert } from './al/edit';
-import { textboxValueEdit } from './layoutEdit';
+import {
+  LabelOptions, applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, offsetOf, renameIdentifierAt, TextInsert,
+} from './al/edit';
+import { renameColumnInLayout, textboxValueEdit } from './layoutEdit';
 import { alConfigurations, reportUrl } from './al/launch';
 import { mergedDataItems } from './al/context';
-import { AlDataItem, AlReport, allColumns, parseAl } from './al/parser';
+import { AlColumn, AlDataItem, AlReport, allColumns, declaredColumns, parseAl } from './al/parser';
 import { LayoutService } from './layoutService';
 import { DesignerSession, ReportEditorProvider } from './reportEditorProvider';
 import { readCodeBlock, writeCodeBlock } from './codeBlock';
@@ -27,6 +29,7 @@ export function registerBcCommands(context: vscode.ExtensionContext, service: La
 
     vscode.commands.registerCommand('bcReportBuilder.createLabel', (arg?: MenuArg) => createLabel(service, arg)),
     vscode.commands.registerCommand('bcReportBuilder.addColumns', (arg?: MenuArg) => addColumns(service, arg)),
+    vscode.commands.registerCommand('bcReportBuilder.renameColumn', (arg?: MenuArg) => renameColumn(service, arg)),
     vscode.commands.registerCommand('bcReportBuilder.buildAl', buildAl),
     vscode.commands.registerCommand('bcReportBuilder.runInBc', () => runInBc(service)),
     vscode.commands.registerCommand('bcReportBuilder.revealInLayout', revealInLayout),
@@ -191,6 +194,87 @@ async function addColumns(service: LayoutService, arg: MenuArg) {
   const insert = insertInto(src, report, dataItem.name, columns);
   if (!insert) { vscode.window.showErrorMessage(`„${dataItem.name}“ lässt sich in „${report.name}“ nicht erweitern.`); return; }
   await applyAndOffer(target.doc, insert, `${columns.length} Spalte(n) zu „${dataItem.name}“ hinzugefügt: ${columns.map(c => c.name).join(', ')}.`);
+}
+
+/** The column to rename: picked in the designer (Report data) or under the cursor in an AL editor. */
+async function columnToRename(service: LayoutService, wanted: string | undefined) {
+  type Hit = { doc: vscode.TextDocument; report: AlReport; column: AlColumn; start: number };
+  const find = (doc: vscode.TextDocument, test: (c: AlColumn, start: number) => boolean): Hit | undefined => {
+    const src = doc.getText();
+    for (const report of parseAl(src)) {
+      for (const column of declaredColumns(report)) {
+        const start = offsetOf(src, column.pos.line, column.pos.character);
+        if (test(column, start)) return { doc, report, column, start };
+      }
+    }
+    return undefined;
+  };
+  if (wanted) {
+    const session = ReportEditorProvider.active;
+    const owner = session && await service.al.ownerOf(session.uri);
+    if (!owner) return undefined;
+    const family = owner.report.kind === 'report' ? owner.report.name : owner.report.extends ?? owner.report.name;
+    for (const uri of await service.al.familyFiles(family)) {
+      const hit = find(await vscode.workspace.openTextDocument(uri), c => c.name.toLowerCase() === wanted.toLowerCase());
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || !/\.al$/i.test(editor.document.uri.path)) return undefined;
+  const at = editor.document.offsetAt(editor.selection.active);
+  return find(editor.document, (c, start) => {
+    const r = renameIdentifierAt(editor.document.getText(), start, c.name);
+    return !!r && at >= r.start && at <= r.end;
+  });
+}
+
+/**
+ * Renames a dataset column in AL and in every RDLC layout of the report and its extensions – field references,
+ * caption parameter, dataset declaration, textboxes named after it – in one edit, so one undo reverts everything.
+ */
+async function renameColumn(service: LayoutService, arg: MenuArg) {
+  const hit = await columnToRename(service, str(arg?.column));
+  if (!hit) {
+    vscode.window.showInformationMessage('Den Cursor auf den Namen einer Spalte setzen: column(Name; Quelle).');
+    return;
+  }
+  const { doc, report, column, start } = hit;
+  const family = report.kind === 'report' ? report.name : report.extends ?? report.name;
+  const taken = new Set<string>();
+  for (const uri of await service.al.familyFiles(family)) {
+    for (const r of parseAl((await vscode.workspace.openTextDocument(uri)).getText())) for (const c of declaredColumns(r)) taken.add(c.name.toLowerCase());
+  }
+  const to = await vscode.window.showInputBox({
+    title: 'Spalte umbenennen (AL und Layouts)', value: column.name, valueSelection: [0, column.name.length],
+    prompt: `Neuer Name für „${column.name}“ in „${report.name}“ – auch in allen RDLC-Layouts des Reports`,
+    validateInput: v => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(v) ? 'Nur Buchstaben, Ziffern und _ (beginnend mit einem Buchstaben)'
+      : v !== column.name && taken.has(v.toLowerCase()) ? `Eine Spalte „${v}“ gibt es bereits` : undefined,
+  });
+  if (!to || to === column.name) return;
+
+  const edit = new vscode.WorkspaceEdit();
+  const al = renameIdentifierAt(doc.getText(), start, to)!;
+  edit.replace(doc.uri, new vscode.Range(doc.positionAt(al.start), doc.positionAt(al.end)), al.text);
+  const layouts = await service.al.layoutsOf({ report });
+  let changedLayouts = 0, places = 0;
+  for (const l of layouts.filter(l => /^rdlc$/i.test(l.type))) {
+    const layoutDoc = await vscode.workspace.openTextDocument(l.uri).then(d => d, () => undefined);
+    if (!layoutDoc) continue;
+    const { text, count } = renameColumnInLayout(layoutDoc.getText(), column.name, to);
+    if (!count) continue;
+    edit.replace(l.uri, new vscode.Range(layoutDoc.positionAt(0), layoutDoc.positionAt(layoutDoc.getText().length)), text);
+    changedLayouts++;
+    places += count;
+  }
+  if (!await vscode.workspace.applyEdit(edit)) {
+    vscode.window.showErrorMessage('Die Umbenennung konnte nicht angewendet werden.');
+    return;
+  }
+  const others = layouts.filter(l => !/^rdlc$/i.test(l.type)).map(l => l.name);
+  vscode.window.showInformationMessage(
+    `„${column.name}“ heißt jetzt „${to}“: AL${changedLayouts ? ` und ${changedLayouts} Layout(s) mit ${places} Stelle(n)` : ''} – ein Rückgängig macht alles rückgängig.`
+    + (others.length ? ` Word-/Excel-Layouts (${others.join(', ')}) bitte selbst anpassen.` : ''));
 }
 
 /** Where new columns of a data item go: the data item itself, or in a report extension its add(...) block. */

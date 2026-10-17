@@ -100,3 +100,20 @@ export function findDataItem(items: AlDataItem[], name: string): AlDataItem | un
 }
 
 export const applyInsert = (src: string, e: TextInsert) => src.slice(0, e.offset) + e.text + src.slice(e.offset);
+
+/** Offset of a line/character position. */
+export function offsetOf(src: string, line: number, character: number): number {
+  let offset = 0;
+  for (let l = 0; l < line; l++) {
+    const nl = src.indexOf('\n', offset);
+    if (nl < 0) return src.length;
+    offset = nl + 1;
+  }
+  return offset + character;
+}
+
+/** Replacement of the identifier at an offset (a column name, quoted or not) by `name`; null if there is none. */
+export function renameIdentifierAt(src: string, offset: number, name: string): { start: number; end: number; text: string } | null {
+  const m = /^(?:"[^"\n]*"|[A-Za-z_][A-Za-z0-9_]*)/.exec(src.slice(offset));
+  return m ? { start: offset, end: offset + m[0].length, text: alIdentifier(name) } : null;
+}

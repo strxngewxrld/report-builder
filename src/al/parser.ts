@@ -329,6 +329,10 @@ export function allColumns(items: AlDataItem[]): AlColumn[] {
   return items.flatMap(d => [...d.columns, ...allColumns(d.children)]);
 }
 
+/** Columns a report or report extension declares itself (an extension: in its add(…) blocks and new data items). */
+export const declaredColumns = (r: AlReport): AlColumn[] =>
+  [...allColumns(r.dataItems), ...r.additions.flatMap(a => [...a.columns, ...allColumns(a.dataItems)])];
+
 /**
  * What the AL compiler generates into the RDLC: a field per column (decimal columns additionally get "<Name>Format",
  * which is accepted but not required since the column types are unknown here) and a parameter per label and per

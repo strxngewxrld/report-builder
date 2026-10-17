@@ -161,3 +161,23 @@ test('Layout-Textfeld im Host ändern (für ein gemeinsames Rückgängig mit AL)
   assert.equal(textboxValueEdit('<Textbox Name="A"><Paragraphs><Paragraph><TextRuns><TextRun><Value EvaluationMode="Constant">a &amp; b</Value></TextRun></TextRuns></Paragraph></Paragraphs></Textbox>', 'A', '=1 & 2')!.text,
     '<Value>=1 &amp; 2</Value>');
 });
+
+test('Spalte umbenennen: Layout-Verweise, Dataset, Beschriftung, gleichnamige Textfelder', async () => {
+  const { renameColumnInLayout } = await import('../src/layoutEdit');
+  const xml = readFileSync('samples/Verkaufsrechnung.rdlc', 'utf8');
+  assert.ok(xml.includes('Fields!Quantity_Line.Value'));
+  const { text, count } = renameColumnInLayout(xml, 'Quantity_Line', 'Qty_Line');
+  assert.ok(count > 0);
+  assert.ok(!/Quantity_Line\b/.test(text), 'kein Verweis auf den alten Namen');
+  assert.ok(text.includes('Fields!Qty_Line.Value'));
+  assert.ok(text.includes('<Field Name="Qty_Line">'));
+  assert.ok(text.includes('<DataField>Qty_Line</DataField>'));
+  assert.equal(text.split('\n').length, xml.split('\n').length);
+  // a prefix of another column is not touched
+  assert.equal(renameColumnInLayout('=Fields!No_.Value + Fields!No_Header.Value', 'No_', 'Nr').text, '=Fields!Nr.Value + Fields!No_Header.Value');
+  assert.equal(renameColumnInLayout('=Parameters!AmtCaption.Value & Fields!AmtFormat.Value', 'Amt', 'Amount').text, '=Parameters!AmountCaption.Value & Fields!AmountFormat.Value');
+  // the textbox keeps its name when the new one is taken
+  const both = '<Textbox Name="A"><Value>=Fields!A.Value</Value></Textbox><Textbox Name="B"><Value>=ReportItems!A.Value</Value></Textbox>';
+  assert.equal(renameColumnInLayout(both, 'A', 'B').text, '<Textbox Name="A"><Value>=Fields!B.Value</Value></Textbox><Textbox Name="B"><Value>=ReportItems!A.Value</Value></Textbox>');
+  assert.equal(renameColumnInLayout(both, 'A', 'C').text, '<Textbox Name="C"><Value>=Fields!C.Value</Value></Textbox><Textbox Name="B"><Value>=ReportItems!C.Value</Value></Textbox>');
+});

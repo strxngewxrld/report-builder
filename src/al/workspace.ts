@@ -101,13 +101,17 @@ export class AlWorkspace implements vscode.Disposable {
    * All layouts of the report a layout belongs to – of the report itself and of the report extensions extending it
    * (BC lets users choose among them), with the resolved file.
    */
-  async layoutsOf(owner: LayoutOwner): Promise<{ name: string; type: string; uri: vscode.Uri; owner: string }[]> {
+  async layoutsOf(owner: { report: AlReport; base?: AlReport }): Promise<{ name: string; type: string; uri: vscode.Uri; owner: string }[]> {
     await this.ready;
-    const target = owner.report.kind === 'report' ? owner.report : owner.base;
+    // by name: the reports may come from a fresh parse of an editor's text
+    const id = (r: AlReport) => `${r.kind}:${r.name.toLowerCase()}`;
+    const base = owner.report.kind === 'report' ? owner.report.name : owner.report.extends;
     const out: { name: string; type: string; uri: vscode.Uri; owner: string }[] = [];
     for (const file of this.files.values()) {
       for (const report of file.reports) {
-        const isOwn = target ? report === target || (report.kind === 'reportextension' && this.baseOf(report) === target) : report === owner.report;
+        const isOwn = id(report) === id(owner.report) || (!!base && (report.kind === 'report'
+          ? report.name.toLowerCase() === base.toLowerCase()
+          : report.extends?.toLowerCase() === base.toLowerCase()));
         if (!isOwn) continue;
         for (const l of report.layouts) {
           if (!l.file) continue;
@@ -118,6 +122,15 @@ export class AlWorkspace implements vscode.Disposable {
       }
     }
     return out;
+  }
+
+  /** AL files declaring the report family of `reportName` (the report and the extensions extending it). */
+  async familyFiles(reportName: string): Promise<vscode.Uri[]> {
+    await this.ready;
+    const n = reportName.toLowerCase();
+    return [...this.files.values()]
+      .filter(f => f.reports.some(r => (r.kind === 'report' ? r.name : r.extends ?? '').toLowerCase() === n))
+      .map(f => f.uri);
   }
 
   private baseOf(report: AlReport): AlReport | undefined {
