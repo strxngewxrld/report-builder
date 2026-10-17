@@ -10,7 +10,7 @@ import {
 } from '../ops';
 import { isNumericType } from '../sampleData';
 import { styleToCss, textAlign, verticalAlign } from '../styleCss';
-import { PX_PER_IN } from '../units';
+import { PX_PER_IN, toUnit } from '../units';
 import { Codicon } from './Icon';
 import {
   addGroupRow, cellAt, cellLayout, columnGroupBlocker, columnGroupList, columnLeaf, deleteColumnGroup, deleteGroup, leavesOf, matrixLayout, deleteRow, groupList,
@@ -70,6 +70,28 @@ const literalText = (ed: { isBc: boolean }, tb: TextboxItem): Record<string, str
 const tableContext = (t: TableItem) => ({
   inTable: true, tableHasHeader: t.rows.some(r => r.kind === 'header'), tableHasFooter: t.rows.some(r => r.kind === 'footer'), tableColumns: t.columns.length,
 });
+
+const ITEM_TYPE: Record<string, string> = {
+  textbox: 'Textfeld', rectangle: 'Rechteck', line: 'Linie', image: 'Bild', table: 'Tabelle', raw: 'Element',
+};
+/** What a screen reader says for an item: type, name and (textboxes) the text or expression. */
+function itemLabel(item: ReportItem): string {
+  const kind = item.type === 'raw' ? (item.kind === 'Chart' ? 'Diagramm' : item.kind === 'Textbox' ? 'Textfeld' : item.kind) : ITEM_TYPE[item.type];
+  const text = item.type === 'textbox' ? item.value : item.type === 'raw' ? item.preview ?? '' : item.type === 'image' ? item.value : '';
+  return `${kind} ${item.name}${text ? `: ${text}` : ''}`;
+}
+
+/** Announcement of the selection with position and size (polite live region). */
+function announce(r: Report, names: string[]): string {
+  if (!names.length) return '';
+  if (names.length > 1) return `${names.length} Elemente ausgewählt`;
+  const loc = locate(r, names[0]);
+  if (!loc) return '';
+  const n = (v: number) => toUnit(v, r.unit).toLocaleString('de-DE', { maximumFractionDigits: 2 });
+  const it = loc.item;
+  const where = loc.container ? `, links ${n(it.left)}, oben ${n(it.top)}, ${n(it.width)} × ${n(it.height)} ${r.unit}` : loc.cell ? `, Zeile ${loc.cell.row + 1}, Spalte ${loc.cell.col + 1}` : '';
+  return `${itemLabel(it)}${where}`;
+}
 
 /** Whether column `col` repeats in a column group (context key for "Delete column group"). */
 const columnGrouped = (t: TableItem, col: number) => {
@@ -507,7 +529,14 @@ export function Designer() {
   const render = { S, drag, editing, setEditing, onItemPointerDown, onHandlePointerDown, onColumnResize, onRowResize, onTableCornerDown, onCellDrop, allowDrop, onContext, rendered };
 
   return (
-    <div className={`designer ${ed.tool ? 'tool-active' : ''}`} {...vsContext({ preventDefaultContextMenuItems: true, selectionCount: ed.selection.length })}>
+    <div className={`designer ${ed.tool ? 'tool-active' : ''}`} {...vsContext({ preventDefaultContextMenuItems: true, selectionCount: ed.selection.length })}
+      tabIndex={0} role="application" aria-roledescription="Entwurfsfläche" aria-describedby="designer-help"
+      aria-label="Entwurfsfläche des Berichts">
+      <div id="designer-help" className="sr-only">
+        Tab und Umschalt+Tab wählen das nächste bzw. vorherige Element, Pfeiltasten verschieben, Alt+Pfeiltasten ändern die Größe,
+        Umschalt fein. Eingabe oder F2 bearbeitet den Text, Entf löscht, Escape hebt die Auswahl auf. Das Kontextmenü öffnet Umschalt+F10.
+      </div>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{announce(report, ed.selection)}</div>
       {view.ruler && <Ruler width={reportWidth} S={S} unit={report.unit} />}
       <div className="page" style={{ width: reportWidth * S }}>
         {sections(report).map(([kind, section]) => {
@@ -593,6 +622,7 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
 
   const common = {
     'data-name': item.name,
+    'aria-label': itemLabel(item),
     onPointerDown: (e: RPointerEvent) => r.onItemPointerDown(e, item),
     onContextMenu: (e: RMouseEvent) => r.onContext(e, item),
     ...vsContext({
