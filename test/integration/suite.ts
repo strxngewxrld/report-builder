@@ -424,6 +424,28 @@ test('PDF-Export: alle Seiten der Vorschau in Seitengröße des Berichts', async
   }
 });
 
+test('Tabellenbefehle aus VS Code wirken in der Webview: Spalte, Zeile, Gruppenfuß, Rückgängig', async api => {
+  const { uri, probe, doc } = await open(api, 'Verkaufsrechnung.rdlc');
+  const original = doc.getText();
+  const count = (re: RegExp) => ((vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString())?.getText() ?? '').match(re) ?? []).length;
+  const columns = () => count(/<TablixColumn>/g), rows = () => count(/<TablixRow>/g), groups = () => count(/<Group Name=/g);
+  const [c0, r0, g0] = [columns(), rows(), groups()];
+  // select the quantity cell of the line table (as a CodeLens click does)
+  await vscode.commands.executeCommand('bcReportBuilder.revealInLayout', uri, 'Quantity_Line');
+  await until('Zelle gewählt', () => [...probe.received].reverse().find(m => m.type === 'state' && /Tabellenzelle/.test((m.state as { status: string }).status)));
+  const run = async (cmd: string, check: () => boolean, what: string) => {
+    await vscode.commands.executeCommand(`bcReportBuilder.${cmd}`, uri);
+    await until(what, check);
+  };
+  await run('table.insertColumnRight', () => columns() === c0 + 1, 'Spalte eingefügt');
+  await run('table.insertRowBelow', () => rows() === r0 + 1, 'Zeile eingefügt');
+  await run('table.addGroupFooter', () => rows() === r0 + 2, 'Gruppenfuß');
+  assert.equal(groups(), g0, 'Detailgruppe: Fußzeile außerhalb, keine neue Gruppe');
+  for (let i = 0; i < 3; i++) await vscode.commands.executeCommand('undo');
+  await until('alles rückgängig', () => (vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString())?.getText() ?? '') === original);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;
