@@ -37,6 +37,21 @@ export interface BcContext {
   missingInLayout: string[];
   /** Fields/parameters in the layout dataset the AL report no longer defines. */
   removedInAl: string[];
+  /** All layouts of the report (and of report extensions extending it); the open one is `current`. */
+  layouts?: BcLayout[];
+}
+
+export interface BcLayout {
+  name: string;
+  /** RDLC, Word, Excel, Custom (rendering › Type) */
+  type: string;
+  uri: string;
+  /** Workspace-relative path, for display. */
+  path: string;
+  /** Report or report extension that declares it. */
+  owner: string;
+  current: boolean;
+  exists: boolean;
 }
 
 /** A Business Central layout: has the dataset the AL compiler generates, or is linked to an AL report. */

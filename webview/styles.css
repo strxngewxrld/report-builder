@@ -536,3 +536,6 @@ table.grid input, table.grid select { width: 100%; }
 .preview [data-action] { cursor: pointer; }
 .image-thumb { width: 16px; height: 16px; object-fit: contain; }
 .image-entry input { flex: 1; min-width: 0; }
+.layout-entry { cursor: pointer; }
+.layout-entry.current { font-weight: 600; cursor: default; }
+.layout-entry.missing { opacity: .55; text-decoration: line-through; cursor: default; }

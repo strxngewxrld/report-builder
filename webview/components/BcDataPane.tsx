@@ -81,6 +81,26 @@ export function BcDataPane() {
           <div className="prop-note">Kein AL-Report im Workspace verweist auf dieses Layout (rendering › LayoutFile bzw. RDLCLayout). Angezeigt wird das Layout-Dataset.</div>
         )}
 
+        {bc?.layouts && bc.layouts.length > 1 && (
+          <Group label="Layouts des Reports" open={isOpen('layouts')} onToggle={() => toggle('layouts')}>
+            {bc.layouts.map(l => {
+              const rdlc = /^rdlc$/i.test(l.type);
+              return (
+                <div key={l.uri} className={`tree-leaf layout-entry ${l.current ? 'current' : ''} ${l.exists ? '' : 'missing'}`}
+                  title={`${l.path}${l.owner !== bc.reportName ? ` (aus ${l.owner})` : ''}${l.exists ? '' : '\nDatei fehlt'}${rdlc ? '' : '\nWord- und Excel-Layouts bearbeitet der Designer nicht – öffnet in Word bzw. Excel'}`}
+                  onClick={() => !l.current && l.exists && post({ type: 'openLayout', uri: l.uri })}>
+                  <Codicon name={l.current ? 'check' : rdlc ? 'layout' : l.type.toLowerCase() === 'excel' ? 'table' : 'file-text'} className="glyph" />
+                  <span className="grow">{l.name}</span>
+                  <span className="tree-meta">{l.type}</span>
+                </div>
+              );
+            })}
+            {bc.layouts.some(l => !/^rdlc$/i.test(l.type)) && (
+              <div className="prop-note">Word- und Excel-Layouts nutzen dasselbe Dataset, werden hier aber nicht bearbeitet; ein Klick öffnet sie in Word bzw. Excel.</div>
+            )}
+          </Group>
+        )}
+
         {bc ? (
           <Group label="Datenelemente" open={isOpen('items')} onToggle={() => toggle('items')}>
             {bc.dataItems.map(d => item(d, 0))}

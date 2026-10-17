@@ -58,7 +58,14 @@ export class LayoutService implements vscode.Disposable {
     const owner = await this.al.ownerOf(uri);
     if (!owner) return null;
     const decl = layoutDeclarations(text ?? await this.text(uri));
-    return buildBcContext(owner.report, owner.base, decl, owner.file.uri.toString(), vscode.workspace.asRelativePath(owner.file.uri));
+    const context = buildBcContext(owner.report, owner.base, decl, owner.file.uri.toString(), vscode.workspace.asRelativePath(owner.file.uri));
+    const same = (a: vscode.Uri, b: vscode.Uri) => (process.platform === 'linux' ? a.fsPath === b.fsPath : a.fsPath.toLowerCase() === b.fsPath.toLowerCase());
+    context.layouts = await Promise.all((await this.al.layoutsOf(owner)).map(async l => ({
+      name: l.name, type: l.type, uri: l.uri.toString(), path: vscode.workspace.asRelativePath(l.uri), owner: l.owner,
+      current: same(l.uri, uri),
+      exists: await vscode.workspace.fs.stat(l.uri).then(() => true, () => false),
+    })));
+    return context;
   }
 
   issuesFor(uri: vscode.Uri): LintIssue[] { return this.issues.get(uri.toString()) ?? []; }

@@ -220,6 +220,41 @@ test('<Code>-Block als VB-Dokument: lesen und zurückschreiben ins Layout', asyn
   await until('zurückgesetzt', () => doc.getText() === original);
 });
 
+test('Layouts des Reports: auch aus Report-Extensions, RDLC wechseln im Designer', async api => {
+  const ext = file('src/VerkaufsrechnungExt.ReportExt.al');
+  const second = file('VerkaufsrechnungKurz.rdlc');
+  await vscode.workspace.fs.copy(file('Verkaufsrechnung.rdlc'), second, { overwrite: true });
+  await vscode.workspace.fs.writeFile(ext, new TextEncoder().encode(`reportextension 50100 "Verkaufsrechnung Ext" extends "Contoso Verkaufsrechnung"
+{
+    rendering
+    {
+        layout(Kurz) { Type = RDLC; LayoutFile = './VerkaufsrechnungKurz.rdlc'; }
+        layout(WordLayout) { Type = Word; LayoutFile = './Verkaufsrechnung.docx'; }
+    }
+}
+`));
+  try {
+    const { probe } = await open(api, 'Verkaufsrechnung.rdlc');
+    type Layout = { name: string; type: string; uri: string; current: boolean; exists: boolean; owner: string };
+    const layouts = await until('Layouts im bcContext', () => {
+      const ctx = [...probe.posted].reverse().find(m => m.type === 'bcContext' && m.context)?.context as { layouts?: Layout[] } | undefined;
+      return ctx?.layouts && ctx.layouts.length === 3 ? ctx.layouts : undefined;
+    }, 30000);
+    const byName = (a: unknown[], b: unknown[]) => String(a[0]).localeCompare(String(b[0]));
+    assert.deepEqual(layouts.map(l => [l.name, l.type, l.current, l.exists]).sort(byName), [
+      ['Kurz', 'RDLC', false, true], ['RDLCLayout', 'RDLC', true, true], ['WordLayout', 'Word', false, false],
+    ]);
+    assert.equal(layouts.find(l => l.name === 'Kurz')!.owner, 'Verkaufsrechnung Ext');
+
+    await probe.deliver({ type: 'openLayout', uri: layouts.find(l => l.name === 'Kurz')!.uri });
+    await until('Designer für das zweite Layout', () => api.probes.get(second.toString()));
+  } finally {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    await vscode.workspace.fs.delete(ext);
+    await vscode.workspace.fs.delete(second);
+  }
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;
