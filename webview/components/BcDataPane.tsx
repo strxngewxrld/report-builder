@@ -121,7 +121,7 @@ export function BcDataPane() {
           {bc ? <>
             {bc.labels.map(l => (
               <div key={l.name} className={`tree-leaf ${l.inLayout ? '' : 'not-built'}`} {...dragProps({ kind: 'parameter', name: l.name })}
-                onDoubleClick={() => reveal(l.line, l.character)} title={`Label: „${l.text}“`}
+                onDoubleClick={() => reveal(l.line, l.character)} title={[`Label: „${l.text}“`, l.comment && `Hinweis: ${l.comment}`, l.maxLength && `Höchstlänge: ${l.maxLength}`, l.locked && 'Nicht übersetzt (Locked)'].filter(Boolean).join('\n')}
                 {...vsContext({ webviewSection: 'alSymbol', line: l.line, character: l.character, expression: `=Parameters!${l.name}.Value` })}>
                 <Codicon name="symbol-key" className="glyph" />{l.name}<span className="tree-meta">{l.text}</span>
                 {!l.inLayout && <span className="badge warn" title="Projekt erstellen, damit der Compiler das Layout-Dataset aktualisiert">Build</span>}

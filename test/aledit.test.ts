@@ -137,3 +137,27 @@ test('Report im Web-Client: URL aus launch.json (Cloud und Docker/On-Prem)', asy
   assert.equal(reportUrl(configs[1], 50100), 'http://bcserver/BC/?report=50100');
   assert.equal(reportUrl({ server: 'https://bc.contoso.local', serverInstance: 'BC240', tenant: 'firma' }, 1306), 'https://bc.contoso.local/BC240/?report=1306&tenant=firma');
 });
+
+test('Label mit Optionen für Übersetzer; Parser liest sie wieder', () => {
+  const [rep] = parseAl(sample);
+  const out = applyInsert(sample, insertLabel(sample, rep, 'QtyLbl', 'Menge', { comment: "Spalte 'Menge'", maxLength: 12, locked: false }));
+  assert.match(out, /QtyLbl = 'Menge', Comment = 'Spalte ''Menge''', MaxLength = 12;/);
+  const [again] = parseAl(out);
+  assert.deepEqual(again.labels.map(l => [l.name, l.text, l.comment, l.maxLength, l.locked]), [['QtyLbl', 'Menge', "Spalte 'Menge'", 12, undefined]]);
+  const locked = applyInsert(out, insertLabel(out, again, 'CodeLbl', 'EUR', { locked: true }));
+  assert.equal(parseAl(locked)[0].labels[1].locked, true);
+});
+
+test('Layout-Textfeld im Host ändern (für ein gemeinsames Rückgängig mit AL)', async () => {
+  const { textboxValueEdit } = await import('../src/layoutEdit');
+  const xml = readFileSync('samples/Verkaufsrechnung.rdlc', 'utf8');
+  const name = /<Textbox Name="([^"]+)">(?:(?!<\/Textbox>)[\s\S])*?<Value>Menge<\/Value>/.exec(xml)?.[1];
+  const edit = name ? textboxValueEdit(xml, name, '=Parameters!InvoiceLbl.Value') : null;
+  assert.ok(edit, 'Textfeld mit festem Text im Beispiel');
+  const out = xml.slice(0, edit!.start) + edit!.text + xml.slice(edit!.end);
+  assert.equal(out.split('\n').length, xml.split('\n').length);
+  assert.ok(out.includes('<Value>=Parameters!InvoiceLbl.Value</Value>'));
+  assert.equal(textboxValueEdit(xml, 'GibtEsNicht', 'x'), null);
+  assert.equal(textboxValueEdit('<Textbox Name="A"><Paragraphs><Paragraph><TextRuns><TextRun><Value EvaluationMode="Constant">a &amp; b</Value></TextRun></TextRuns></Paragraph></Paragraphs></Textbox>', 'A', '=1 & 2')!.text,
+    '<Value>=1 &amp; 2</Value>');
+});

@@ -44,9 +44,21 @@ function beforeClose(src: string, span: AlSpan, line: string): TextInsert {
   return { offset: at, text: `${closeIndent}${unit(src)}${line}\n` };
 }
 
+export interface LabelOptions { comment?: string; maxLength?: number; locked?: boolean }
+
+/** The label declaration: `Name = 'Text', Comment = '…', MaxLength = 30, Locked = true;` */
+export function labelEntry(name: string, text: string, o: LabelOptions = {}): string {
+  return [
+    `${alIdentifier(name)} = ${alString(text)}`,
+    o.comment ? `Comment = ${alString(o.comment)}` : '',
+    o.maxLength ? `MaxLength = ${Math.floor(o.maxLength)}` : '',
+    o.locked ? 'Locked = true' : '',
+  ].filter(Boolean).join(', ') + ';';
+}
+
 /** Adds a label to the report's labels block, creating the block after the dataset when there is none. */
-export function insertLabel(src: string, report: AlReport, name: string, text: string): TextInsert {
-  const entry = `${alIdentifier(name)} = ${alString(text)};`;
+export function insertLabel(src: string, report: AlReport, name: string, text: string, options: LabelOptions = {}): TextInsert {
+  const entry = labelEntry(name, text, options);
   if (report.labelsSpan) return beforeClose(src, report.labelsSpan, entry);
   const span = report.span!;
   const inner = indentOf(src, span.close) + unit(src);

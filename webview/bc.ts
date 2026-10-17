@@ -14,7 +14,10 @@ export interface BcColumn {
   character: number;
 }
 export interface BcDataItem { name: string; table: string; columns: BcColumn[]; children: BcDataItem[]; line: number; character: number }
-export interface BcLabel { name: string; text: string; inLayout: boolean; line: number; character: number }
+export interface BcLabel {
+  name: string; text: string; inLayout: boolean; line: number; character: number;
+  comment?: string; maxLength?: number; locked?: boolean;
+}
 
 /** The AL report a layout belongs to, as sent to the webview. */
 export interface BcContext {

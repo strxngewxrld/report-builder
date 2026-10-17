@@ -49,7 +49,10 @@ export function buildBcContext(
     line: rep.pos.line,
     character: rep.pos.character,
     dataItems: mergedDataItems(rep, base).map(toBc),
-    labels: expected.labels.map(l => ({ name: l.name, text: l.text, inLayout: params.has(l.name), line: l.pos.line, character: l.pos.character })),
+    labels: expected.labels.map(l => ({
+      name: l.name, text: l.text, inLayout: params.has(l.name), line: l.pos.line, character: l.pos.character,
+      comment: l.comment, maxLength: l.maxLength, locked: l.locked,
+    })),
     captions: expected.columns.filter(c => c.includeCaption).map(c => ({
       name: `${c.name}Caption`, column: c.name, text: captionFromSource(c.source), inLayout: params.has(`${c.name}Caption`),
     })),
