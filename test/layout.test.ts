@@ -176,3 +176,20 @@ test('Aktionen: Hyperlink, Lesezeichen, Drillthrough – schreiben, lesen, in de
   setAction(tb2, { kind: 'hyperlink', value: 'c' });
   assert.deepEqual(tb2.extra, ['<ActionInfo><Actions><Action><Hyperlink>c</Hyperlink></Action><Action><Hyperlink>b</Hyperlink></Action></Actions></ActionInfo>']);
 });
+
+test('Tastaturreihenfolge: Seitenkopf, Text, Seitenfuß; oben nach unten, links nach rechts; Rechteckinhalt danach', async () => {
+  const { focusOrder } = await import('../webview/layoutTools');
+  const r = emptyReport();
+  const add = (list: typeof r.body.items, type: 'textbox' | 'rectangle', left: number, top: number) => {
+    const it = createItem(r, type, { left, top, width: 1, height: 0.5 });
+    list.push(it);
+    return it;
+  };
+  r.header = { height: 1, items: [], style: {} };
+  const b = add(r.body.items, 'textbox', 3, 1);
+  const a = add(r.body.items, 'textbox', 1, 1);
+  const rect = add(r.body.items, 'rectangle', 0, 0);
+  const inner = add((rect as unknown as { items: typeof r.body.items }).items, 'textbox', 0, 0);
+  const h = add(r.header.items, 'textbox', 5, 0);
+  assert.deepEqual(focusOrder(r), [h.name, rect.name, inner.name, a.name, b.name]);
+});

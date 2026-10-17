@@ -9,6 +9,17 @@ export type AlignOp = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export type SizeOp = 'width' | 'height' | 'both';
 export type SpacingOp = 'horizontal' | 'vertical';
 
+/** Items in keyboard order: page header, body, footer; within each top to bottom, left to right (rectangles' items after them). */
+export function focusOrder(r: Report): string[] {
+  const out: string[] = [];
+  const visit = (items: ReportItem[]) => [...items].sort((a, b) => a.top - b.top || a.left - b.left).forEach(it => {
+    out.push(it.name);
+    if (it.type === 'rectangle') visit(it.items);
+  });
+  for (const s of [r.header, r.body, r.footer]) if (s) visit(s.items);
+  return out;
+}
+
 /** Items that can be positioned (not table cells), in the same container as the first one. */
 function positioned(r: Report, names: string[]) {
   const locs = names.map(n => locate(r, n)).filter(l => l?.container);

@@ -3,7 +3,7 @@ import { Diagnostic, Dialog, Editor, EditorContext, InsertTool, TablePart, useCo
 import { addEmbeddedImage } from './images';
 import { BcContext, isBcLayout } from './bc';
 import { Report, ReportItem, TextboxItem, allReportItems } from './model';
-import { alignItems, centerInContainer, distribute, makeSameSize } from './layoutTools';
+import { alignItems, centerInContainer, distribute, focusOrder, makeSameSize } from './layoutTools';
 import { cloneItems, deleteItems, fitSections, locate, reorder, sectionOf } from './ops';
 import { parseRdl, serializeRdl } from './rdl';
 import { newReportTemplate } from './templates';
@@ -189,19 +189,44 @@ export function App() {
         if (reportRef.current) select(reportRef.current.body.items.map(i => i.name));
         return;
       }
+      // keyboard on the design surface: Tab/Shift+Tab go through the items, Enter/F2 edits a textbox's text
+      const onSurface = !!(document.activeElement as HTMLElement | null)?.closest?.('.designer');
+      if (e.key === 'Tab' && onSurface && reportRef.current) {
+        const order = focusOrder(reportRef.current);
+        if (!order.length) return;
+        e.preventDefault();
+        const at = sel.length ? order.indexOf(sel[sel.length - 1]) : -1;
+        const next = order[(at + (e.shiftKey ? -1 : 1) + order.length) % order.length] ?? order[0];
+        select([next]);
+        requestAnimationFrame(() => document.querySelector(`.designer [data-name="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+        return;
+      }
+      if ((e.key === 'Enter' || e.key === 'F2') && onSurface && sel.length === 1) {
+        e.preventDefault();
+        commands.get('editText')?.();
+        return;
+      }
       const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (arrows[e.key] && sel.length) {
         e.preventDefault();
         const r = reportRef.current!;
         const step = e.shiftKey ? 1 / 96 : r.unit === 'in' ? 0.125 : 0.25 / 2.54;
         const [dx, dy] = arrows[e.key];
+        // Alt+arrow: size (right/down grows), otherwise position
+        const resize = e.altKey;
         commit(d => {
           let moved = false;
           for (const n of sel) {
             const loc = locate(d, n);
             if (!loc?.container) continue;
-            loc.item.left = Math.max(0, loc.item.left + dx * step);
-            loc.item.top = Math.max(0, loc.item.top + dy * step);
+            if (resize) {
+              if (loc.item.type === 'table') continue; // a table's size comes from its columns and rows
+              loc.item.width = Math.max(step, loc.item.width + dx * step);
+              loc.item.height = Math.max(loc.item.type === 'line' ? 0 : step, loc.item.height + dy * step);
+            } else {
+              loc.item.left = Math.max(0, loc.item.left + dx * step);
+              loc.item.top = Math.max(0, loc.item.top + dy * step);
+            }
             moved = true;
           }
           return moved;
