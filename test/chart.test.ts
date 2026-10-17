@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { ChartSpec, chartXml, patchChart, readChart } from '../webview/charts';
+import { ChartSpec, chartXml, emptyAxis, patchChart, readChart } from '../webview/charts';
 import { RawItem, emptyReport } from '../webview/model';
 import { XmlDom, parseRdl, serializeRdl } from '../webview/rdl';
 import { renderReport } from '../webview/render/engine';
@@ -16,6 +16,7 @@ const spec: ChartSpec = {
   name: 'Umsatzdiagramm', dataSetName: 'Sales', kind: 'Column', category: '=Fields!Region.Value',
   series: [{ name: 'Umsatz', value: '=Sum(Fields!Amount.Value)' }, { name: 'Menge', value: '=Sum(Fields!Qty.Value)' }],
   title: 'Umsatz je Region', legend: true, palette: 'BrightPastel',
+  dataLabels: false, categoryAxis: emptyAxis(), valueAxis: emptyAxis(), secondaryAxis: emptyAxis(),
 };
 const data = { Sales: [
   { Region: 'Nord', Amount: 100, Qty: 1 }, { Region: 'Süd', Amount: 50, Qty: 2 }, { Region: 'Nord', Amount: 25, Qty: 3 },
@@ -70,4 +71,67 @@ test('Diagramm bearbeiten: Typ, Reihen, Kategorie, Titel – der Rest bleibt', (
   const chart = renderReport(serializeRdl(withChart(more), dom), { dom, mode: 'preview', data }).body.nodes[0] as RChart;
   assert.deepEqual(chart.series.map(s => [s.type, s.stacked]), [['Column', true], ['Column', true]]);
   assert.equal(chart.legend, false);
+});
+
+test('Diagramm: Achsen, Datenbeschriftungen, zweite Werteachse, Kombidiagramm', () => {
+  const combo: ChartSpec = {
+    ...spec, kind: 'Column', dataLabels: true,
+    series: [spec.series[0], { ...spec.series[1], kind: 'SmoothLine', secondary: true }],
+    categoryAxis: { ...emptyAxis(), title: 'Region' },
+    valueAxis: { title: 'Umsatz', format: 'N0', min: '0', max: '200' },
+    secondaryAxis: { ...emptyAxis(), title: 'Menge' },
+  };
+  const xml = chartXml(combo, { top: 0, left: 0, width: 4, height: 2.5 });
+  assert.deepEqual(readChart(xml, dom), combo);
+  const r = withChart(xml);
+  const out = renderReport(serializeRdl(r, dom), { dom, mode: 'preview', data });
+  const chart = out.body.nodes[0] as RChart;
+  assert.deepEqual(chart.valueAxis, { title: 'Umsatz', format: 'N0', min: 0, max: 200 });
+  assert.equal(chart.secondaryAxis?.title, 'Menge');
+  assert.equal(chart.categoryAxis?.title, 'Region');
+  assert.equal(chart.dataLabels, true);
+  assert.deepEqual(chart.series.map(s => [s.type, !!s.smooth, !!s.secondary]), [['Column', false, false], ['Line', true, true]]);
+
+  // patching a plain chart: only what changed; the secondary axis is added as a copy of the primary one
+  const plain = chartXml(spec, { top: 0, left: 0, width: 4, height: 2.5 });
+  const patched = patchChart(plain, combo, dom);
+  assert.deepEqual(readChart(patched, dom), combo);
+  assert.match(patched, /<ChartAxis Name="Secondary">[\s\S]*?<Location>Opposite<\/Location>/);
+  // and back: labels off, axis bounds automatic again
+  const back = patchChart(patched, { ...combo, dataLabels: false, valueAxis: { ...combo.valueAxis, min: '', max: '' } }, dom);
+  const read = readChart(back, dom)!;
+  assert.equal(read.dataLabels, false);
+  assert.deepEqual([read.valueAxis.min, read.valueAxis.max], ['', '']);
+  assert.match(back, /<Minimum>NaN<\/Minimum>/);
+});
+
+test('Weitere Diagrammtypen: 100 %-Säulen, gestapelte Fläche, Punkte', () => {
+  for (const kind of ['PercentColumn', 'StackedArea', 'Scatter'] as const) {
+    const xml = chartXml({ ...spec, kind }, { top: 0, left: 0, width: 4, height: 2.5 });
+    assert.equal(readChart(xml, dom)!.kind, kind);
+    const chart = renderReport(serializeRdl(withChart(xml), dom), { dom, mode: 'preview', data }).body.nodes[0] as RChart;
+    assert.equal(chart.series.length, 2);
+    if (kind === 'PercentColumn') assert.ok(chart.series.every(s => s.percent && s.stacked));
+    if (kind === 'StackedArea') assert.ok(chart.series.every(s => s.type === 'Area' && s.stacked));
+    if (kind === 'Scatter') assert.ok(chart.series.every(s => s.type === 'Scatter'));
+  }
+});
+
+test('SVG-Darstellung: alle Typen, Achsentitel, zweite Achse, Beschriftungen', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { ChartView } = await import('../webview/render/ChartView');
+  const kinds = ['Column', 'StackedColumn', 'PercentColumn', 'Bar', 'StackedBar', 'Line', 'SmoothLine', 'Area', 'StackedArea', 'Scatter', 'Pie', 'Doughnut'] as const;
+  for (const kind of kinds) {
+    const combo: ChartSpec = {
+      ...spec, kind, dataLabels: true, series: [spec.series[0], { ...spec.series[1], secondary: kind === 'Column' }],
+      valueAxis: { title: 'Umsatz', format: 'N0', min: '', max: '' }, secondaryAxis: { ...emptyAxis(), title: 'Menge' },
+    };
+    const chart = renderReport(serializeRdl(withChart(chartXml(combo, { top: 0, left: 0, width: 4, height: 2.5 })), dom), { dom, mode: 'preview', data }).body.nodes[0] as RChart;
+    const svg = renderToStaticMarkup(createElement(ChartView, { chart, S: 96, style: {} }));
+    assert.ok(!svg.includes('NaN'), `${kind}: keine NaN-Koordinaten`);
+    if (kind !== 'Pie' && kind !== 'Doughnut') assert.ok(svg.includes('>Umsatz<'), `${kind}: Achsentitel`);
+    if (kind === 'Column') assert.ok(svg.includes('>Menge<'), 'Titel der zweiten Achse');
+    if (kind === 'PercentColumn') assert.ok(svg.includes('100 %') || svg.includes('100,00 %') || svg.includes('100'), '100 %');
+  }
 });

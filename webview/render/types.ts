@@ -68,7 +68,13 @@ export interface RImage extends RBase { kind: 'image'; src: string; sizing: stri
 export interface RPlaceholder extends RBase { kind: 'placeholder'; label: string }
 
 export type ChartType = 'Column' | 'Bar' | 'Line' | 'Area' | 'Pie' | 'Doughnut' | 'Scatter';
-export interface RChartSeries { name: string; type: ChartType; stacked: boolean; values: (number | null)[] }
+export interface RChartSeries {
+  name: string; type: ChartType; stacked: boolean; values: (number | null)[];
+  /** 100 % stacked, smoothed line, plotted on the secondary value axis. */
+  percent?: boolean; smooth?: boolean; secondary?: boolean;
+}
+/** An axis as evaluated: title, label format, fixed bounds. */
+export interface RChartAxis { title?: string; format?: string; min?: number; max?: number }
 export interface RChart extends RBase {
   kind: 'chart';
   categories: string[];
@@ -76,6 +82,11 @@ export interface RChart extends RBase {
   title?: string;
   legend: boolean;
   palette: string;
+  /** Values shown at the data points. */
+  dataLabels?: boolean;
+  categoryAxis?: RChartAxis;
+  valueAxis?: RChartAxis;
+  secondaryAxis?: RChartAxis;
   /** Design mode: shape only (sample values). */
   sample: boolean;
 }

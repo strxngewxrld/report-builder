@@ -9,7 +9,8 @@ import { EvalContext, Row, compare, designLabel, evaluate, formatValue, isNothin
 import { XmlDom, child, elements, text } from '../rdl';
 import { parseSize } from '../units';
 import { CodeModule } from '../vb';
-import { ChartType, Css, PageInfo, RBox, RCell, RChart, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
+import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
+import { axesOf, readAxis } from '../charts';
 
 export interface RenderOptions {
   dom: XmlDom;
@@ -571,11 +572,34 @@ class Engine {
       legend: !!legendEl && (text(legendEl, 'Hidden') ?? '').toLowerCase() !== 'true',
       palette: text(el, 'Palette') ?? 'Default', sample: this.design,
     };
-    const typeOf = (s: Element): { type: ChartType; stacked: boolean } => {
+    const axes = axesOf(el);
+    const secondaryName = axes.secondary?.getAttribute('Name');
+    const evalAxis = (a: Element | undefined): RChartAxis | undefined => {
+      if (!a) return undefined;
+      const spec = readAxis(a);
+      const num = (v: string) => {
+        if (v === '') return undefined;
+        const n = Number(this.eval(v, ctx, `${name} (Achse)`));
+        return Number.isFinite(n) ? n : undefined;
+      };
+      return {
+        title: spec.title ? toStr(this.eval(spec.title, ctx, `${name} (Achsentitel)`)) || undefined : undefined,
+        format: spec.format || undefined, min: num(spec.min), max: num(spec.max),
+      };
+    };
+    out.categoryAxis = evalAxis(axes.category);
+    out.valueAxis = evalAxis(axes.primary);
+    if (secondaryName && seriesEls.some(x => text(x, 'ValueAxisName') === secondaryName)) out.secondaryAxis = evalAxis(axes.secondary);
+    out.dataLabels = seriesEls.some(x => (text(x, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataLabel', 'Visible') ?? '').toLowerCase() === 'true');
+    const typeOf = (s: Element): Omit<RChartSeries, 'name' | 'values'> => {
       const t = (text(s, 'Type') ?? 'Column') as string;
       const sub = (text(s, 'Subtype') ?? '').toLowerCase();
       const type: ChartType = t === 'Shape' ? (sub === 'doughnut' ? 'Doughnut' : 'Pie') : (['Column', 'Bar', 'Line', 'Area', 'Scatter'].includes(t) ? t as ChartType : 'Column');
-      return { type, stacked: sub.includes('stacked') };
+      return {
+        type, stacked: sub.includes('stacked'),
+        ...(sub === 'percentstacked' ? { percent: true } : {}), ...(sub === 'smooth' ? { smooth: true } : {}),
+        ...(secondaryName && text(s, 'ValueAxisName') === secondaryName ? { secondary: true } : {}),
+      };
     };
     if (this.design) {
       out.categories = ['A', 'B', 'C', 'D'];

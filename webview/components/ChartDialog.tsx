@@ -3,7 +3,7 @@ import { Dialog, useEditor } from '../editor';
 import { validateExpression } from '../expr';
 import { RawItem, uniqueName } from '../model';
 import { locate, rawItem, sectionOf } from '../ops';
-import { CHART_KINDS, ChartKind, ChartSpec, PALETTES, chartXml, patchChart, readChart } from '../charts';
+import { CHART_KINDS, ChartAxisSpec, ChartKind, ChartSpec, PALETTES, SERIES_KINDS, chartXml, emptyAxis, isPie, patchChart, readChart } from '../charts';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
 
@@ -20,15 +20,37 @@ export function ChartDialog({ d, close, Modal, Field }: {
   const [spec, setSpec] = useState<ChartSpec>(initial ?? {
     name: uniqueName(ed.report, 'Chart'), dataSetName: ds0?.name ?? '', kind: 'Column', category: '',
     series: [{ name: 'Wert', value: '' }], title: '', legend: true, palette: 'BrightPastel',
+    dataLabels: false, categoryAxis: emptyAxis(), valueAxis: emptyAxis(), secondaryAxis: emptyAxis(),
   });
   const set = (p: Partial<ChartSpec>) => setSpec({ ...spec, ...p });
   const fields = ed.report.dataSets.find(x => x.name === spec.dataSetName)?.fields ?? [];
-  const pie = spec.kind === 'Pie' || spec.kind === 'Doughnut';
+  const pie = isPie(spec.kind);
+  const horizontal = spec.kind === 'Bar' || spec.kind === 'StackedBar';
+  const bound = (v: string) => v === '' || v.startsWith('=') || Number.isFinite(Number(v.replace(',', '.')));
+  const axes = [spec.valueAxis, spec.secondaryAxis];
   const error = !/^[A-Za-z_]\w*$/.test(spec.name) ? 'Ungültiger Name'
     : !existing && locate(ed.report, spec.name) ? `„${spec.name}“ ist schon vergeben`
     : !spec.dataSetName ? 'Dataset wählen'
     : !spec.series.length || spec.series.some(s => !s.value.trim()) ? 'Jede Reihe braucht einen Wert (z. B. =Sum(Fields!Betrag.Value))'
+    : axes.some(a => !bound(a.min) || !bound(a.max)) ? 'Minimum/Maximum: Zahl, =Ausdruck oder leer (automatisch)'
     : [spec.category, ...spec.series.map(s => s.value)].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
+  const setSeries = (i: number, p: Partial<ChartSpec['series'][number]>) => set({ series: spec.series.map((x, j) => (j === i ? { ...x, ...p } : x)) });
+  const axisFields = (label: string, a: ChartAxisSpec, key: 'categoryAxis' | 'valueAxis' | 'secondaryAxis', values: boolean) => (
+    <div className="form-row"><span>{label}</span>
+      <div className="list-editor">
+        <div className="list-row">
+          <input value={a.title} placeholder="Titel (optional)" onChange={e => set({ [key]: { ...a, title: e.target.value } })} />
+          {values && <input className="axis-format" value={a.format} placeholder="Format (N0, P0 …)" title="Zahlenformat der Achsenbeschriftung" onChange={e => set({ [key]: { ...a, format: e.target.value } })} />}
+        </div>
+        {values && (
+          <div className="list-row">
+            <input value={a.min} placeholder="Minimum (automatisch)" onChange={e => set({ [key]: { ...a, min: e.target.value.replace(',', '.') } })} />
+            <input value={a.max} placeholder="Maximum (automatisch)" onChange={e => set({ [key]: { ...a, max: e.target.value.replace(',', '.') } })} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const ok = () => {
     ed.commit(r => {
@@ -77,11 +99,18 @@ export function ChartDialog({ d, close, Modal, Field }: {
         <div className="list-editor">
           {(pie ? spec.series.slice(0, 1) : spec.series).map((s, i) => (
             <div key={i} className="list-row">
-              <input className="series-name" value={s.name} placeholder="Name" onChange={e => set({ series: spec.series.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+              <input className="series-name" value={s.name} placeholder="Name" onChange={e => setSeries(i, { name: e.target.value })} />
               <span className="expr-prop">
                 <ExpressionInput value={s.value} onChange={v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) })} dataSetName={spec.dataSetName} placeholder="=Sum(Fields!…Value)" />
                 {fieldPick(v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) }), true)}
               </span>
+              {!pie && !horizontal && <>
+                <select value={s.kind ?? ''} title="Typ dieser Reihe (Kombidiagramm)" onChange={e => setSeries(i, { kind: (e.target.value || undefined) as ChartKind | undefined })}>
+                  <option value="">wie Diagramm</option>
+                  {SERIES_KINDS.map(k => <option key={k} value={k}>{CHART_KINDS.find(c => c[0] === k)![1]}</option>)}
+                </select>
+                <label className="check" title="An der zweiten Werteachse (rechts) auftragen"><input type="checkbox" checked={!!s.secondary} onChange={e => setSeries(i, { secondary: e.target.checked || undefined })} /> rechts</label>
+              </>}
               <ActionButton icon="trash" title="Reihe entfernen" disabled={spec.series.length <= 1} onClick={() => set({ series: spec.series.filter((_, j) => j !== i) })} />
             </div>
           ))}
@@ -92,10 +121,16 @@ export function ChartDialog({ d, close, Modal, Field }: {
       <Field label="Darstellung">
         <span className="list-row">
           <label className="check"><input type="checkbox" checked={spec.legend} onChange={e => set({ legend: e.target.checked })} /> Legende</label>
+          <label className="check"><input type="checkbox" checked={spec.dataLabels} onChange={e => set({ dataLabels: e.target.checked })} /> Datenbeschriftungen</label>
           <select value={spec.palette} onChange={e => set({ palette: e.target.value })} title="Farbpalette">{PALETTES.map(p => <option key={p}>{p}</option>)}</select>
         </span>
       </Field>
-      {existing && <div className="prop-note">Geändert werden nur Typ, Kategorie, Reihen, Titel, Legende und Palette – Achsen, Formatierung und alles Weitere bleiben wie im Layout.</div>}
+      {!pie && <>
+        {axisFields(horizontal ? 'Kategorieachse (y)' : 'Kategorieachse (x)', spec.categoryAxis, 'categoryAxis', false)}
+        {axisFields(horizontal ? 'Werteachse (x)' : 'Werteachse (y)', spec.valueAxis, 'valueAxis', true)}
+        {spec.series.some(x => x.secondary) && !horizontal && axisFields('Zweite Werteachse (rechts)', spec.secondaryAxis, 'secondaryAxis', true)}
+      </>}
+      {existing && <div className="prop-note">Geändert wird nur, was hier eingestellt ist – weitere Formatierung des Diagramms bleibt wie im Layout.</div>}
     </Modal>
   );
 }

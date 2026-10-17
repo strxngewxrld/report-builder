@@ -539,3 +539,4 @@ table.grid input, table.grid select { width: 100%; }
 .layout-entry { cursor: pointer; }
 .layout-entry.current { font-weight: 600; cursor: default; }
 .layout-entry.missing { opacity: .55; text-decoration: line-through; cursor: default; }
+.axis-format { max-width: 140px; }

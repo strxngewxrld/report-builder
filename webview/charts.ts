@@ -4,12 +4,31 @@
 
 import { NS_RD, XmlDom, browserDom, child, elements, normalizeFragment, text } from './rdl';
 
-export type ChartKind = 'Column' | 'StackedColumn' | 'Bar' | 'StackedBar' | 'Line' | 'Area' | 'Pie' | 'Doughnut';
+export type ChartKind =
+  | 'Column' | 'StackedColumn' | 'PercentColumn' | 'Bar' | 'StackedBar' | 'Line' | 'SmoothLine' | 'Area' | 'StackedArea'
+  | 'Scatter' | 'Pie' | 'Doughnut';
 export const CHART_KINDS: [ChartKind, string, string][] = [
-  ['Column', 'Säulen', 'graph'], ['StackedColumn', 'Säulen gestapelt', 'graph'], ['Bar', 'Balken', 'graph-left'],
-  ['StackedBar', 'Balken gestapelt', 'graph-left'], ['Line', 'Linie', 'graph-line'], ['Area', 'Fläche', 'graph-line'],
-  ['Pie', 'Kreis', 'pie-chart'], ['Doughnut', 'Ring', 'pie-chart'],
+  ['Column', 'Säulen', 'graph'], ['StackedColumn', 'Säulen gestapelt', 'graph'], ['PercentColumn', 'Säulen 100 %', 'graph'],
+  ['Bar', 'Balken', 'graph-left'], ['StackedBar', 'Balken gestapelt', 'graph-left'], ['Line', 'Linie', 'graph-line'],
+  ['SmoothLine', 'Linie geglättet', 'graph-line'], ['Area', 'Fläche', 'graph-line'], ['StackedArea', 'Fläche gestapelt', 'graph-line'],
+  ['Scatter', 'Punkte', 'graph-scatter'], ['Pie', 'Kreis', 'pie-chart'], ['Doughnut', 'Ring', 'pie-chart'],
 ];
+/** Kinds a single series can have in a combined chart (with the chart's own kind). */
+export const SERIES_KINDS: ChartKind[] = ['Column', 'Line', 'SmoothLine', 'Area', 'Scatter'];
+export const isPie = (k: ChartKind) => k === 'Pie' || k === 'Doughnut';
+
+/** An axis: title, number format of its labels (N0, P0, …), fixed minimum/maximum ('' = automatic). */
+export interface ChartAxisSpec { title: string; format: string; min: string; max: string }
+export const emptyAxis = (): ChartAxisSpec => ({ title: '', format: '', min: '', max: '' });
+
+export interface ChartSeriesSpec {
+  name: string;
+  value: string;
+  /** Own type in a combined chart (undefined: the chart's type). */
+  kind?: ChartKind;
+  /** Plotted against the secondary value axis (right). */
+  secondary?: boolean;
+}
 export const PALETTES = ['BrightPastel', 'Pastel', 'EarthTones', 'Berry', 'Chocolate', 'Fire', 'Grayscale', 'SemiTransparent'];
 
 export interface ChartSpec {
@@ -18,40 +37,53 @@ export interface ChartSpec {
   kind: ChartKind;
   /** Category grouping (x axis), e.g. =Fields!Region.Value; '' for a single category. */
   category: string;
-  series: { name: string; value: string }[];
+  series: ChartSeriesSpec[];
   title: string;
   legend: boolean;
   palette: string;
+  /** Values shown at the data points. */
+  dataLabels: boolean;
+  categoryAxis: ChartAxisSpec;
+  valueAxis: ChartAxisSpec;
+  secondaryAxis: ChartAxisSpec;
 }
 
 const xmlEsc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const typeOf = (k: ChartKind): readonly [string, string | undefined] => ({
-  Column: ['Column', undefined], StackedColumn: ['Column', 'Stacked'], Bar: ['Bar', undefined], StackedBar: ['Bar', 'Stacked'],
-  Line: ['Line', undefined], Area: ['Area', undefined], Pie: ['Shape', undefined], Doughnut: ['Shape', 'Doughnut'],
+  Column: ['Column', undefined], StackedColumn: ['Column', 'Stacked'], PercentColumn: ['Column', 'PercentStacked'],
+  Bar: ['Bar', undefined], StackedBar: ['Bar', 'Stacked'], Line: ['Line', undefined], SmoothLine: ['Line', 'Smooth'],
+  Area: ['Area', undefined], StackedArea: ['Area', 'Stacked'], Scatter: ['Scatter', undefined],
+  Pie: ['Shape', undefined], Doughnut: ['Shape', 'Doughnut'],
 } as const)[k];
 const kindOf = (type: string, sub: string): ChartKind => {
   const s = sub.toLowerCase();
   if (type === 'Shape') return s === 'doughnut' ? 'Doughnut' : 'Pie';
   if (type === 'Bar') return s.includes('stacked') ? 'StackedBar' : 'Bar';
-  if (type === 'Line' || type === 'Area') return type;
-  return s.includes('stacked') ? 'StackedColumn' : 'Column';
+  if (type === 'Line') return s === 'smooth' ? 'SmoothLine' : 'Line';
+  if (type === 'Area') return s.includes('stacked') ? 'StackedArea' : 'Area';
+  if (type === 'Scatter') return 'Scatter';
+  return s === 'percentstacked' ? 'PercentColumn' : s.includes('stacked') ? 'StackedColumn' : 'Column';
 };
 
-const seriesXml = (s: { name: string; value: string }, kind: ChartKind) => {
-  const [type, sub] = typeOf(kind);
-  return `<ChartSeries Name="${xmlEsc(s.name)}"><ChartDataPoints><ChartDataPoint><ChartDataPointValues><Y>${xmlEsc(s.value)}</Y></ChartDataPointValues>`
-    + `<ChartDataLabel><Style /></ChartDataLabel><Style /><ChartMarker><Style /></ChartMarker><DataElementOutput>Output</DataElementOutput></ChartDataPoint></ChartDataPoints>`
+const SECONDARY = 'Secondary';
+const dataLabelXml = (on: boolean) => (on ? '<ChartDataLabel><Style /><UseValueAsLabel>true</UseValueAsLabel><Visible>true</Visible></ChartDataLabel>' : '<ChartDataLabel><Style /></ChartDataLabel>');
+const seriesXml = (s: ChartSeriesSpec, spec: ChartSpec) => {
+  const [type, sub] = typeOf(s.kind ?? spec.kind);
+  return `<ChartSeries Name="${xmlEsc(s.name.replace(/\W/g, '') || 'Series')}"><ChartDataPoints><ChartDataPoint><ChartDataPointValues><Y>${xmlEsc(s.value)}</Y></ChartDataPointValues>`
+    + `${dataLabelXml(spec.dataLabels)}<Style /><ChartMarker><Style /></ChartMarker><DataElementOutput>Output</DataElementOutput></ChartDataPoint></ChartDataPoints>`
     + `<Type>${type}</Type>${sub ? `<Subtype>${sub}</Subtype>` : ''}<Style /><ChartEmptyPoints><Style /><ChartMarker><Style /></ChartMarker><ChartDataLabel><Style /></ChartDataLabel></ChartEmptyPoints>`
-    + `<ValueAxisName>Primary</ValueAxisName><CategoryAxisName>Primary</CategoryAxisName><ChartSmartLabel><CalloutLineColor>Black</CalloutLineColor><MinMovingDistance>0pt</MinMovingDistance></ChartSmartLabel></ChartSeries>`;
+    + `<ValueAxisName>${s.secondary ? SECONDARY : 'Primary'}</ValueAxisName><CategoryAxisName>Primary</CategoryAxisName><ChartSmartLabel><CalloutLineColor>Black</CalloutLineColor><MinMovingDistance>0pt</MinMovingDistance></ChartSmartLabel></ChartSeries>`;
 };
 const seriesMember = (s: { name: string }) => `<ChartMember><Label>${xmlEsc(s.name)}</Label></ChartMember>`;
 const categoryMember = (spec: ChartSpec) => (spec.category
   ? `<ChartMember><Group Name="${xmlEsc(spec.name)}_CategoryGroup"><GroupExpressions><GroupExpression>${xmlEsc(spec.category)}</GroupExpression></GroupExpressions></Group>`
     + `<SortExpressions><SortExpression><Value>${xmlEsc(spec.category)}</Value></SortExpression></SortExpressions><Label>${xmlEsc(spec.category)}</Label></ChartMember>`
   : '<ChartMember><Label /></ChartMember>');
-const axis = (name: string) => `<ChartAxis Name="${name}"><Style><FontSize>8pt</FontSize></Style><ChartAxisTitle><Caption /><Style><FontSize>8pt</FontSize></Style></ChartAxisTitle>`
-  + `<ChartMajorGridLines><Style><Border><Color>Gainsboro</Color></Border></Style></ChartMajorGridLines><ChartMinorGridLines><Style><Border><Color>Gainsboro</Color><Style>Dotted</Style></Border></Style></ChartMinorGridLines>`
-  + `<ChartMinorTickMarks><Length>0.5</Length></ChartMinorTickMarks><CrossAt>NaN</CrossAt><Minimum>NaN</Minimum><Maximum>NaN</Maximum><ChartAxisScaleBreak><Style /></ChartAxisScaleBreak></ChartAxis>`;
+const axis = (name: string, a: ChartAxisSpec, opposite = false) => `<ChartAxis Name="${name}"><Style><FontSize>8pt</FontSize>${a.format ? `<Format>${xmlEsc(a.format)}</Format>` : ''}</Style>`
+  + `<ChartAxisTitle>${a.title ? `<Caption>${xmlEsc(a.title)}</Caption>` : '<Caption />'}<Style><FontSize>8pt</FontSize></Style></ChartAxisTitle>`
+  + `<ChartMajorGridLines>${opposite ? '<Enabled>False</Enabled>' : ''}<Style><Border><Color>Gainsboro</Color></Border></Style></ChartMajorGridLines><ChartMinorGridLines><Style><Border><Color>Gainsboro</Color><Style>Dotted</Style></Border></Style></ChartMinorGridLines>`
+  + `<ChartMinorTickMarks><Length>0.5</Length></ChartMinorTickMarks><CrossAt>NaN</CrossAt><Minimum>${a.min || 'NaN'}</Minimum><Maximum>${a.max || 'NaN'}</Maximum>`
+  + `${opposite ? '<Location>Opposite</Location>' : ''}<ChartAxisScaleBreak><Style /></ChartAxisScaleBreak></ChartAxis>`;
 
 /** RDL of a new chart (the structure Report Builder creates), positioned in inches. */
 export function chartXml(spec: ChartSpec, box: { top: number; left: number; width: number; height: number }): string {
@@ -59,8 +91,9 @@ export function chartXml(spec: ChartSpec, box: { top: number; left: number; widt
   return `<Chart Name="${xmlEsc(spec.name)}">`
     + `<ChartCategoryHierarchy><ChartMembers>${categoryMember(spec)}</ChartMembers></ChartCategoryHierarchy>`
     + `<ChartSeriesHierarchy><ChartMembers>${spec.series.map(seriesMember).join('')}</ChartMembers></ChartSeriesHierarchy>`
-    + `<ChartData><ChartSeriesCollection>${spec.series.map(s => seriesXml(s, spec.kind)).join('')}</ChartSeriesCollection></ChartData>`
-    + `<ChartAreas><ChartArea Name="Default"><ChartCategoryAxes>${axis('Primary')}</ChartCategoryAxes><ChartValueAxes>${axis('Primary')}</ChartValueAxes>`
+    + `<ChartData><ChartSeriesCollection>${spec.series.map(s => seriesXml(s, spec)).join('')}</ChartSeriesCollection></ChartData>`
+    + `<ChartAreas><ChartArea Name="Default"><ChartCategoryAxes>${axis('Primary', spec.categoryAxis)}</ChartCategoryAxes>`
+    + `<ChartValueAxes>${axis('Primary', spec.valueAxis)}${spec.series.some(x => x.secondary) ? axis(SECONDARY, spec.secondaryAxis, true) : ''}</ChartValueAxes>`
     + `<Style><BackgroundGradientType>None</BackgroundGradientType></Style></ChartArea></ChartAreas>`
     + `<ChartLegends><ChartLegend Name="Default">${spec.legend ? '' : '<Hidden>true</Hidden>'}<Style><BackgroundGradientType>None</BackgroundGradientType><FontSize>8pt</FontSize></Style>`
     + `<ChartLegendTitle><Caption /><Style><FontSize>8pt</FontSize><FontWeight>Bold</FontWeight><TextAlign>Center</TextAlign></Style></ChartLegendTitle><HeaderSeparatorColor>Black</HeaderSeparatorColor><ColumnSeparatorColor>Black</ColumnSeparatorColor></ChartLegend></ChartLegends>`
@@ -84,16 +117,47 @@ export function readChart(xml: string, dom: XmlDom = browserDom): ChartSpec | nu
   const labels = elements(child(chart, 'ChartSeriesHierarchy', 'ChartMembers'), 'ChartMember').map(m => text(m, 'Label') ?? '');
   const cat = elements(child(chart, 'ChartCategoryHierarchy', 'ChartMembers'), 'ChartMember')[0];
   const legend = child(chart, 'ChartLegends', 'ChartLegend');
+  const kind = kindOf(text(seriesEls[0], 'Type') ?? 'Column', text(seriesEls[0], 'Subtype') ?? '');
+  const axes = axesOf(chart);
   return {
     name: chart.getAttribute('Name') ?? '',
     dataSetName: text(chart, 'DataSetName') ?? '',
-    kind: kindOf(text(seriesEls[0], 'Type') ?? 'Column', text(seriesEls[0], 'Subtype') ?? ''),
+    kind,
     category: text(cat, 'Group', 'GroupExpressions', 'GroupExpression') ?? '',
-    series: seriesEls.map((s, i) => ({ name: labels[i] || s.getAttribute('Name') || `Reihe${i + 1}`, value: text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y') ?? '' })),
+    series: seriesEls.map((s, i) => {
+      const own = kindOf(text(s, 'Type') ?? 'Column', text(s, 'Subtype') ?? '');
+      const secondary = !!axes.secondary && text(s, 'ValueAxisName') === axes.secondary.getAttribute('Name');
+      return {
+        name: labels[i] || s.getAttribute('Name') || `Reihe${i + 1}`, value: text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y') ?? '',
+        ...(own !== kind ? { kind: own } : {}), ...(secondary ? { secondary } : {}),
+      };
+    }),
     title: text(chart, 'ChartTitles', 'ChartTitle', 'Caption') ?? '',
     legend: !!legend && (text(legend, 'Hidden') ?? '').toLowerCase() !== 'true',
     palette: text(chart, 'Palette') ?? 'BrightPastel',
+    dataLabels: seriesEls.some(s => (text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataLabel', 'Visible') ?? '').toLowerCase() === 'true'),
+    categoryAxis: readAxis(axes.category),
+    valueAxis: readAxis(axes.primary),
+    secondaryAxis: readAxis(axes.secondary),
   };
+}
+
+/** The axes of the first chart area; the secondary value axis is the one series use besides the primary. */
+export function axesOf(chart: Element) {
+  const area = child(chart, 'ChartAreas', 'ChartArea');
+  const values = elements(child(area, 'ChartValueAxes'), 'ChartAxis');
+  const primary = values.find(a => a.getAttribute('Name') === 'Primary') ?? values[0];
+  return {
+    area, values: child(area, 'ChartValueAxes'), primary,
+    category: elements(child(area, 'ChartCategoryAxes'), 'ChartAxis')[0],
+    secondary: values.find(a => a !== primary),
+  };
+}
+
+const bound = (v: string | undefined) => (!v || /^nan$/i.test(v.trim()) ? '' : v.trim());
+export function readAxis(a: Element | undefined): ChartAxisSpec {
+  if (!a) return emptyAxis();
+  return { title: text(a, 'ChartAxisTitle', 'Caption') ?? '', format: text(a, 'Style', 'Format') ?? '', min: bound(text(a, 'Minimum')), max: bound(text(a, 'Maximum')) };
 }
 
 function setText(doc: Document, parent: Element, tag: string, value: string | undefined, before?: string) {
@@ -136,9 +200,11 @@ export function patchChart(xml: string, spec: ChartSpec, dom: XmlDom = browserDo
       if (old.series[i]?.name !== s.name || i >= old.series.length) el.setAttribute('Name', s.name.replace(/\W/g, '') || `Series${i + 1}`);
       const y = child(el, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y');
       if (y && y.textContent !== s.value) y.textContent = s.value;
-      if (old.kind !== spec.kind) {
-        setText(doc, el, 'Type', type, 'Style');
-        setText(doc, el, 'Subtype', sub, 'Style');
+      const oldKind = old.series[i]?.kind ?? old.kind, newKind = s.kind ?? spec.kind;
+      if (oldKind !== newKind || i >= old.series.length) {
+        const [t, st] = s.kind ? typeOf(s.kind) : [type, sub];
+        setText(doc, el, 'Type', t, 'Style');
+        setText(doc, el, 'Subtype', st, 'Style');
       }
       if (memberEls[i] && (text(memberEls[i], 'Label') ?? '') !== s.name) setText(doc, memberEls[i], 'Label', s.name);
     });
@@ -160,6 +226,56 @@ export function patchChart(xml: string, spec: ChartSpec, dom: XmlDom = browserDo
     if (legend) setText(doc, legend, 'Hidden', spec.legend ? undefined : 'true', 'Style');
   }
   if (spec.palette !== old.palette) setText(doc, chart, 'Palette', spec.palette, 'DataSetName');
+  patchAxesAndLabels(doc, chart, old, spec);
   if (spec.dataSetName !== old.dataSetName) setText(doc, chart, 'DataSetName', spec.dataSetName);
   return normalizeFragment(dom.serialize(chart));
+}
+
+/** Axis titles, formats and bounds, the secondary axis and its series, data labels – only what changed. */
+function patchAxesAndLabels(doc: Document, chart: Element, old: ChartSpec, spec: ChartSpec) {
+  let axes = axesOf(chart);
+  const wantSecondary = spec.series.some(x => x.secondary);
+  if (wantSecondary && !axes.secondary && axes.values && axes.primary) {
+    // a copy of the primary value axis on the opposite side, without its own gridlines
+    const copy = axes.primary.cloneNode(true) as Element;
+    copy.setAttribute('Name', SECONDARY);
+    setText(doc, copy, 'Location', 'Opposite', 'ChartAxisScaleBreak');
+    const grid = child(copy, 'ChartMajorGridLines');
+    if (grid) setText(doc, grid, 'Enabled', 'False', 'Style');
+    axes.values.appendChild(copy);
+    axes = axesOf(chart);
+  }
+  const patchAxis = (a: Element | undefined, before: ChartAxisSpec, after: ChartAxisSpec) => {
+    if (!a) return;
+    if (after.title !== before.title) {
+      const title = child(a, 'ChartAxisTitle') ?? a.insertBefore(doc.createElementNS(a.namespaceURI, 'ChartAxisTitle'), elements(a)[1] ?? null);
+      setText(doc, title, 'Caption', after.title, 'Style');
+    }
+    if (after.format !== before.format) {
+      const style = child(a, 'Style') ?? a.insertBefore(doc.createElementNS(a.namespaceURI, 'Style'), elements(a)[0] ?? null);
+      setText(doc, style, 'Format', after.format || undefined);
+    }
+    if (after.min !== before.min) setText(doc, a, 'Minimum', after.min || (child(a, 'Minimum') ? 'NaN' : undefined), 'ChartAxisScaleBreak');
+    if (after.max !== before.max) setText(doc, a, 'Maximum', after.max || (child(a, 'Maximum') ? 'NaN' : undefined), 'ChartAxisScaleBreak');
+  };
+  patchAxis(axes.category, old.categoryAxis, spec.categoryAxis);
+  patchAxis(axes.primary, old.valueAxis, spec.valueAxis);
+  patchAxis(axes.secondary, old.secondaryAxis, spec.secondaryAxis);
+
+  const seriesEls = elements(child(chart, 'ChartData', 'ChartSeriesCollection'), 'ChartSeries');
+  spec.series.forEach((s, i) => {
+    const el = seriesEls[i];
+    if (!el) return;
+    if (!!s.secondary !== !!old.series[i]?.secondary || i >= old.series.length) {
+      const target = s.secondary ? axes.secondary?.getAttribute('Name') ?? SECONDARY : axes.primary?.getAttribute('Name') ?? 'Primary';
+      setText(doc, el, 'ValueAxisName', target, 'CategoryAxisName');
+    }
+    if (spec.dataLabels !== old.dataLabels) {
+      for (const point of elements(child(el, 'ChartDataPoints'), 'ChartDataPoint')) {
+        const label = child(point, 'ChartDataLabel') ?? point.insertBefore(doc.createElementNS(point.namespaceURI, 'ChartDataLabel'), elements(point)[1] ?? null);
+        setText(doc, label, 'UseValueAsLabel', spec.dataLabels ? 'true' : undefined);
+        setText(doc, label, 'Visible', spec.dataLabels ? 'true' : undefined);
+      }
+    }
+  });
 }
