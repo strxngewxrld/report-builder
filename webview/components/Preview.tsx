@@ -12,6 +12,7 @@ import { bindRows, mockRows, numericFieldsFromLayout } from '../sampleData';
 import { post } from '../vscode';
 import { ActionButton, Codicon, DropdownAction, Separator } from './Icon';
 import { exportBlocks } from '../render/export';
+import { pagesToPdf } from '../render/pdf';
 
 const S = 96;
 
@@ -208,6 +209,30 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
     }, 200)));
   };
 
+  // PDF: all pages mounted at zoom 1, drawn into a PDF here, saved by the extension
+  const [pdfExport, setPdfExport] = useState(false);
+  const exportPdf = () => {
+    if (!pages.length || pdfExport) return;
+    setRenderAll(true);
+    setPdfExport(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(async () => {
+      const name = fileName.replace(/\.rdlc?$/i, '');
+      try {
+        const els = Array.from(pagesRef.current?.querySelectorAll<HTMLElement>('.rv-page') ?? []);
+        const bytes = await pagesToPdf(els, { width: p.width, height: p.height }, name);
+        let data = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) data += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        post({ type: 'savePdf', name, data: btoa(data) });
+      } catch (e) {
+        post({ type: 'error', message: `PDF-Export fehlgeschlagen: ${(e as Error).message}` });
+      } finally {
+        setRenderAll(false);
+        setPdfExport(false);
+      }
+    }, 300)));
+  };
+  useCommand('exportPdf', exportPdf);
+
   const exportDocument = (format: 'xlsx' | 'docx') => post({
     type: 'exportDocument', format, blocks: exportBlocks(result),
     page: { width: p.width, height: p.height, margins: [p.marginTop, p.marginRight, p.marginBottom, p.marginLeft] },
@@ -254,6 +279,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
           <div className="action-group">
             <ActionButton icon="file-pdf" title="Im Browser öffnen und drucken bzw. als PDF speichern" label="Drucken" disabled={!pages.length} onClick={() => exportPages('print')} />
             <DropdownAction icon="export" title="Exportieren" disabled={!pages.length} items={[
+              { label: 'PDF (.pdf)…', icon: 'file-pdf', run: exportPdf },
               { label: 'Excel (.xlsx)…', icon: 'table', run: () => exportDocument('xlsx') },
               { label: 'Word (.docx)…', icon: 'file-text', run: () => exportDocument('docx') },
               { label: 'HTML…', icon: 'code', run: () => exportPages('html') },
@@ -276,7 +302,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
           <div ref={measureRef} className="measure" style={{ width: result.bodyWidth * S }} aria-hidden>
             <Flow nodes={result.body.nodes} height={result.body.height} />
           </div>
-          <div ref={pagesRef} style={{ zoom }}>
+          <div ref={pagesRef} style={{ zoom: pdfExport ? 1 : zoom }}>
             {measured && pages.map((pg, i) => (
               <PageView key={i} slice={pg} info={pageInfos[i]} isFirst={i === 0} isLast={i === pages.length - 1}
                 result={result} nodes={nodes} tableLeft={measured.tableLeft} forceMount={renderAll} />

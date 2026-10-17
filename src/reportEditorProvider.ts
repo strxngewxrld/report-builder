@@ -56,6 +56,7 @@ type FromWebview =
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
   | { type: 'openLayout'; uri: string }
+  | { type: 'savePdf'; name: string; data: string }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -201,6 +202,16 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           case 'pickImage': {
             const image = await pickImage(document.uri);
             if (image) await session.command('images.add', image);
+            break;
+          }
+          case 'savePdf': {
+            const target = await vscode.window.showSaveDialog({
+              defaultUri: vscode.Uri.joinPath(document.uri, '..', `${msg.name}.pdf`), filters: { PDF: ['pdf'] }, saveLabel: 'Als PDF exportieren',
+            });
+            if (!target) break;
+            await vscode.workspace.fs.writeFile(target, Buffer.from(msg.data, 'base64'));
+            const action = await vscode.window.showInformationMessage(`PDF gespeichert: ${vscode.workspace.asRelativePath(target)}`, 'Öffnen');
+            if (action) await vscode.env.openExternal(target);
             break;
           }
           case 'openLayout': {

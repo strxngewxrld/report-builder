@@ -384,6 +384,46 @@ test('Spalte umbenennen: AL und Layout in einem Schritt', async api => {
   }
 });
 
+test('PDF-Export: alle Seiten der Vorschau in Seitengröße des Berichts', async api => {
+  const { uri, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  await until('bcContext', () => probe.posted.find(m => m.type === 'bcContext'));
+  await vscode.commands.executeCommand('bcReportBuilder.togglePreview', uri);
+  const ready = await until('Vorschau fertig', () => probe.received.find(m => m.type === 'previewReady'), 30000);
+  const target = file('Export-Test.pdf');
+  const w = vscode.window as unknown as Record<string, unknown>;
+  const saved = { showSaveDialog: w.showSaveDialog, showInformationMessage: w.showInformationMessage };
+  w.showSaveDialog = async () => target;
+  w.showInformationMessage = async () => undefined;
+  try {
+    await vscode.commands.executeCommand('bcReportBuilder.exportPdf', uri);
+    const bytes = await until('PDF geschrieben', () => {
+      const msg = probe.received.find(m => m.type === 'savePdf' || m.type === 'error');
+      return msg;
+    }, 60000).then(async msg => {
+      assert.equal(msg.type, 'savePdf', String(msg.message ?? ''));
+      for (let i = 0; i < 50; i++) {
+        const b = await vscode.workspace.fs.readFile(target).then(x => x, () => undefined);
+        if (b?.length) return b;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      throw new Error('PDF-Datei fehlt');
+    });
+    assert.equal(new TextDecoder().decode(bytes.slice(0, 5)), '%PDF-');
+    const { PDFDocument } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(bytes);
+    assert.equal(pdf.getPageCount(), ready.pages);
+    const size = pdf.getPage(0).getSize();
+    // Verkaufsrechnung: A4 (21 × 29.7 cm)
+    assert.ok(Math.abs(size.width - 595.3) < 2 && Math.abs(size.height - 841.9) < 2, `${size.width} × ${size.height}`);
+    assert.ok(bytes.length > 3000, 'Inhalt vorhanden');
+    // to look at the result: BC_RB_KEEP_PDF=/path/file.pdf npm run test:vscode
+    if (process.env.BC_RB_KEEP_PDF) await vscode.workspace.fs.writeFile(vscode.Uri.file(process.env.BC_RB_KEEP_PDF), bytes);
+  } finally {
+    Object.assign(w, saved);
+    await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+  }
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;
