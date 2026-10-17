@@ -247,3 +247,20 @@ export function rename(r: Report, from: string, to: string): boolean {
   loc.item.name = to;
   return true;
 }
+
+/** Puts `next` in the place of the located item (section or rectangle, table cell, matrix header or corner cell). */
+export function replaceItem(loc: Located, next: ReportItem): boolean {
+  const old = loc.item;
+  const swap = (list: ReportItem[]) => {
+    const i = list.indexOf(old);
+    if (i >= 0) list[i] = next;
+    return i >= 0;
+  };
+  if (loc.container) return swap(loc.container);
+  const t = loc.table;
+  if (!t) return false;
+  if (t.rows.some(row => swap(row.cells))) return true;
+  for (const h of tableHeaders(t)) if (h.cell === old) { h.cell = next; return true; }
+  for (const row of t.corner ?? []) for (const c of row) if (c.item === old) { c.item = next; return true; }
+  return false;
+}

@@ -9,6 +9,7 @@ import { fromUnit, toUnit } from '../units';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
 import { RichTextEditor } from './RichTextEditor';
+import { partsDiffer, toRichText, toSimpleText } from '../richtext';
 import {
   ItemAction, actionOf, bookmarkOf, hiddenOf, printsOn, setAction, setBookmark, setHidden, setPrintsOn, setToggleItem, setUserSort, toggleItemOf,
   userSortOf,
@@ -152,6 +153,11 @@ export function PropertiesPane({ width }: { width: number }) {
         {single?.type === 'raw' && single.kind === 'Textbox' && (
           <Category title="Textteile">
             <RichTextEditor owner={single.name} name={single.name} />
+            <Row label="Umwandeln">
+              <button className="secondary small" title="Textteile zu einem Wert zusammenfassen (Formatierung des ersten Teils)"
+                onClick={() => ed.commit(r => toSimpleText(r, single.name))}><Codicon name="whole-word" /> In einfaches Textfeld</button>
+            </Row>
+            {partsDiffer(single) && <div className="prop-note">Beim Umwandeln gilt die Formatierung des ersten Textteils für den ganzen Text.</div>}
           </Category>
         )}
 
@@ -283,6 +289,10 @@ function TextboxProps({ tb, dataSetName }: { tb: TextboxItem; dataSetName?: stri
       </Row>
       <Row label="Vergrößerbar">
         <input type="checkbox" checked={tb.canGrow} onChange={e => set(t => { t.canGrow = e.target.checked; })} />
+      </Row>
+      <Row label="Textteile">
+        <button className="secondary small" title="Den Wert in einzeln formatierbare Teile aufteilen (z. B. „Seite “ und fette Seitenzahl)"
+          onClick={() => ed.commit(r => toRichText(r, tb.name))}><Codicon name="symbol-text" /> Aufteilen…</button>
       </Row>
     </>
   );
