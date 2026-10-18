@@ -234,7 +234,7 @@ export function DocumentOutline() {
             )}
           </>
         ) : (
-          <div className="prop-note">{count} Einträge. Element anklicken, um es im Designer auszuwählen und Details zu sehen. <Codicon name="eye-closed" /> = ausgeblendet (abgeblendet: bedingt).</div>
+          <div className="prop-note">{l10n.t('{0} entries. Select an item to reveal it in the designer and see details.', count)} <Codicon name="eye-closed" /> {l10n.t('= hidden (dimmed: conditional).')}</div>
         )}
       </div>
     </div>

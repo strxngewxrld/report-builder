@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Dialog, useEditor } from '../editor';
 import { EvalContext, evaluate, formatValue, toStr, validateExpression } from '../expr';
@@ -17,6 +17,10 @@ import { addChildGroup, addColumnGroup, addParentGroup, createMatrix, findMember
 import { sectionOf } from '../ops';
 import { hiddenOf, setHidden, setToggleItem, toggleItemOf } from '../layoutTools';
 import { l10n } from '../l10n';
+import { useDialogFocus } from './dialogFocus';
+import { expressionsIn, patchExpressions, renameParameterReference } from '../expressionSearch';
+import { parseRdl, serializeRdl } from '../rdl';
+import { remapBlockExpression } from '../blocks';
 
 const IDENT = /^[A-Za-z_][\w]*$/;
 
@@ -24,11 +28,7 @@ const IDENT = /^[A-Za-z_][\w]*$/;
 const PRIMARY_LAST = navigator.platform.startsWith('Mac');
 
 function Modal(props: { title: string; children: ReactNode; onOk?: () => void; onCancel: () => void; okLabel?: string; error?: string | null; wide?: boolean }) {
-  // give the focus back to where it was (designer, tree, toolbar) when the dialog closes
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    return () => previous?.focus?.();
-  }, []);
+  const focusRef = useDialogFocus();
   const ok = props.onOk && !props.error ? props.onOk : undefined;
   const buttons = [
     props.onOk && <button key="ok" className="primary" disabled={!!props.error} onClick={props.onOk}>{props.okLabel ?? 'OK'}</button>,
@@ -36,13 +36,13 @@ function Modal(props: { title: string; children: ReactNode; onOk?: () => void; o
   ];
   return (
     <div className="modal-backdrop" onPointerDown={e => { if (e.target === e.currentTarget) props.onCancel(); }}>
-      <div className={`modal ${props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.title}
+      <div ref={focusRef} className={`modal ${props.wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={props.title}
         onKeyDown={e => {
-          e.stopPropagation();
-          if (e.key === 'Escape') props.onCancel();
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); props.onCancel(); }
           // Enter confirms, except in multi-line fields and on buttons (they handle it themselves)
           const t = e.target as HTMLElement;
-          if (e.key === 'Enter' && ok && t.tagName !== 'TEXTAREA' && t.tagName !== 'BUTTON' && !e.nativeEvent.isComposing) { e.preventDefault(); ok(); }
+          if (e.key === 'Enter' && ok && t.tagName !== 'TEXTAREA' && t.tagName !== 'BUTTON' && t.tagName !== 'SELECT'
+            && !(t instanceof HTMLInputElement && ['checkbox', 'radio', 'color'].includes(t.type)) && !e.nativeEvent.isComposing) { e.preventDefault(); ok(); }
         }}>
         <div className="modal-title"><span className="grow">{props.title}</span><ActionButton icon="close" title={l10n.t('Close (Esc)')} onClick={props.onCancel} /></div>
         <div className="modal-body">{props.children}</div>
@@ -190,7 +190,12 @@ function DataSetDialog({ name, close }: { name?: string; close: () => void }) {
       if (existing) {
         r.dataSets = r.dataSets.map(x => (x.name === existing.name ? d : x));
         if (d.name !== existing.name) {
-          for (const it of allReportItems(r)) if (it.type === 'table' && it.dataSetName === existing.name) it.dataSetName = d.name;
+          const xml = serializeRdl(r).replace(/(<DataSetName>)([^<]*)(<\/DataSetName>)/g,
+            (whole, open: string, name: string, close: string) => name === existing.name ? `${open}${d.name}${close}` : whole);
+          const scopes = new Map([[existing.name, d.name]]);
+          const changes = expressionsIn(xml).map(location => ({ location, value: remapBlockExpression(location.value, scopes, false) }))
+            .filter(change => change.value !== change.location.value);
+          Object.assign(r, parseRdl(patchExpressions(xml, changes)));
         }
       } else {
         r.dataSets.push(d);
@@ -301,10 +306,10 @@ function ParameterDialog({ name, close }: { name?: string; close: () => void }) 
 }
 
 function renameParameterRefs(r: Report, from: string, to: string) {
-  const re = new RegExp(`Parameters!${from}\\b`, 'g');
-  for (const it of allReportItems(r)) {
-    if (it.type === 'textbox') it.value = it.value.replace(re, `Parameters!${to}`);
-  }
+  const xml = serializeRdl(r);
+  const changes = expressionsIn(xml).map(location => ({ location, value: renameParameterReference(location.value, from, to) }))
+    .filter(change => change.value !== change.location.value);
+  if (changes.length) Object.assign(r, parseRdl(patchExpressions(xml, changes)));
 }
 
 // ---------------------------------------------------------------------------------------------------------------

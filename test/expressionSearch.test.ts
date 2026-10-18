@@ -2,11 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { XmlDom } from '../webview/rdl';
-import { expressionReferences, expressionsIn, patchExpressions, replaceLiteral } from '../webview/expressionSearch';
+import { expressionReferences, expressionsIn, patchExpressions, replaceLiteral, renameParameterReference } from '../webview/expressionSearch';
 const dom: XmlDom = {
   parse: xml => new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document,
   serialize: n => new XMLSerializer().serializeToString(n as never),
 };
+
+test('parameter renaming covers collection syntax and case without rewriting string literals', () => {
+  const value = '=Parameters!Year.Value + Parameters("YEAR").Value + parameters ! year.Value & "Parameters!Year.Value" & Parameters!Yearly.Value';
+  assert.equal(renameParameterReference(value, 'Year', 'FiscalYear'), '=Parameters!FiscalYear.Value + Parameters("FiscalYear").Value + Parameters!FiscalYear.Value & "Parameters!Year.Value" & Parameters!Yearly.Value');
+});
 
 test('expression search includes preserved regions, group and style properties but skips constants, code and comments', () => {
   const xml = `<Report><Body><Textbox Name="Total"><Value>=Fields!Amount.Value &amp; " €"</Value><Style><Color>=IIf(Fields!Amount.Value &lt; 0, "Red", "Black")</Color></Style></Textbox>

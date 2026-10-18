@@ -51,8 +51,8 @@ export interface BlockPlan { names: string[]; missing: string[] }
 const ITEMS = new Set(['Textbox', 'Rectangle', 'Tablix', 'Image', 'Line', 'Chart', 'GaugePanel', 'Subreport', 'Map', 'Group']);
 
 /** Rewrite references and aggregate scopes without changing ordinary string arguments. */
-export function remapBlockExpression(value: string, names: Map<string, string>): string {
-  value = value.replace(/"(?:[^"]|"")*"|\bReportItems\s*(?:!\s*([A-Za-z_]\w*)|\(\s*"((?:[^"]|"")*)"\s*\))/gi, (whole, bang: string, key: string) => {
+export function remapBlockExpression(value: string, names: Map<string, string>, remapItems = true): string {
+  if (remapItems) value = value.replace(/"(?:[^"]|"")*"|\bReportItems\s*(?:!\s*([A-Za-z_]\w*)|\(\s*"((?:[^"]|"")*)"\s*\))/gi, (whole, bang: string, key: string) => {
     const old = bang ?? key;
     return old && names.has(old) ? (bang ? `ReportItems!${names.get(old)}` : `ReportItems("${names.get(old)}")`) : whole;
   });

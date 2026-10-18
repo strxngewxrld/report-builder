@@ -31,9 +31,9 @@
   --btn-fg: var(--vscode-button-foreground, #fff);
   --btn-hover: var(--vscode-button-hoverBackground, #0258a8);
   --btn-border: var(--vscode-button-border, transparent);
-  --btn2-bg: var(--vscode-button-secondaryBackground, #e5e5e5);
-  --btn2-fg: var(--vscode-button-secondaryForeground, #3b3b3b);
-  --btn2-hover: var(--vscode-button-secondaryHoverBackground, #cccccc);
+  --btn2-bg: var(--vscode-button-secondaryBackground, var(--input-bg));
+  --btn2-fg: var(--vscode-button-secondaryForeground, var(--fg));
+  --btn2-hover: var(--vscode-button-secondaryHoverBackground, var(--toolbar-hover));
   --toolbar-hover: var(--vscode-toolbar-hoverBackground, rgba(184, 184, 184, .31));
   --toolbar-active: var(--vscode-toolbar-activeBackground, rgba(166, 166, 166, .31));
   --option-bg: var(--vscode-inputOption-activeBackground, rgba(0, 95, 184, .2));
@@ -250,6 +250,7 @@ button.link:hover { background: none; text-decoration: underline; }
 .row-actions { margin-left: auto; display: none; align-items: center; gap: 2px; }
 .row-actions .action-item { height: 20px; min-width: 20px; padding: 1px; }
 .tree-leaf:hover .row-actions, .tree-node:hover .row-actions, .tree-group-head:hover .row-actions { display: inline-flex; }
+.tree-leaf:focus-within .row-actions, .tree-node:focus-within .row-actions, .tree-group-head:focus-within .row-actions { display: inline-flex; }
 .tree-leaf.not-built { opacity: .7; }
 
 /* indent guides, shown on hover like the workbench default */

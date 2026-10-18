@@ -2,30 +2,37 @@
 
 Was zur vollständigen Anwendung noch fehlt – nach Priorität. Erledigtes steht abgehakt darunter.
 
+Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md) und
+[UI-Testmatrix mit verbleibenden Lücken](docs/UI-TESTMATRIX.md). Grüne Tests ersetzen keine vollständige manuelle Abnahme.
+
 ## Erstes Release (1.0.0)
-- [ ] Offene Änderungen committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
-- [ ] Extension-ID `tknueppe.bc-report-builder` endgültig festlegen – Updates installieren nur über dieselbe ID
+- [x] Offene Änderungen committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
+- [ ] Nach den lokalen QA-Korrekturen erneut committen/pushen und CI für genau diesen Release-Stand prüfen (aktuell uncommittete Änderungen)
 - [ ] Screenshot `media/preview.png` (Designer mit Gliederung und Berichtsdaten) für README und Release-Seite
-- [ ] Veröffentlichen: `npm run publish:github -- --dry-run`, dann `npm run publish:github`
-- [ ] Update-Weg einmal echt prüfen: 1.0.0 installieren, Release 1.0.1 anlegen, Hinweis → *Installieren* → Neustart der Erweiterungen
+- [x] Lokalen Release-Dry-Run ausführen: `npm run publish:github -- --dry-run` (18.10.2026: Typecheck, 143/143 Tests und VSIX-Prüfung grün; nichts veröffentlicht)
+- [ ] Nach bestandener Abnahme und grüner CI veröffentlichen: `npm run publish:github`
 - [ ] Remote-Fenster (WSL/SSH/Dev Container): Update-Installation prüfen (VSIX liegt im temporären Ordner des Extension-Hosts)
 - [ ] Eingeschränkter Modus: `untrustedWorkspaces.supported: true` überdenken – *Report in BC ausführen* und *Projekt
       erstellen* starten AL-Befehle; ggf. `limited` mit Beschreibung wie bei Sheets
 
 ## Absichern (vor einer Veröffentlichung) – braucht Hand und echte Umgebungen
-- [ ] Neue Werkzeuge anhand von `docs/ABNAHME.md` abnehmen (Ausdrücke/Verwendungen, Bausteine, Vorschau)
-- [ ] Neue Dialoge und Abläufe in VS Code von Hand durchgehen: Gruppe, Spaltengruppe (auch geschachtelt), Matrix, Diagramm (Achsen, zweite Achse,
-      Kombi, neue Typen, berechnete Reihen, Punktfarben), Textteile aufteilen/zusammenfassen, Aktionen, eingebettete Bilder, Layouts wechseln, native Kontextmenüs,
-      Felder in Listen-Rechtecke ziehen, Tastaturbedienung mit Screenreader (VoiceOver/NVDA)
-- [ ] Oberfläche auf Englisch von Hand durchsehen (Texte, Platz in Dialogen und Bereichen)
+- [ ] Restliche manuelle Fälle aus `docs/ABNAHME.md` abnehmen (insbesondere Baustein-Ersetzen bestätigen/abbrechen, Konfliktpfade und kombinierte Vorschau-Umbrüche)
+- [ ] Noch offene Dialog-/Navigationsvarianten prüfen: verschachtelte Spaltengruppen, berechnete Diagrammreihen und Punktfarben,
+      Bookmark/Drillthrough samt Navigation sowie komplexe Filter-/Drilldown-Kombinationen; Details in `docs/UI-TESTMATRIX.md`
+- [ ] Reine Tastaturbedienung sämtlicher Dialogvarianten mit VoiceOver prüfen; NVDA unter Windows separat abnehmen
+- [ ] Native Farbauswahl und weitere Gestaltungs-/Drag-Varianten prüfen (Schriften, Rahmen, Zahlenformate, Raster/Zoom, Container); große/defekte Bilder testen
+- [ ] Kopieren/Einfügen zwischen mehreren geöffneten Berichten nativ prüfen
 - [ ] Mehrdatei-Rückgängig von Hand prüfen: *Als AL-Label anlegen* und *Spalte umbenennen* (VS Code fragt „in allen Dateien?“)
 - [ ] Symbolpakete gegen eine echte Base Application (`.alpackages/*.app`) prüfen – getestet nur mit selbst gebautem Paket
 - [ ] „Report in Business Central ausführen“ gegen echte Umgebungen prüfen (Cloud-Sandbox, Docker, On-Prem)
-- [ ] Excel-/Word-/PDF-Export in Microsoft Excel, Word und Acrobat öffnen (PDF auch mit eingebetteten Schriften unter Windows/Linux) (geprüft mit openpyxl, `textutil`, pdf-lib, Quick Look)
-- [ ] UI-Tests für Dialoge in der Webview (Klicks im DOM) – Befehlswege, Vorschau, PDF und Lokalisierung sind integrationsgetestet
+- [ ] PDF-Export in Acrobat sowie eingebettete Schriften unter Windows/Linux prüfen (macOS Vorschau bereits geprüft)
 
 
 ## Erledigt
+- [x] Dialog-UI im echten VS-Code-Webview per DOM-Eingaben/Klicks testen: 39/39 Integrationstests, zusätzlich alle 16 neuen UI-Abläufe auf Deutsch; 143/143 Unit-Tests
+- [x] Englischen Designer und geprüfte Dialoge visuell durchsehen; deutsche Oberfläche sowie Hell/Dunkel/hoher Kontrast und kleine Diagrammdialoge prüfen (keine Vollabnahme aller Varianten)
+- [x] Gruppen, Matrix, Diagrammdialog, Rich Text und Bilder über Webview-Tests prüfen; native Kontextmenüs, Listen-Rechteck-Drop, Inline-Text, Tabellenzellen verbinden/teilen sowie Designer-Auswahl/Größe/Ausrichtung per macOS MCP prüfen
+- [x] Excel-/Word-Exporte in Microsoft Excel und Word unter macOS ohne Reparaturdialog öffnen; PDF in macOS Vorschau prüfen (ergänzend openpyxl, `textutil`, pdf-lib und Quick Look)
 - [x] Ausdrücke suchen/ersetzen mit Vorschau, Syntaxprüfung und Sammel-Undo; Feld-/Labelverwendungen mit Layout-Navigation
 - [x] Wiederverwendbare Layout-Bausteine: Bibliothek, RDLC-Export/Import, Bilder und interne Verweise, Abhängigkeitsprüfung
 - [x] Vorschau: Container-Umbrüche, Gruppen-Endumbrüche, bedingte Umbrüche und Seitenzahl-Neustart; Schriften vor Vermessung laden
