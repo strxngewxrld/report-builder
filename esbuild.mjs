@@ -1,5 +1,6 @@
 import * as esbuild from 'esbuild';
 import { copyFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { writeNotices } from './scripts/notices.mjs';
 
 const watch = process.argv.includes('--watch');
 const test = process.argv.includes('--test');
@@ -25,6 +26,8 @@ const configs = integration
       { entryPoints: ['webview/index.tsx'], outfile: 'out/webview.js', bundle: true, platform: 'browser',
         format: 'iife', sourcemap: true, minify: !watch, loader: { '.css': 'css' },
         define: { 'process.env.NODE_ENV': watch ? '"development"' : '"production"' } },
+      { entryPoints: ['webview/fontkit.ts'], outfile: 'out/fontkit.js', bundle: true, platform: 'browser',
+        format: 'iife', minify: !watch, sourcemap: true },
     ];
 
 // Codicons (VS Code's icon font) for the webview
@@ -38,4 +41,6 @@ if (watch) {
   console.log('watching…');
 } else {
   await Promise.all(configs.map(c => esbuild.build(c)));
+  // licenses of the bundled packages, from the source maps (the package ships no node_modules)
+  if (!integration && !corpus && !test) await writeNotices('.');
 }

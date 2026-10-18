@@ -24,6 +24,10 @@ interface RBase {
   values?: [string, unknown][];
   /** KeepTogether: kept on one page if it fits. */
   keepTogether?: boolean;
+  /** Evaluated explicit page breaks on data regions and rectangles. */
+  pageBreakBefore?: boolean;
+  pageBreakAfter?: boolean;
+  resetPageNumber?: boolean;
   /** Action on click (preview): evaluated URL, bookmark, or drillthrough target. */
   action?: RAction;
   /** Evaluated bookmark of this item (target of bookmark links). */
@@ -56,6 +60,8 @@ export interface RRow {
   cells: RCell[];
   /** Page break before this row (group PageBreak). */
   breakBefore: boolean;
+  breakAfter?: boolean;
+  resetPageNumberAfter?: boolean;
   /** Page numbering restarts on the page starting with this row (PageBreak/ResetPageNumber). */
   resetPageNumber: boolean;
   /** Static header row repeated at the top of every page the table continues on (RepeatOnNewPage). */
@@ -67,11 +73,20 @@ export interface RLine extends RBase { kind: 'line'; stroke: string; strokeWidth
 export interface RImage extends RBase { kind: 'image'; src: string; sizing: string }
 export interface RPlaceholder extends RBase { kind: 'placeholder'; label: string }
 
-export type ChartType = 'Column' | 'Bar' | 'Line' | 'Area' | 'Pie' | 'Doughnut' | 'Scatter';
+export type ChartType = 'Column' | 'Bar' | 'Line' | 'Area' | 'Pie' | 'Doughnut' | 'Scatter'
+  | 'Funnel' | 'Pyramid' | 'Range' | 'RangeColumn' | 'RangeBar' | 'Polar' | 'Radar';
 export interface RChartSeries {
   name: string; type: ChartType; stacked: boolean; values: (number | null)[];
   /** 100 % stacked, smoothed line, plotted on the secondary value axis. */
   percent?: boolean; smooth?: boolean; secondary?: boolean;
+  /** Range charts: the low value of each point (`values` are the high values). */
+  low?: (number | null)[];
+  /** Fill color of each data point (ChartDataPoint/Style/Color, may be an expression); null: the palette color. */
+  colors?: (string | null)[];
+  /** Marker of line, scatter and polar points ('None' hides them); size in points. */
+  marker?: { type: string; size?: number };
+  /** A calculated series (moving average, mean, …) – drawn as a dashed line. */
+  derived?: boolean;
 }
 /** An axis as evaluated: title, label format, fixed bounds. */
 export interface RChartAxis { title?: string; format?: string; min?: number; max?: number }

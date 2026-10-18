@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { ChartSpec, chartXml, emptyAxis, patchChart, readChart } from '../webview/charts';
+import { ChartSpec, chartXml, deriveValues, emptyAxis, patchChart, readChart } from '../webview/charts';
 import { RawItem, emptyReport } from '../webview/model';
 import { XmlDom, parseRdl, serializeRdl } from '../webview/rdl';
 import { renderReport } from '../webview/render/engine';
@@ -133,5 +133,73 @@ test('SVG-Darstellung: alle Typen, Achsentitel, zweite Achse, Beschriftungen', a
     if (kind !== 'Pie' && kind !== 'Doughnut') assert.ok(svg.includes('>Umsatz<'), `${kind}: Achsentitel`);
     if (kind === 'Column') assert.ok(svg.includes('>Menge<'), 'Titel der zweiten Achse');
     if (kind === 'PercentColumn') assert.ok(svg.includes('100 %') || svg.includes('100,00 %') || svg.includes('100'), '100 %');
+  }
+});
+
+test('berechnete Reihen: Formeln', () => {
+  const v = [2, 4, 6, null, 10];
+  assert.deepEqual(deriveValues('MovingAverage', v, { Period: '2' }), [null, 3, 5, 6, 10]);
+  assert.deepEqual(deriveValues('MovingAverage', v, { Period: '3', StartFromFirst: 'True' }), [2, 3, 4, 5, 8]);
+  assert.deepEqual(deriveValues('Mean', v, {}), [5.5, 5.5, 5.5, 5.5, 5.5]);
+  assert.deepEqual(deriveValues('Median', [3, 1, 2], {}), [2, 2, 2]);
+  assert.deepEqual(deriveValues('WeightedMovingAverage', [1, 2, 3], { Period: '2' }), [null, 5 / 3, 8 / 3]);
+  assert.deepEqual(deriveValues('ExponentialMovingAverage', [2, 4, 8], { Period: '2' }), [null, 3, 3 * (1 / 3) + 8 * (2 / 3)]);
+  assert.equal(deriveValues('TriangularMovingAverage', [1, 2, 3, 4], { Period: '3' })!.length, 4);
+  assert.equal(deriveValues('BollingerBands', v, {}), null);
+});
+
+test('Trichter, Bereich, Polar; Punktfarben, Markierungen, gleitender Durchschnitt', () => {
+  const rich: ChartSpec = {
+    ...spec,
+    series: [
+      { name: 'Umsatz', value: '=Sum(Fields!Amount.Value)', color: '=IIf(Sum(Fields!Amount.Value) > 60, "Green", "Red")', marker: 'Diamond', trend: { formula: 'MovingAverage', period: 2 } },
+      { name: 'Menge', value: '=Sum(Fields!Qty.Value)', kind: 'Line' },
+    ],
+  };
+  const xml = chartXml(rich, { top: 0, left: 0, width: 4, height: 2.5 });
+  assert.deepEqual(readChart(xml, dom), rich);
+  const r = withChart(xml);
+  const doc = serializeRdl(r, dom);
+  assert.match(xml, /<ChartDerivedSeriesCollection><ChartDerivedSeries><ChartSeries Name="Umsatz_MovingAverage">/);
+  assert.match(xml, /<SourceChartSeriesName>Umsatz<\/SourceChartSeriesName><DerivedSeriesFormula>MovingAverage<\/DerivedSeriesFormula>/);
+  const chart = renderReport(doc, { dom, mode: 'preview', data }).body.nodes[0] as RChart;
+  assert.deepEqual(chart.series[0].colors, ['Green', 'Red']);
+  assert.deepEqual(chart.series[0].marker, { type: 'Diamond' });
+  const trend = chart.series.find(s => s.derived)!;
+  assert.deepEqual(trend.values, [null, 87.5]);
+  assert.equal(trend.type, 'Line');
+  const design = renderReport(doc, { dom, mode: 'design' }).body.nodes[0] as RChart;
+  assert.equal(design.series.filter(s => s.derived).length, 1);
+
+  // the trend is changed, then removed; the chart's other XML stays
+  const p2 = patchChart(xml, { ...rich, series: [{ ...rich.series[0], trend: { formula: 'Mean', period: 2 } }, rich.series[1]] }, dom);
+  assert.equal(readChart(p2, dom)!.series[0].trend?.formula, 'Mean');
+  assert.equal((p2.match(/<ChartDerivedSeries>/g) ?? []).length, 1);
+  assert.doesNotMatch(p2, /Period/);
+  const p3 = patchChart(p2, { ...rich, series: [{ ...rich.series[0], trend: undefined, color: undefined, marker: undefined }, rich.series[1]] }, dom);
+  assert.doesNotMatch(p3, /ChartDerivedSeries|<Color>=IIf|Diamond/);
+  // renaming the series keeps its calculated series attached
+  const p4 = patchChart(xml, { ...rich, series: [{ ...rich.series[0], name: 'Erlös' }, rich.series[1]] }, dom);
+  assert.match(p4, /<SourceChartSeriesName>Erls<\/SourceChartSeriesName>/);
+  assert.equal((p4.match(/<ChartDerivedSeries>/g) ?? []).length, 1);
+
+  // range: High/Low instead of Y, back to Y
+  const range = patchChart(xml, { ...rich, kind: 'RangeColumn', series: [{ name: 'Umsatz', value: '=Max(Fields!Amount.Value)', low: '=Min(Fields!Amount.Value)' }] }, dom);
+  assert.match(range, /<Type>Range<\/Type><Subtype>Column<\/Subtype>/);
+  assert.match(range, /<ChartDataPointValues><High>=Max\(Fields!Amount.Value\)<\/High><Low>=Min\(Fields!Amount.Value\)<\/Low><\/ChartDataPointValues>/);
+  const rc = renderReport(serializeRdl(withChart(range), dom), { dom, mode: 'preview', data }).body.nodes[0] as RChart;
+  assert.equal(rc.series[0].type, 'RangeColumn');
+  assert.deepEqual(rc.series[0].values, [100, 50]);
+  assert.deepEqual(rc.series[0].low, [25, 50]);
+  const back = patchChart(range, { ...rich, kind: 'Column', series: [{ name: 'Umsatz', value: '=Sum(Fields!Amount.Value)' }] }, dom);
+  assert.match(back, /<ChartDataPointValues><Y>=Sum\(Fields!Amount.Value\)<\/Y><\/ChartDataPointValues>/);
+
+  for (const [kind, type, sub, render] of [['Funnel', 'Shape', 'Funnel', 'Funnel'], ['Pyramid', 'Shape', 'Pyramid', 'Pyramid'], ['Radar', 'Polar', 'Radar', 'Radar'], ['Polar', 'Polar', undefined, 'Polar'], ['Range', 'Range', undefined, 'Range']] as const) {
+    const one: ChartSpec = { ...spec, kind, series: [{ name: 'Umsatz', value: '=Sum(Fields!Amount.Value)', ...(kind === 'Range' ? { low: '=0' } : {}) }] };
+    const x = chartXml(one, { top: 0, left: 0, width: 4, height: 2.5 });
+    assert.match(x, new RegExp(`<Type>${type}</Type>${sub ? `<Subtype>${sub}</Subtype>` : '<Style'}`));
+    assert.deepEqual(readChart(x, dom), one);
+    const c = renderReport(serializeRdl(withChart(x), dom), { dom, mode: 'preview', data }).body.nodes[0] as RChart;
+    assert.equal(c.series[0].type, render);
   }
 });

@@ -31,6 +31,7 @@ async function open(api: Api, name: string) {
   await vscode.commands.executeCommand('vscode.open', uri);
   const probe = await until(`Designer für ${name}`, () => api.probes.get(uri.toString()));
   await until(`Webview hat ${name} geladen`, () => probe.received.find(m => m.type === 'loaded'));
+  await until(`Designer für ${name} ist bereit`, () => probe.received.find(m => m.type === 'state'));
   return { uri, probe, doc: docOf(uri) };
 }
 
@@ -416,6 +417,14 @@ test('PDF-Export: alle Seiten der Vorschau in Seitengröße des Berichts', async
     // Verkaufsrechnung: A4 (21 × 29.7 cm)
     assert.ok(Math.abs(size.width - 595.3) < 2 && Math.abs(size.height - 841.9) < 2, `${size.width} × ${size.height}`);
     assert.ok(bytes.length > 3000, 'Inhalt vorhanden');
+    // the report's fonts are embedded when an installed font file is found (otherwise the standard fonts are used)
+    const { FontIndex } = await import('../../src/fonts');
+    if (await new FontIndex().find({ families: ['Segoe UI', 'Arial', 'sans-serif'], bold: false, italic: false })) {
+      const { PDFDict, PDFName } = await import('pdf-lib');
+      const embedded = pdf.context.enumerateIndirectObjects()
+        .some(([, o]) => o instanceof PDFDict && (o.has(PDFName.of('FontFile2')) || o.has(PDFName.of('FontFile3'))));
+      assert.ok(embedded, 'Schrift eingebettet');
+    }
     // to look at the result: BC_RB_KEEP_PDF=/path/file.pdf npm run test:vscode
     if (process.env.BC_RB_KEEP_PDF) await vscode.workspace.fs.writeFile(vscode.Uri.file(process.env.BC_RB_KEEP_PDF), bytes);
   } finally {
@@ -467,6 +476,75 @@ test('Lokalisierung: Extension, Webview und Manifest in der Sprache von VS Code'
   // manifest: command title
   const pkg = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!.packageJSON;
   assert.equal(pkg.l10n, './l10n');
+});
+
+
+let domRequest = 0;
+async function domAction(api: Api, uri: vscode.Uri, probe: EditorProbe, selector: string, action = 'read', value?: string) {
+  const id = ++domRequest;
+  await probe.send({ type: 'testDom', id, selector, action, value });
+  const reply = await until('DOM: ' + selector, () => probe.received.find(m => m.type === 'testDomResult' && m.id === id));
+  assert.ok(!reply.error, String(reply.error));
+  return reply;
+}
+
+test('Ausdruckssuche: echte Dialogeingaben, Vorschau, Ersetzen und Rückgängig', async api => {
+  const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  const original = doc.getText();
+  await vscode.commands.executeCommand('bcReportBuilder.findExpressions', uri);
+  await domAction(api, uri, probe, '.expression-search select', 'input', 'uses');
+  await domAction(api, uri, probe, '.expression-search .form-row:nth-child(2) select', 'input', 'Fields!UnitPrice_Line');
+  assert.ok(Number((await domAction(api, uri, probe, '.expression-result')).count) > 0);
+  await domAction(api, uri, probe, '.expression-search select', 'input', 'search');
+  await domAction(api, uri, probe, '.expression-search input', 'input', 'Fields!UnitPrice_Line.Value');
+  const found = await domAction(api, uri, probe, '.expression-result');
+  assert.ok(Number(found.count) > 0);
+  await domAction(api, uri, probe, '.expression-search .form-row:nth-child(3) input', 'input', 'Fields!LineAmount_Line.Value');
+  const preview = await domAction(api, uri, probe, '.replacement-preview');
+  assert.match(String(preview.text), /Fields!LineAmount_Line.Value/);
+  await domAction(api, uri, probe, '.expression-search .modal-footer .primary', 'click');
+  await until('Ersetzungen geschrieben', () => !doc.getText().includes('Fields!UnitPrice_Line.Value'));
+  await domAction(api, uri, probe, '.expression-search .modal-footer button:last-child', 'click');
+  await vscode.commands.executeCommand('undo');
+  await until('Sammelersetzung rückgängig', () => doc.getText() === original);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Bausteine: Datei laden, echte Dialogbestätigung und gemeinsames Rückgängig', async api => {
+  const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  const original = doc.getText();
+  const { parseRdl, serializeRdl } = await import('../../webview/rdl');
+  const { createBlock } = await import('../../webview/blocks');
+  const { DOMParser, XMLSerializer } = await import('@xmldom/xmldom');
+  const dom = {
+    parse: (xml: string) => new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document,
+    serialize: (node: Node) => new XMLSerializer().serializeToString(node as never),
+  };
+  const source = parseRdl(original, dom);
+  const block = createBlock(source, [source.body.items[0].name], dom);
+  const temporary = file('Abnahme-Baustein.rdlc');
+  await vscode.workspace.fs.writeFile(temporary, new TextEncoder().encode(serializeRdl(block)));
+  const w = vscode.window as unknown as Record<string, unknown>;
+  const originalOpen = w.showOpenDialog;
+  w.showOpenDialog = async () => [temporary];
+  try {
+    await withAnswers({ pick: [['Import Block from File…']] }, async () => {
+      await probe.deliver({ type: 'pickBlock' });
+    });
+    await domAction(api, uri, probe, '.block-dialog');
+    await domAction(api, uri, probe, '.block-dialog .modal-footer .primary', 'click');
+    await until('Baustein eingefügt', () => doc.getText() !== original);
+    const result = parseRdl(doc.getText(), dom);
+    assert.equal(result.body.items.length, source.body.items.length + 1);
+    assert.notEqual(result.body.items.at(-1)!.name, source.body.items[0].name);
+    assert.equal(result.dataSets.length, source.dataSets.length);
+    await vscode.commands.executeCommand('undo');
+    await until('Baustein rückgängig', () => doc.getText() === original);
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    w.showOpenDialog = originalOpen;
+    await vscode.workspace.fs.delete(temporary);
+  }
 });
 
 export async function run(): Promise<void> {

@@ -4,6 +4,23 @@ Visueller Designer für RDLC-Layouts von Business-Central-Berichten (`.rdlc`, au
 Microsoft Report Builder, mit der **Dokumentgliederung**, die es sonst nur im Berichts-Designer von Visual Studio gibt,
 und mit dem **AL-Report als Datenquelle**.
 
+## Installation
+
+Die Extension wird als VSIX über die [GitHub Releases](https://github.com/strxngewxrld/report-builder/releases) verteilt:
+Die Datei `bc-report-builder-<version>.vsix` des neuesten Releases herunterladen und in VS Code **Extensions: Install from
+VSIX…** ausführen, oder:
+
+```sh
+code --install-extension bc-report-builder-1.0.0.vsix
+```
+
+Voraussetzung ist VS Code 1.90 oder neuer. Das Paket enthält alle Laufzeitabhängigkeiten.
+
+**Updates**: Beim Start prüft die Extension, ob in den GitHub Releases eine neuere Version liegt, und bietet dann
+*Installieren* (lädt die VSIX, prüft die SHA-256-Prüfsumme von GitHub und installiert sie), *Release öffnen* oder *Diese
+Version überspringen* an. Dabei wird nur die öffentliche GitHub-API abgefragt; es werden keine Daten gesendet. Abschalten
+lässt sich das mit `bcReportBuilder.checkForUpdates`.
+
 ## Business Central
 
 ### AL-Report als Datenquelle
@@ -69,10 +86,11 @@ Rahmen je Seite, Textläufe mit eigener Formatierung, Datenbank- und eingebettet
 - **Seitenumbruch** nach Seitengröße und Rändern, Gruppenumbrüche (`PageBreak`), `KeepTogether`, wiederholte Kopfzeilen (`RepeatOnNewPage`), `ResetPageNumber`
 - **Seitenkopf/-fuß je Seite**: Seitenzahlen, `ReportItems!` der Seite, `First/Last(ReportItems!…)`
 - **Messgeräte** (rund und linear) mit Skala, Bereichen und Zeiger
-- **`<Code>`-Block** wird interpretiert (VB-Teilmenge, auch `For`/`For Each`/`While`/`Do`-Schleifen und `Select Case`): `BlankZero`…, `SetData`/`GetData` (der Seitenkopf sieht den Stand seiner Seite), `IsNewPage`/`GetGroupPageNumber`, `SetRowColor`, `CalcPct` und eigene Funktionen
+- **`<Code>`-Block** wird interpretiert (VB-Teilmenge, auch `For`/`For Each`/`While`/`Do`-Schleifen, `Select Case`, `Try`/`Catch`/`Finally`, `With` und Arrays): `BlankZero`…, `SetData`/`GetData` (der Seitenkopf sieht den Stand seiner Seite), `IsNewPage`/`GetGroupPageNumber`, `SetRowColor`, `CalcPct` und eigene Funktionen
 - Ausdrücke: Aggregate inkl. Bereich und `RunningValue`, `Previous`, `RowNumber`, `IIf`/`Switch`/`Choose`, Text-, Datums- und Formatfunktionen, `Convert.*`, `System.String.*`, `Math.*`, .NET-Formatcodes
 - **Daten**: *Berichtsdaten › Vorschaudaten laden* liest **Excel** (z. B. aus BC: Report ausführen › *Senden an › Microsoft Excel-Dokument (nur Daten)*), CSV oder JSON; gespeichert als `<Layout>.data.json`. Ohne Daten erzeugt die Vorschau Beispielzeilen entlang der AL-Datenelemente (Kopf- und Zeilendatensätze wie im echten BC-Dataset).
-- **PDF-Export** direkt aus der Vorschau (Text, Rahmen, Hintergründe als Vektoren; Bilder und Diagramme eingebettet);
+- **PDF-Export** direkt aus der Vorschau (Text, Rahmen, Hintergründe als Vektoren; Bilder und Diagramme eingebettet; die
+  installierten TrueType-/OpenType-Schriften des Berichts als Teilmenge eingebettet, mit allen Unicode-Zeichen der Schrift);
   **Drucken** öffnet die paginierte Vorschau im Browser; Export als HTML, Excel und Word
 
 ### Tabellen, Gruppen, Listen und Matrizen
@@ -88,11 +106,14 @@ Tablix, je Beleg ein Rechteck mit Kopfdaten und der verschachtelten Zeilentabell
 - **Listen**: Felder auf das Rechteck einer Listenzelle ziehen legt dort ein Textfeld an; Elemente darin sind verschiebbar
 - **Matrix einfügen** (Zeilen-/Spaltengruppe, Wert, Gesamtzeile/-spalte); Kopfzellen und Ecke sind normale Textfelder
 - **Diagramm einfügen** und *Diagrammeigenschaften*: Typ (Säulen, auch gestapelt und 100 %, Balken, Linie, geglättete Linie,
-  Fläche, gestapelte Fläche, Punkte, Kreis, Ring), Kategorie, Reihen mit eigenem Typ (Kombidiagramm) und zweiter Werteachse,
-  Achsen (Titel, Zahlenformat, Minimum/Maximum), Datenbeschriftungen, Titel, Legende, Palette; bestehende Diagramme werden
-  gezielt gepatcht, alles andere bleibt wortgleich
-- **Spaltengruppen** zu bestehenden Tabellen hinzufügen (*Gruppe hinzufügen › Spaltengruppe*) und löschen (nur Gruppe oder mit
-  Spalten); Spalteneigenschaften *Ausblenden* und *Umschalten durch*
+  Fläche, gestapelte Fläche, Punkte, Kreis, Ring, Trichter, Pyramide, Bereich, Bereichssäulen/-balken, Polar, Netz), Kategorie,
+  Reihen mit eigenem Typ (Kombidiagramm) und zweiter Werteachse, Farbe der Datenpunkte (auch als Ausdruck je Punkt),
+  Markierungen, berechnete Reihen (gleitende Durchschnitte, Mittelwert, Median – gestrichelt), Achsen (Titel, Zahlenformat,
+  Minimum/Maximum), Datenbeschriftungen, Titel, Legende, Palette; bestehende Diagramme werden gezielt gepatcht, alles andere
+  bleibt wortgleich
+- **Spaltengruppen** zu Tabellen und Matrizen hinzufügen (*Gruppe hinzufügen › Spaltengruppe*) – auch zu Tabellen mit
+  Spaltenköpfen und um bestehende Spaltengruppen herum (neue Kopfebene, die Ecke wächst mit) – und löschen (nur Gruppe oder
+  mit Spalten); Spalteneigenschaften *Ausblenden* und *Umschalten durch*
 - **Textteile**: Textfelder mit mehreren formatierten Teilen (z. B. „Seite **1**“) – jeder Teil mit Text/Ausdruck und Formatierung;
   *Textteile › Aufteilen* zerlegt ein Textfeld (`="Seite " & Globals!PageNumber` → zwei Teile), *In einfaches Textfeld* fasst sie
   wieder zusammen
@@ -106,6 +127,28 @@ Damit Layouts in Git kleine, nachvollziehbare Diffs ergeben: Unveränderte Eleme
 bearbeitete behalten alle nicht modellierten Inhalte (`Visibility`, `ZIndex`, Seitenrahmen …), die Stil-Ebene jeder
 Eigenschaft, die Elementreihenfolge, Attribute wie `EvaluationMode` und die Maßeinheit (`pt`/`in`/`cm`).
 Schema-Version, `MustUnderstand`, `rd:ReportUnitType` (auch `Invalid`), Zeilenenden und BOM bleiben erhalten.
+
+## Ausdrücke, Verwendungen und Layout-Bausteine
+
+Die **Lupe** im Designer öffnet *Ausdrücke und Verwendungen…*: Suchen/Ersetzen im gesamten Layout, einschließlich
+Stilen, Gruppen und unverändert gespeicherten Elementen. Vorher/Nachher-Vorschau, einzelne Treffer oder alle ersetzen;
+eine Sammelersetzung ist ein Rückgängig-Schritt. Im Modus *Feld- und Labelverwendungen* zeigt die Auswahl eines Felds
+oder AL-Labels seine Verwendungen mit Elementname, Eigenschaft und Pfad; *Im Layout anzeigen* springt zum Element.
+Feste Texte und AL-Quelltext werden nicht verändert.
+
+Über das **Bibliothek-Symbol** lassen sich ausgewählte Elemente als Baustein speichern und in anderen Reports einsetzen,
+z. B. Firmenkopf, Adressblock oder Fußzeile. Die Bibliothek bleibt im VS-Code-Profil erhalten; Export/Import als RDLC-Datei
+ermöglicht die Weitergabe. Beim Einfügen sind Abschnitt und Position wählbar. Namen und interne Verweise werden angepasst;
+benötigte eingebettete Bilder und verwendeter Berichtscode werden übernommen. Abweichender Code oder gleichnamige Bilder
+mit anderem Inhalt werden nicht überschrieben. Fehlende Felder, Labels oder Datasets werden vorab angezeigt und müssen
+im Zielreport ergänzt oder die Ausdrücke angepasst werden. Datenquellen und AL-Datasets werden nicht übertragen.
+
+Die Vorschau berücksichtigt Umbrüche vor/nach Rechtecken und Datenbereichen sowie bedingte Gruppen-Umbrüche
+(`Disabled`, `ResetPageNumber` als Ausdruck); „Am Ende“ gilt auch für die letzte Gruppeninstanz. Seiten werden nach dem
+Laden der verwendeten Schriften neu vermessen.
+
+Die drei Funktionen sind auch über die Befehlspalette verfügbar. Ein manueller Abnahmeplan unter `docs/ABNAHME.md`
+beschreibt die Abläufe und erwarteten Ergebnisse.
 
 ## Dokumentgliederung
 Registerkarte links: Seitenkopf / Text / Seitenfuß → Berichtselemente → Zeilen-/Spaltengruppen → Zellinhalte, beliebig
@@ -211,11 +254,40 @@ npm install
 npm run build          # out/extension.js und out/webview.js (esbuild)
 npm run watch
 npm run typecheck
-npm run package        # .vsix
+npm run package        # artifacts/bc-report-builder-<version>.vsix, anschließend geprüft (scripts/check-package.mjs)
 ```
 
 F5 in VS Code startet einen Extension Host mit `samples/`: ein AL-Projekt (`app.json`, `src/Verkaufsrechnung.Report.al`)
 mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsatzbericht.rdl` mit Beispieldaten.
+
+### Paket und Veröffentlichung
+
+`npm run package` baut die Produktionsbundles, schreibt `THIRD_PARTY_NOTICES.md` (Lizenzen der gebündelten Pakete aus den
+Source Maps) und erzeugt die VSIX. Die Positivliste in `.vscodeignore` nimmt nur Manifest, Übersetzungen, README,
+CHANGELOG, Lizenzen, Icon und die Bundles in `out/` auf. Danach prüft `scripts/check-package.mjs` das fertige Paket:
+genau diese Dateien, Manifest und Übersetzungen, Icon, CHANGELOG-Abschnitt der Version, und dass das gepackte Bundle ohne
+`node_modules` lädt und bei der Aktivierung (gegen eine nachgebildete VS-Code-API) alle Befehle und den Editor registriert.
+Die CI lädt die VSIX als Artefakt hoch und veröffentlicht nichts.
+
+Veröffentlicht wird als GitHub Release mit der VSIX als Asset – genau das findet die Update-Prüfung der Extension:
+
+```sh
+# Version anheben, CHANGELOG.md um „## [x.y.z] - Datum“ ergänzen, committen und pushen
+npm version patch --no-git-tag-version
+# lokal prüfen: Typprüfung, Tests, VSIX, Release-Plan – kein GitHub-Aufruf
+npm run publish:github -- --dry-run
+# veröffentlichen (optional --draft); legt den Tag v<version> auf GitHub an
+npm run publish:github
+```
+
+`tools/publish-github.mjs` braucht die [GitHub CLI](https://cli.github.com/) (`gh auth login` oder `GH_TOKEN`/`GITHUB_TOKEN`
+mit `Contents: write`), ein sauberes Arbeitsverzeichnis und einen gepushten Release-Commit. Es führt Typprüfung, `npm test`
+und `npm run package` aus, legt den fehlenden Tag `v<version>` exakt auf dem gebauten Commit an (vorhandene Tags müssen
+auf denselben Commit zeigen und werden nie verschoben) und erzeugt den Release mit `gh release create --verify-tag`; die
+Release Notes stammen aus dem passenden Abschnitt von `CHANGELOG.md`. Vorhandene Releases und Assets werden nicht
+überschrieben. Der Probelauf schreibt `artifacts/v<version>-release-plan.json` (Ziel, Commit, SHA-256, Befehle) und
+`artifacts/v<version>-release-notes.md`; in VS Code als Task **Report Builder: Publishing-Probelauf**. Die
+Integrationstests (`npm run test:vscode`) laufen in der CI – vor einem Release sollte sie für den Commit grün sein.
 
 ## Aufbau
 
@@ -227,6 +299,8 @@ mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsat
 | `src/bcCommands.ts`, `src/codeBlock.ts` | BC-Befehle, CodeLens, `<Code>`-Block als VB-Dokument |
 | `src/lint.ts`, `src/layoutService.ts` | Prüfung und Problembereich |
 | `src/xlsx.ts`, `src/csv.ts` | Excel-/CSV-Import |
+| `src/updateCheck.ts` | Update-Prüfung gegen GitHub Releases, Download und Prüfsumme der VSIX |
+| `scripts/`, `tools/publish-github.mjs` | Paketierung, Paketprüfung, Lizenzhinweise; Veröffentlichung als GitHub Release |
 | `src/layoutEdit.ts` | Layout-Änderungen im Host (Label-Wert, Spalte umbenennen) für gemeinsame Bearbeitungsschritte mit AL |
 | `webview/rdl.ts` | RDL-Parser und quellerhaltender Serializer |
 | `webview/render/` | Vorschau-Engine (RDL → Darstellungsbaum), Seitenumbruch, React-Darstellung, Diagramme, Messgeräte, PDF-Export |
@@ -238,16 +312,18 @@ mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsat
 | `webview/components/` | Symbolleiste, Designer, Berichtsdaten, Gliederung, Eigenschaften, Dialoge, Vorschau |
 
 ## Grenzen
-- Diagramme: Trendlinien, 3D, Spezialtypen (Trichter, Bereich, Polar …) und Formatierung einzelner Datenpunkte bleiben wie im
-  Layout und sind nur im XML änderbar
+- Diagramme: 3D, Börsen-/Kerzen-/Boxplot-Diagramme, weitere Formeln berechneter Reihen (Bollinger-Bänder, MACD, …) und
+  Formatierung über Farbe und Markierung hinaus bleiben wie im Layout und sind nur im XML änderbar; eine lineare Trendlinie
+  kennt RDL nicht
 - Karten erscheinen als Platzhalter und bleiben unverändert erhalten; Unterberichte werden nicht ausgeführt (beides kommt in
   Business-Central-RDLC-Layouts nicht vor)
-- Neue Spaltengruppen nur für Tabellen ohne Spaltenköpfe; Kreuztabellen entstehen über *Matrix einfügen*
 - Zellen im Tabellenkörper lassen sich nur waagerecht verbinden – wie in Report Builder, denn RDL kennt `RowSpan` nur in der Ecke
 - Export nach Excel/Word überträgt Texte, Tabellen (Zahlen als Zahlen) und Diagrammwerte – kein pixelgenaues Abbild; der
-  PDF-Export nutzt die PDF-Standardschriften (Helvetica, Times, Courier)
+  PDF-Export nimmt ohne installierte Schriftdatei (oder bei Lizenz „keine Einbettung“) die PDF-Standardschriften (nur
+  WinAnsi-Zeichen)
 - Neue Spalten und Labels erscheinen erst nach dem Erstellen des Projekts im Layout-Dataset (wie bei der Arbeit in Visual Studio)
 - Die Vorschau ist eine Annäherung an den Berichtsserver, nicht pixelgenau; Abfragen gegen echte Datenquellen werden nicht ausgeführt
-- Der `<Code>`-Interpreter kennt `Try`/`Catch`, `With` und Arrays mit Index-Zuweisung nicht – betroffene Funktionen melden das in der Vorschau
+- Der `<Code>`-Interpreter kennt eine VB-Teilmenge: Klassen, `Using`, `New` für .NET-Objekte (außer `Exception`) und `On Error`
+  (wird ignoriert) fehlen – betroffene Funktionen melden das in der Vorschau
 - Word- und Excel-Layouts werden nicht bearbeitet (sie öffnen sich aus *Berichtsdaten › Layouts des Reports* in Word bzw. Excel)
 - Die Oberfläche gibt es auf Englisch und Deutsch

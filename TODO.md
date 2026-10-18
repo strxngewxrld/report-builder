@@ -2,30 +2,39 @@
 
 Was zur vollständigen Anwendung noch fehlt – nach Priorität. Erledigtes steht abgehakt darunter.
 
+## Erstes Release (1.0.0)
+- [ ] Offene Änderungen committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
+- [ ] Extension-ID `tknueppe.bc-report-builder` endgültig festlegen – Updates installieren nur über dieselbe ID
+- [ ] Screenshot `media/preview.png` (Designer mit Gliederung und Berichtsdaten) für README und Release-Seite
+- [ ] Veröffentlichen: `npm run publish:github -- --dry-run`, dann `npm run publish:github`
+- [ ] Update-Weg einmal echt prüfen: 1.0.0 installieren, Release 1.0.1 anlegen, Hinweis → *Installieren* → Neustart der Erweiterungen
+- [ ] Remote-Fenster (WSL/SSH/Dev Container): Update-Installation prüfen (VSIX liegt im temporären Ordner des Extension-Hosts)
+- [ ] Eingeschränkter Modus: `untrustedWorkspaces.supported: true` überdenken – *Report in BC ausführen* und *Projekt
+      erstellen* starten AL-Befehle; ggf. `limited` mit Beschreibung wie bei Sheets
+
 ## Absichern (vor einer Veröffentlichung) – braucht Hand und echte Umgebungen
-- [ ] Neue Dialoge und Abläufe in VS Code von Hand durchgehen: Gruppe, Spaltengruppe, Matrix, Diagramm (Achsen, zweite Achse,
-      Kombi), Textteile aufteilen/zusammenfassen, Aktionen, eingebettete Bilder, Layouts wechseln, native Kontextmenüs,
+- [ ] Neue Werkzeuge anhand von `docs/ABNAHME.md` abnehmen (Ausdrücke/Verwendungen, Bausteine, Vorschau)
+- [ ] Neue Dialoge und Abläufe in VS Code von Hand durchgehen: Gruppe, Spaltengruppe (auch geschachtelt), Matrix, Diagramm (Achsen, zweite Achse,
+      Kombi, neue Typen, berechnete Reihen, Punktfarben), Textteile aufteilen/zusammenfassen, Aktionen, eingebettete Bilder, Layouts wechseln, native Kontextmenüs,
       Felder in Listen-Rechtecke ziehen, Tastaturbedienung mit Screenreader (VoiceOver/NVDA)
 - [ ] Oberfläche auf Englisch von Hand durchsehen (Texte, Platz in Dialogen und Bereichen)
 - [ ] Mehrdatei-Rückgängig von Hand prüfen: *Als AL-Label anlegen* und *Spalte umbenennen* (VS Code fragt „in allen Dateien?“)
 - [ ] Symbolpakete gegen eine echte Base Application (`.alpackages/*.app`) prüfen – getestet nur mit selbst gebautem Paket
 - [ ] „Report in Business Central ausführen“ gegen echte Umgebungen prüfen (Cloud-Sandbox, Docker, On-Prem)
-- [ ] Excel-/Word-/PDF-Export in Microsoft Excel, Word und Acrobat öffnen (geprüft mit openpyxl, `textutil`, pdf-lib, Quick Look)
+- [ ] Excel-/Word-/PDF-Export in Microsoft Excel, Word und Acrobat öffnen (PDF auch mit eingebetteten Schriften unter Windows/Linux) (geprüft mit openpyxl, `textutil`, pdf-lib, Quick Look)
 - [ ] UI-Tests für Dialoge in der Webview (Klicks im DOM) – Befehlswege, Vorschau, PDF und Lokalisierung sind integrationsgetestet
 
-## Funktionen
-- [ ] Karte darstellen (räumliche Daten) und Unterberichte in der Vorschau ausführen – in BC-RDLC-Layouts nicht verwendet
-- [ ] Spaltengruppen auch für Tabellen mit vorhandenen Spaltenköpfen (heute: „Matrix einfügen“)
-- [ ] Diagramme: Trendlinien, Spezialtypen (Trichter, Bereich, Polar), Formatierung einzelner Datenpunkte
-- [ ] `<Code>`-Interpreter: `Try`/`Catch`, `With`, Arrays mit Index-Zuweisung
-- [ ] PDF-Export: eingebettete TrueType-Schriften (heute PDF-Standardschriften, nur WinAnsi-Zeichen)
-- [ ] Weitere Sprachen der Oberfläche (heute Englisch und Deutsch)
-
-## Projekt und Veröffentlichung
-- [ ] `repository`-Feld in `package.json`, sobald es ein Remote-Repository gibt
-- [ ] README mit Screenshots/GIFs; Marketplace-Veröffentlichung (Publisher-Konto, Token)
 
 ## Erledigt
+- [x] Ausdrücke suchen/ersetzen mit Vorschau, Syntaxprüfung und Sammel-Undo; Feld-/Labelverwendungen mit Layout-Navigation
+- [x] Wiederverwendbare Layout-Bausteine: Bibliothek, RDLC-Export/Import, Bilder und interne Verweise, Abhängigkeitsprüfung
+- [x] Vorschau: Container-Umbrüche, Gruppen-Endumbrüche, bedingte Umbrüche und Seitenzahl-Neustart; Schriften vor Vermessung laden
+- [x] Echte Dialogeingaben/Klicks für Ausdruckssuche und Bausteinimport integrationsgetestet; Abnahmeplan `docs/ABNAHME.md`
+- [x] Spaltengruppen auch für Tabellen mit vorhandenen Spaltenköpfen (weitere Gruppe, Elterngruppe einer Matrix)
+- [x] Diagramme: berechnete Reihen (gleitende Durchschnitte, Mittelwert, Median – RDL kennt keine lineare Trendlinie),
+      Trichter, Pyramide, Bereich, Polar, Netz, Farbe und Markierung der Datenpunkte
+- [x] `<Code>`-Interpreter: `Try`/`Catch`/`Finally`, `Throw`, `With`, Arrays mit Index-Zuweisung und `ReDim`
+- [x] PDF-Export: eingebettete TrueType-/OpenType-Schriften (Teilmenge, fontkit bei Bedarf nachgeladen)
 - [x] „Als AL-Label anlegen“ und „Felder als Spalten hinzufügen“ mit Eingabefeld/Auswahlliste testen (Integrationstests mit
       beantworteten Eingaben, auch „Spalte umbenennen“)
 - [x] Integrationstests unter Last stabil machen (Zeitlimits über `BC_RB_TIMEOUT_SCALE`, zweiter Versuch je Test, Warten auf

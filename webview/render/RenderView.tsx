@@ -106,6 +106,8 @@ export function NodeView({ node, shift = 0, inCell = false }: { node: RNode; shi
   const selected: CSSProperties = o.selected && o.selected === node.name ? { outline: '2px solid #0a84ff', outlineOffset: -2, zIndex: 2 } : {};
   const common = {
     'data-key': node.key,
+    ...(node.pageBreakBefore ? { 'data-break': node.resetPageNumber ? 'reset' : '' } : {}),
+    ...(node.pageBreakAfter ? { 'data-break-after': node.resetPageNumber ? 'reset' : '' } : {}),
     'data-seq': node.seq,
     ...(node.values ? { 'data-values': '' } : {}),
     ...(node.keepTogether ? { 'data-keep': '' } : {}),
@@ -154,6 +156,7 @@ export function NodeView({ node, shift = 0, inCell = false }: { node: RNode; shi
             {node.rows.map(r => (
               <tr key={r.key} data-key={r.key} style={{ height: r.height * S }}
                 {...(hasNestedTable(r) ? {} : { 'data-leaf': '' })}
+                {...(r.breakAfter ? { 'data-break-after': r.resetPageNumberAfter ? 'reset' : '' } : {})}
                 {...(r.breakBefore ? { 'data-break': r.resetPageNumber ? 'reset' : '' } : {})}
                 {...(r.repeat ? { 'data-repeat': '' } : {})}>
                 {r.cells.map((c, i) => (

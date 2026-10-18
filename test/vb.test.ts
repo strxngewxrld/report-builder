@@ -154,9 +154,8 @@ test('state at a version: body state per page, section writes persist', () => {
 
 test('unsupported statements fail only when executed', () => {
   const code = new CodeModule(`Public Function Loop1()
-  Try
-  Catch
-  End Try
+  Using r As New Object
+  End Using
   Return 1
 End Function
 Public Function Fine()
@@ -275,4 +274,162 @@ End Function`);
   ev('=Code.AddUp(3)');
   assert.equal(ev('=Code.SumTo(0)'), 0);
   assert.throws(() => ev('=Code.Forever()'), /endless loop/);
+});
+
+test('Try/Catch/Finally, Throw and With', () => {
+  const code = new CodeModule(`Shared Log As String = ""
+Public Function GetLog() As String
+  Return Log
+End Function
+Public Function SafeDiv(a As Decimal, b As Decimal) As String
+  Try
+    If b = 0 Then Throw New Exception("division by zero")
+    Return a / b
+  Catch ex As Exception When ex.Message = "nothing"
+    Return "never"
+  Catch ex As Exception
+    Return "error: " & ex.Message
+  Finally
+    Log &= "f"
+  End Try
+End Function
+Public Function Parse(t As String) As Decimal
+  Try
+    Return CDec(t)
+  Catch
+    Return -1
+  End Try
+End Function
+Public Function Rethrow()
+  Try
+    Throw New System.Exception("inner")
+  Catch e
+    Throw
+  End Try
+End Function
+Public Function Leave() As Integer
+  Dim n As Integer
+  Try
+    n = 1
+    Exit Try
+    n = 2
+  Finally
+    n += 10
+  End Try
+  Return n
+End Function
+Public Function Nested() As String
+  Try
+    Try
+      Throw New Exception("x")
+    Finally
+      Log &= "n"
+    End Try
+  Catch ex As Exception
+    Return ex.ToString() & Log
+  End Try
+End Function
+Public Function Loops()
+  Try
+    While True
+    End While
+  Catch
+    Return "caught"
+  End Try
+End Function
+Public Function WithArray() As Integer
+  Dim a() As Integer = {4, 5, 6}
+  With a
+    Return .Length + a(0)
+  End With
+End Function
+Public Function WithException() As String
+  Try
+    Throw New Exception("m")
+  Catch ex As Exception
+    With ex
+      Return .Message & "!"
+    End With
+  End Try
+End Function`);
+  assert.deepEqual(code.errors, []);
+  const ev = (e: string) => evaluate(e, ctx(code));
+  assert.equal(ev('=Code.SafeDiv(6, 3)'), 2);
+  assert.equal(ev('=Code.SafeDiv(1, 0)'), 'error: division by zero');
+  assert.equal(ev('=Code.GetLog()'), 'ff');
+  assert.equal(ev('=Code.Parse("12.5")'), 12.5);
+  assert.equal(ev('=Code.Parse("abc")'), -1);
+  assert.throws(() => ev('=Code.Rethrow()'), /inner/);
+  assert.equal(ev('=Code.Leave()'), 11);
+  assert.equal(ev('=Code.Nested()'), 'xffn');
+  // the endless-loop guard cannot be caught
+  assert.throws(() => ev('=Code.Loops()'), /endless loop/);
+  assert.equal(ev('=Code.WithArray()'), 7);
+  assert.equal(ev('=Code.WithException()'), 'm!');
+});
+
+test('arrays: declaration, index assignment, ReDim and Shared arrays', () => {
+  const code = new CodeModule(`Shared Totals(3) As Decimal
+Shared Names() As String = {"a", "b"}
+Public Function Squares(n As Integer) As String
+  Dim q(n) As Integer
+  For i = 0 To UBound(q)
+    q(i) = i * i
+  Next
+  q(1) += 10
+  Return Join(q, ",")
+End Function
+Public Function Grid() As Integer
+  Dim g(1, 2) As Integer
+  g(1, 2) = 7
+  g(0, 1) = 3
+  Return g(1, 2) * 10 + g(0, 1) + g.GetUpperBound(1)
+End Function
+Public Function Grow() As String
+  Dim a As String() = New String() {"x", "y"}
+  ReDim Preserve a(3)
+  a(3) = "z"
+  Dim b(2) As Integer
+  b(0) = 5
+  ReDim b(1)
+  Return Join(a, "-") & "|" & b.Length & b(0) & Array.IndexOf(a, "y")
+End Function
+Public Sub Add(i As Integer, v As Decimal)
+  Totals(i) = Totals(i) + v
+End Sub
+Public Function GetTotal(i As Integer) As Decimal
+  Return Totals(i)
+End Function
+Public Function Name(i As Integer) As String
+  Return Names(i)
+End Function
+Public Function Out() As String
+  Dim a(1) As Integer
+  Try
+    a(5) = 1
+  Catch ex As Exception
+    Return ex.Message
+  End Try
+End Function
+Public Function Defaults() As String
+  Dim n As Integer, ok As Boolean
+  Dim s As String
+  Return n & "/" & ok & "/" & IsNothing(s)
+End Function`);
+  assert.deepEqual(code.errors, []);
+  const ev = (e: string) => evaluate(e, ctx(code));
+  assert.equal(ev('=Code.Squares(3)'), '0,11,4,9');
+  assert.equal(ev('=Code.Grid()'), 75);
+  assert.equal(ev('=Code.Grow()'), 'x-y--z|201');
+  ev('=Code.Add(2, 5)');
+  const v = code.version;
+  ev('=Code.Add(2, 1.5)');
+  assert.equal(ev('=Code.GetTotal(2)'), 6.5);
+  assert.equal(ev('=Code.GetTotal(0)'), 0);
+  // the Shared array as it was at an earlier version
+  assert.equal(code.atVersion(v, () => ev('=Code.GetTotal(2)')), 5);
+  assert.equal(ev('=Code.Name(1)'), 'b');
+  assert.match(String(ev('=Code.Out()')), /outside the bounds/);
+  assert.equal(ev('=Code.Defaults()'), '0/False/True');
+  assert.throws(() => ev('=Code.Name(5)'), /outside the bounds/);
 });

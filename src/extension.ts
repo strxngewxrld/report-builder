@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { l10n, setLocalization } from '../webview/l10n';
 import { DesignerSession, ReportEditorProvider } from './reportEditorProvider';
 import { serializeRdl } from '../webview/rdl';
@@ -7,11 +10,13 @@ import { newReportTemplate } from '../webview/templates';
 import { probes, testing } from './testing';
 import { LayoutService } from './layoutService';
 import { registerBcCommands } from './bcCommands';
+import { checkForUpdates, downloadVsix } from './updateCheck';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 /** Commands the webview carries out itself (toolbar, context menu, command palette). */
 const WEBVIEW_COMMANDS = [
+  'findExpressions', 'saveBlock', 'insertBlock',
   'togglePreview', 'reportProperties', 'print', 'exportHtml', 'zoomIn', 'zoomOut', 'zoomReset',
   'toggleOutline', 'toggleReportData', 'toggleProperties', 'toggleHeader', 'toggleFooter',
   'insert.textbox', 'insert.table', 'insert.image', 'insert.line', 'insert.rectangle',
@@ -122,7 +127,59 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
   registerBcCommands(context, service);
+  void startUpdateCheck(context).catch(() => undefined);
   return api;
+}
+
+const SKIPPED_VERSION_KEY = 'bcReportBuilder.skippedUpdateVersion';
+
+/** Offers a newer version from GitHub Releases (once per start): install its VSIX, open the release or skip it. */
+async function startUpdateCheck(context: vscode.ExtensionContext): Promise<void> {
+  if (testing || context.extensionMode === vscode.ExtensionMode.Test) return;
+  if (!vscode.workspace.getConfiguration('bcReportBuilder').get<boolean>('checkForUpdates', true)) return;
+  const manifest = context.extension.packageJSON as { version: string; repository?: { url?: string } };
+  const openRelease = (url: string) => void vscode.env.openExternal(vscode.Uri.parse(url, true));
+  await checkForUpdates({
+    current: manifest.version,
+    repositoryUrl: manifest.repository?.url ?? '',
+    fetch,
+    skipped: context.globalState.get<string>(SKIPPED_VERSION_KEY),
+    async notify(release) {
+      const install = l10n.t('Install'), open = l10n.t('Open Release'), skip = l10n.t('Skip This Version');
+      const choice = await vscode.window.showInformationMessage(
+        l10n.t('Business Central Report Builder {0} is available (installed: {1}).', release.version, manifest.version),
+        ...(release.vsix ? [install] : []), open, skip);
+      return choice === install ? 'install' : choice === open ? 'open' : choice === skip ? 'skip' : undefined;
+    },
+    async install(release) {
+      try {
+        await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: l10n.t('Installing Business Central Report Builder {0}…', release.version),
+        }, async () => {
+          const bytes = await downloadVsix(release.vsix, fetch);
+          // installFromVSIX only accepts file: URIs; globalStorageUri may use vscode-userdata:
+          const dir = await mkdtemp(join(tmpdir(), 'bc-report-builder-update-'));
+          try {
+            const file = join(dir, basename(release.vsix.name));
+            await writeFile(file, bytes);
+            await vscode.commands.executeCommand('workbench.extensions.command.installFromVSIX', [vscode.Uri.file(file)]);
+          } finally {
+            await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+          }
+        });
+        // VS Code itself offers to restart the extensions after installing the VSIX
+      } catch (error) {
+        const open = l10n.t('Open Release');
+        const reason = error instanceof Error ? error.message : String(error);
+        const choice = await vscode.window.showErrorMessage(
+          l10n.t('Could not install Business Central Report Builder {0}: {1}', release.version, reason), open);
+        if (choice === open) openRelease(release.url);
+      }
+    },
+    open: openRelease,
+    skip: version => void context.globalState.update(SKIPPED_VERSION_KEY, version),
+  });
 }
 
 /** Resource of the active editor tab (designer or text editor). */

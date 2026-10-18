@@ -37,3 +37,10 @@ test('a single element taller than a page is cut', () => {
 test('empty body still gives one page', () => {
   assert.equal(paginate({ height: 0, leaves: [], keeps: [], forced: [], tables: [] }, 500).length, 1);
 });
+
+test('coincident container/group boundaries preserve page-number resets without empty pages', () => {
+  const pages = paginate({ height: 300, leaves: rows(0, 6, 50), keeps: [], tables: [], forced: [
+    { y: 0, reset: false }, { y: 100, reset: false }, { y: 100, reset: true }, { y: 300, reset: true },
+  ] }, 500);
+  assert.deepEqual(pages.map(p => [p.start, p.end, p.reset]), [[0, 100, false], [100, 300, true]]);
+});

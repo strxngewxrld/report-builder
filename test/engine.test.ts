@@ -96,3 +96,31 @@ test('simple table report with parameters, aggregates and alternating colors', (
   assert.equal(bg(2), '#F2F6FA');
   assert.deepEqual(r.body.nodes.filter(n => n.name === 'Titel').flatMap(texts), ['Umsatzbericht 2026']);
 });
+
+test('rectangle and data-region page breaks evaluate Disabled and ResetPageNumber expressions', () => {
+  // Use an explicit rectangle independent of the BC hierarchy to exercise item-level page breaks.
+  const report = `<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition"><ReportSections><ReportSection><Body><Height>2in</Height><ReportItems>
+    <Rectangle Name="Section"><Top>0in</Top><Left>0in</Left><Width>1in</Width><Height>1in</Height><PageBreak><BreakLocation>StartAndEnd</BreakLocation><Disabled>=Parameters!Disabled.Value</Disabled><ResetPageNumber>=Not Parameters!Disabled.Value</ResetPageNumber></PageBreak></Rectangle>
+  </ReportItems></Body><Width>2in</Width><Page><PageWidth>8in</PageWidth><PageHeight>10in</PageHeight></Page></ReportSection></ReportSections></Report>`;
+  const enabled = renderReport(report, { dom, mode: 'preview', parameters: { Disabled: false } });
+  assert.deepEqual(enabled.errors, []);
+  assert.equal(enabled.body.nodes[0].pageBreakBefore, true);
+  assert.equal(enabled.body.nodes[0].pageBreakAfter, true);
+  assert.equal(enabled.body.nodes[0].resetPageNumber, true);
+  const disabled = renderReport(report, { dom, mode: 'preview', parameters: { Disabled: true } });
+  assert.equal(disabled.body.nodes[0].pageBreakBefore, false);
+  assert.equal(disabled.body.nodes[0].pageBreakAfter, false);
+  const design = renderReport(report, { dom, mode: 'design' });
+  assert.equal(design.body.nodes[0].pageBreakAfter, false);
+});
+
+test('group End breaks include the last instance and conditional disabling is evaluated per group', () => {
+  const xml = bc.replace('<BreakLocation>Between</BreakLocation>', '<BreakLocation>End</BreakLocation><Disabled>=Fields!Paid.Value</Disabled>');
+  const result = renderReport(xml, { dom, mode: 'preview', data: { DataSet_Result: rows } });
+  const table = result.body.nodes[0] as RTable;
+  assert.equal(table.rows[1].breakAfter, true);
+  assert.equal(table.rows[1].resetPageNumberAfter, true);
+  assert.ok(!table.rows[3].breakAfter, 'the paid group disables its page break');
+  const allEnabled = renderReport(xml.replace('<Disabled>=Fields!Paid.Value</Disabled>', ''), { dom, mode: 'preview', data: { DataSet_Result: rows } });
+  assert.equal((allEnabled.body.nodes[0] as RTable).rows[3].breakAfter, true, 'End applies after the final group too');
+});

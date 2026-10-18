@@ -4,16 +4,18 @@
 // Supported: Function/Sub with parameters, Shared/Dim declarations (optionally initialised), If/ElseIf/Else/End If
 // (block and single-line, "Then" optional), For/Next (with Step), For Each, While/End While, Do…Loop (While/Until
 // before or after), Select Case (values, ranges with To, Is <op>, Case Else), Exit/Continue For/Do/While/Select,
-// Return, Exit Function/Sub, assignments (=, +=, -=, *=, /=, &=), calls, comments (' and REM), line continuations
-// and On Error (ignored). Other statements (Try, With, …) are reported as unsupported when they are executed.
+// Try/Catch (with When)/Finally, Throw, With/End With, arrays (Dim a(5), Dim a() = {…}, ReDim Preserve, a(i) = x,
+// several dimensions), Return, Exit Function/Sub/Try, assignments (=, +=, -=, *=, /=, \=, ^=, &=) to variables,
+// array elements and members, calls, comments (' and REM), line continuations and On Error (ignored). Other statements
+// are reported as unsupported when they are executed.
 //
 // Writes to Shared variables are logged with a version number, so the state at any point of the evaluation can be
 // restored – page headers need the state as it was at the end of their page.
 
-import { EvalContext, Node, compare, evalNode, parseExpression, toBool } from './expr';
+import { EvalContext, Node, compare, evalNode, isNothing, parseExpression, toBool, toNum, toStr } from './expr';
 import { l10n } from './l10n';
 
-type LoopKind = 'for' | 'do' | 'while' | 'select';
+type LoopKind = 'for' | 'do' | 'while' | 'select' | 'try';
 type LoopCond = { until: boolean; cond: Node } | null;
 /** One test of a Case clause: a value (op '='), "Is <op> value" or a range "a To b". */
 type CaseTest = { op: string; expr: Node } | { from: Node; to: Node };
@@ -28,25 +30,80 @@ type Stmt =
   | { k: 'continue'; kind: LoopKind }
   | { k: 'return'; expr: Node | null }
   | { k: 'exit' }
-  | { k: 'assign'; name: string; op: string; expr: Node }
-  | { k: 'dim'; name: string; expr: Node | null }
+  | { k: 'assign'; target: Target; op: string; expr: Node }
+  | { k: 'dim'; decls: Decl[] }
+  | { k: 'redim'; name: string; dims: Node[]; preserve: boolean }
+  | { k: 'try'; body: Stmt[]; catches: { name: string | null; when: Node | null; body: Stmt[] }[]; fin: Stmt[] | null }
+  | { k: 'throw'; expr: Node | null }
+  | { k: 'with'; tmp: string; subject: Node; body: Stmt[] }
   | { k: 'expr'; expr: Node }
   | { k: 'unsupported'; text: string };
+
+/** Left side of an assignment: a variable, an array element a(i, j) or a member obj.Name. */
+type Target = { k: 'var'; name: string } | { k: 'index'; name: string; idx: Node[] } | { k: 'member'; obj: Node; name: string };
+/** One declared variable: Dim a(5) As Integer / Dim b() As String = {"x"} / Dim n As Decimal = 1. */
+interface Decl { name: string; dims: Node[] | null; isArray: boolean; type: string; init: Node | null }
 
 interface Fn { name: string; params: { name: string; def: Node | null }[]; body: Stmt[]; isSub: boolean }
 
 class ReturnSignal { constructor(readonly value: unknown) {} }
 class ExitSignal {}
 class LoopSignal { constructor(readonly kind: LoopKind, readonly cont: boolean) {} }
+/** Errors the code cannot catch: endless loops and too deep recursion. */
+class LimitError extends Error {}
 
-/** Splits at commas outside of strings and parentheses. */
+/** The exception object of a Catch block (ex.Message, ex.ToString()). */
+export class VbException {
+  constructor(readonly Message: string) {}
+  toString() { return this.Message; }
+}
+class ThrownError extends Error { constructor(readonly exception: VbException) { super(exception.Message); } }
+
+const NUMERIC = /^(integer|int16|int32|int64|long|short|byte|sbyte|uinteger|ulong|ushort|decimal|double|single|float)$/i;
+/** Value of an uninitialised variable or array element of a type. */
+function defaultValue(type: string): unknown {
+  const t = type.replace(/^system\./i, '');
+  return NUMERIC.test(t) ? 0 : /^boolean$/i.test(t) ? false : null;
+}
+
+/** An array with the upper bounds `bounds` (VB: Dim a(2) has three elements), nested for several dimensions. */
+function makeArray(bounds: number[], type: string, old?: unknown): unknown[] {
+  const [n, ...rest] = bounds;
+  return Array.from({ length: Math.max(0, Math.trunc(n) + 1) }, (_, i) => {
+    const prev = Array.isArray(old) ? old[i] : undefined;
+    if (rest.length) return makeArray(rest, type, prev);
+    return Array.isArray(old) && i < old.length ? prev : defaultValue(type);
+  });
+}
+
+/** The first top-level assignment operator of a statement: [left, operator, right], or null. */
+function splitAssign(text: string): [string, string, string] | null {
+  let depth = 0, inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') inStr = !inStr;
+    if (inStr) continue;
+    if (ch === '(' || ch === '{') depth++;
+    else if (ch === ')' || ch === '}') depth--;
+    else if (depth === 0 && ch === '=') {
+      const prev = text[i - 1] ?? '';
+      if (prev === '<' || prev === '>') return null; // a comparison: not an assignment statement
+      const op = '+-*/\\^&'.includes(prev) && i > 0 ? prev + '=' : '=';
+      const left = text.slice(0, i - (op.length - 1)).trim();
+      return left ? [left, op, text.slice(i + 1).trim()] : null;
+    }
+  }
+  return null;
+}
+
+/** Splits at commas outside of strings, parentheses and braces. */
 function splitTop(text: string): string[] {
   const out: string[] = [];
   let depth = 0, inStr = false, cur = '';
   for (const ch of text) {
     if (ch === '"') inStr = !inStr;
-    else if (!inStr && ch === '(') depth++;
-    else if (!inStr && ch === ')') depth--;
+    else if (!inStr && (ch === '(' || ch === '{')) depth++;
+    else if (!inStr && (ch === ')' || ch === '}')) depth--;
     else if (!inStr && depth === 0 && ch === ',') { out.push(cur.trim()); cur = ''; continue; }
     cur += ch;
   }
@@ -115,13 +172,14 @@ export class CodeModule {
         i++;
         continue;
       }
-      const decl = /^(?:(?:public|private|friend|protected|shared|dim|static|const)\s+)+(\w+)(?:\s*\(\s*\))?(?:\s+as\s+(?:new\s+)?[\w.]+(?:\(\))?)?(?:\s*=\s*(.+))?$/i.exec(text);
+      const head = /^(?:(?:public|private|friend|protected|shared|dim|static|const|readonly)\s+)+(.+)$/i.exec(text);
+      const decl = head && this.decl(head[1], line);
       if (decl) {
         let value: unknown = null;
-        if (decl[2]) {
-          try { value = evalNode(this.expr(decl[2], line), this.bareContext()); } catch (e) { this.errors.push(l10n.t('Line {0}: {1}', line, (e as Error).message)); }
-        }
-        this.initial.set(decl[1].toLowerCase(), value);
+        try {
+          value = this.initValue(decl, this.bareContext());
+        } catch (e) { this.errors.push(l10n.t('Line {0}: {1}', line, (e as Error).message)); }
+        this.initial.set(decl.name, value);
       } else if (!/^(option|imports)\s/i.test(text)) {
         this.errors.push(l10n.t('Line {0}: unsupported statement outside of a function: {1}', line, text));
       }
@@ -134,6 +192,7 @@ export class CodeModule {
   get functionNames(): string[] { return [...this.functions.values()].map(f => f.name); }
 
   private expr(text: string, line: number): Node {
+    text = this.withify(text);
     try { return parseExpression(text); } catch (e) { throw new Error(l10n.t('Code, line {0}: {1} in "{2}"', line, (e as Error).message, text)); }
   }
 
@@ -187,7 +246,41 @@ export class CodeModule {
     return [out, i];
   }
 
-  /** Parses For, For Each, While, Do and Select Case blocks starting at `i`; null if the line starts none of them. */
+  /** Subjects of the enclosing With blocks while parsing (innermost last). */
+  private withs: string[] = [];
+  private withCount = 0;
+
+  /** Inside With: ".Name" refers to the With subject (rewritten to its hidden variable). */
+  private withify(text: string): string {
+    const top = this.withs[this.withs.length - 1];
+    if (!top) return text;
+    let out = '', inStr = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"') inStr = !inStr;
+      if (!inStr && ch === '.' && /[A-Za-z_]/.test(text[i + 1] ?? '') && !/[\w)\]}"]/.test(text.slice(0, i).trimEnd().slice(-1))) out += top;
+      out += ch;
+    }
+    return out;
+  }
+
+  /** Parses a declaration after Dim/Shared/…: "a(5) As Integer", "b() As String = {…}", "n As New Object". */
+  private decl(text: string, line: number): Decl | null {
+    const m = /^(\w+)\s*(?:\(([^)]*)\))?(?:\s+as\s+(?:new\s+)?([\w.]+)\s*(\(\s*\))?)?(?:\s*=\s*(.+))?$/i.exec(text.trim());
+    if (!m) return null;
+    const dims = m[2]?.trim() ? splitTop(m[2]).map(d => this.expr(d, line)) : null;
+    // New Integer() {1, 2} is the same as {1, 2}
+    const init = m[5]?.replace(/^new\s+[\w.]+\s*\(\s*\)\s*(?=\{)/i, '');
+    return { name: m[1].toLowerCase(), dims, isArray: m[2] !== undefined || !!m[4], type: m[3] ?? '', init: init ? this.expr(init, line) : null };
+  }
+
+  private initValue(d: Decl, ctx: EvalContext): unknown {
+    if (d.init) return evalNode(d.init, ctx);
+    if (d.dims) return makeArray(d.dims.map(x => toNum(evalNode(x, ctx))), d.type);
+    return d.isArray ? null : defaultValue(d.type);
+  }
+
+  /** Parses For, For Each, While, Do, Select Case, Try and With blocks starting at `i`; null for other lines. */
   private loop(lines: { text: string; line: number }[], i: number): [Stmt, number] | null {
     const { text, line } = lines[i];
     let m: RegExpExecArray | null;
@@ -216,6 +309,49 @@ export class CodeModule {
         pre: m![1] ? { until: /^until$/i.test(m![1]), cond: this.expr(m![2], line) } : null,
         post: tail?.[1] ? { until: /^until$/i.test(tail[1]), cond: this.expr(tail[2], lines[next - 1].line) } : null,
       })), next];
+    }
+    if (/^try$/i.test(text)) {
+      const part = /^(catch(\s+.*)?|finally|end\s+try)$/i;
+      let [body, next] = this.block(lines, i + 1, part);
+      const catches: { name: string | null; when: Node | null; body: Stmt[] }[] = [];
+      let fin: Stmt[] | null = null;
+      let bad: Error | null = null;
+      while (next > i + 1 && next <= lines.length && part.test(lines[next - 1].text)) {
+        const header = lines[next - 1];
+        if (/^end\s+try$/i.test(header.text)) break;
+        const [partBody, after] = this.block(lines, next, part);
+        if (/^finally$/i.test(header.text)) fin = partBody;
+        else {
+          const c = /^catch(?:\s+(\w+)(?:\s+as\s+[\w.]+)?)?(?:\s+when\s+(.+))?$/i.exec(header.text);
+          if (!c) bad ??= new Error(l10n.t('invalid Catch'));
+          else {
+            try {
+              catches.push({ name: c[1]?.toLowerCase() ?? null, when: c[2] ? this.expr(c[2], header.line) : null, body: partBody });
+            } catch (e) { bad ??= e as Error; }
+          }
+        }
+        if (after === next || !(after <= lines.length && part.test(lines[after - 1].text))) { next = after; break; }
+        next = after;
+      }
+      return [this.guard(text, () => {
+        if (bad) throw bad;
+        return { k: 'try', body, catches, fin };
+      }), next];
+    }
+    if ((m = /^with\s+(.+)$/i.exec(text))) {
+      const tmp = `__with${this.withCount++}`;
+      let subject: Node | Error;
+      try { subject = this.expr(m[1], line); } catch (e) { subject = e as Error; }
+      this.withs.push(tmp);
+      try {
+        const [body, next] = this.block(lines, i + 1, /^end\s+with$/i);
+        return [this.guard(text, () => {
+          if (subject instanceof Error) throw subject;
+          return { k: 'with', tmp, subject, body };
+        }), next];
+      } finally {
+        this.withs.pop();
+      }
     }
     if ((m = /^select\s+(?:case\s+)?(.+)$/i.exec(text))) {
       const caseOrEnd = /^(case\s+.+|end\s+select)$/i;
@@ -263,18 +399,46 @@ export class CodeModule {
     let m: RegExpExecArray | null;
     if ((m = /^return(?:\s+(.+))?$/i.exec(text))) return { k: 'return', expr: m[1] ? this.expr(m[1], line) : null };
     if (/^exit\s+(function|sub)$/i.test(text)) return { k: 'exit' };
-    if ((m = /^(exit|continue)\s+(for|do|while|select)$/i.exec(text))) {
+    if ((m = /^(exit|continue)\s+(for|do|while|select|try)$/i.exec(text))) {
       const kind = m[2].toLowerCase() as LoopKind;
       return /^exit$/i.test(m[1]) ? { k: 'exitloop', kind } : { k: 'continue', kind };
     }
     if (/^on\s+error\b/i.test(text)) return { k: 'expr', expr: { k: 'lit', v: null } };
-    if ((m = /^(?:dim|static)\s+(\w+)(?:\s*\(\s*\))?(?:\s+as\s+(?:new\s+)?[\w.]+(?:\(\))?)?(?:\s*=\s*(.+))?$/i.exec(text))) {
-      return { k: 'dim', name: m[1].toLowerCase(), expr: m[2] ? this.expr(m[2], line) : null };
+    if ((m = /^(?:dim|static|const)\s+(.+)$/i.exec(text))) {
+      // Dim a, b As Integer: variables without a type take the type of the next one
+      const decls = splitTop(m[1]).map(d => this.decl(d, line));
+      if (decls.some(d => !d)) throw new Error(l10n.t('invalid declaration'));
+      const list = decls as Decl[];
+      for (let j = list.length - 2; j >= 0; j--) if (!list[j].type && !list[j].init) list[j].type = list[j + 1].type;
+      return { k: 'dim', decls: list };
     }
-    if (/^(for|while|do|select|loop|next|wend|try|catch|with)\b/i.test(text)) return { k: 'unsupported', text };
-    if ((m = /^([A-Za-z_]\w*)\s*(=|\+=|-=|\*=|\/=|&=)\s*(.+)$/.exec(text))) return { k: 'assign', name: m[1].toLowerCase(), op: m[2], expr: this.expr(m[3], line) };
+    if ((m = /^redim\s+(preserve\s+)?(\w+)\s*\((.+)\)$/i.exec(text))) {
+      return { k: 'redim', name: m[2].toLowerCase(), dims: splitTop(m[3]).map(d => this.expr(d, line)), preserve: !!m[1] };
+    }
+    if ((m = /^throw(?:\s+(.+))?$/i.exec(text))) {
+      if (!m[1]) return { k: 'throw', expr: null };
+      // Throw New Exception("message")
+      const ex = /^new\s+(?:system\.)?\w*exception\s*(?:\((.*)\))?$/i.exec(m[1]);
+      return { k: 'throw', expr: ex ? (ex[1]?.trim() ? this.expr(ex[1], line) : { k: 'lit', v: 'Exception' }) : this.expr(m[1], line) };
+    }
+    if (/^(for|while|do|select|loop|next|wend|try|catch|finally|with|end)\b/i.test(text)) return { k: 'unsupported', text };
     if ((m = /^call\s+(.+)$/i.exec(text))) return { k: 'expr', expr: this.expr(m[1], line) };
+    text = this.withify(text);
+    const assign = splitAssign(text);
+    if (assign) {
+      const target = this.target(assign[0], line);
+      if (target) return { k: 'assign', target, op: assign[1], expr: this.expr(assign[2], line) };
+    }
     return { k: 'expr', expr: this.expr(text, line) };
+  }
+
+  private target(text: string, line: number): Target | null {
+    let n: Node;
+    try { n = this.expr(text, line); } catch { return null; }
+    if (n.k === 'id') return { k: 'var', name: n.name };
+    if (n.k === 'call') return { k: 'index', name: n.name, idx: n.args };
+    if (n.k === 'member' && !n.args.length) return { k: 'member', obj: n.obj, name: n.name };
+    return null;
   }
 
   private guard(text: string, fn: () => Stmt): Stmt {
@@ -303,7 +467,7 @@ export class CodeModule {
   call(name: string, args: unknown[], ctx: EvalContext): unknown {
     const fn = this.functions.get(name.toLowerCase());
     if (!fn) throw new Error(l10n.t('Code.{0} is not defined in the code block', name));
-    if (this.depth > 50) throw new Error(l10n.t('Code.{0}: recursion too deep', name));
+    if (this.depth > 50) throw new LimitError(l10n.t('Code.{0}: recursion too deep', name));
     const locals = new Map<string, unknown>();
     fn.params.forEach((p, i) => locals.set(p.name, i < args.length ? args[i] : p.def ? evalNode(p.def, ctx) : null));
     if (!fn.isSub) locals.set(fn.name.toLowerCase(), null);
@@ -328,7 +492,7 @@ export class CodeModule {
 
   private run(body: Stmt[], locals: Map<string, unknown>, ctx: EvalContext) {
     for (const s of body) {
-      if (++this.steps > 100000) throw new Error(l10n.t('Code: too many statements (endless loop?)'));
+      if (++this.steps > 100000) throw new LimitError(l10n.t('Code: too many statements (endless loop?)'));
       switch (s.k) {
         case 'if': {
           const branch = s.branches.find(b => b.cond === null || toBool(evalNode(b.cond, ctx)));
@@ -337,18 +501,29 @@ export class CodeModule {
         }
         case 'return': throw new ReturnSignal(s.expr ? evalNode(s.expr, ctx) : null);
         case 'exit': throw new ExitSignal();
-        case 'dim': locals.set(s.name, s.expr ? evalNode(s.expr, ctx) : null); break;
-        case 'expr': evalNode(s.expr, ctx); break;
-        case 'unsupported': throw new Error(l10n.t('Code: unsupported statement "{0}"', s.text));
-        case 'assign': {
-          let value = evalNode(s.expr, ctx);
-          if (s.op !== '=') {
-            const cur = locals.has(s.name) ? locals.get(s.name) : this.get(s.name);
-            value = evalNode({ k: 'bin', op: s.op[0], a: { k: 'lit', v: cur }, b: { k: 'lit', v: value } }, ctx);
-          }
-          this.assign(s.name, value, locals);
+        case 'dim': for (const d of s.decls) locals.set(d.name, this.initValue(d, ctx)); break;
+        case 'redim': {
+          const bounds = s.dims.map(d => toNum(evalNode(d, ctx)));
+          const old = this.read(s.name, locals);
+          this.assign(s.name, makeArray(bounds, '', s.preserve ? old : undefined), locals);
+          // without Preserve the elements get the default of the old elements' type
+          if (!s.preserve && Array.isArray(old)) this.fillLike(this.read(s.name, locals) as unknown[], old);
           break;
         }
+        case 'throw': {
+          const v = s.expr ? evalNode(s.expr, ctx) : this.caught[this.caught.length - 1];
+          if (v === undefined) throw new Error(l10n.t('Code: Throw without an exception outside of Catch'));
+          throw new ThrownError(v instanceof VbException ? v : new VbException(toStr(v)));
+        }
+        case 'try': this.runTry(s, locals, ctx); break;
+        case 'with': {
+          locals.set(s.tmp, evalNode(s.subject, ctx));
+          try { this.run(s.body, locals, ctx); } finally { locals.delete(s.tmp); }
+          break;
+        }
+        case 'expr': evalNode(s.expr, ctx); break;
+        case 'unsupported': throw new Error(l10n.t('Code: unsupported statement "{0}"', s.text));
+        case 'assign': this.runAssign(s.target, s.op, s.expr, locals, ctx); break;
         case 'exitloop': throw new LoopSignal(s.kind, false);
         case 'continue': throw new LoopSignal(s.kind, true);
         case 'for': {
@@ -401,9 +576,84 @@ export class CodeModule {
     }
   }
 
+  /** Exceptions of the enclosing Catch blocks, for Throw without an argument. */
+  private caught: VbException[] = [];
+
+  private runTry(s: Extract<Stmt, { k: 'try' }>, locals: Map<string, unknown>, ctx: EvalContext) {
+    const exitTry = (e: unknown) => e instanceof LoopSignal && e.kind === 'try';
+    try {
+      try {
+        this.run(s.body, locals, ctx);
+      } catch (e) {
+        if (exitTry(e)) return;
+        if (!(e instanceof Error) || e instanceof LimitError) throw e;
+        const ex = e instanceof ThrownError ? e.exception : new VbException(e.message);
+        for (const c of s.catches) {
+          if (c.name) locals.set(c.name, ex);
+          if (c.when && !toBool(evalNode(c.when, ctx))) continue;
+          this.caught.push(ex);
+          try {
+            this.run(c.body, locals, ctx);
+          } catch (inner) {
+            if (!exitTry(inner)) throw inner;
+          } finally {
+            this.caught.pop();
+          }
+          return;
+        }
+        throw e;
+      }
+    } finally {
+      if (s.fin) this.run(s.fin, locals, ctx);
+    }
+  }
+
+  private runAssign(t: Target, op: string, expr: Node, locals: Map<string, unknown>, ctx: EvalContext) {
+    let value = evalNode(expr, ctx);
+    const combine = (cur: unknown) => (op === '=' ? value
+      : evalNode({ k: 'bin', op: op[0] === '^' ? '^' : op[0], a: { k: 'lit', v: cur }, b: { k: 'lit', v: value } }, ctx));
+    if (t.k === 'var') {
+      this.assign(t.name, combine(this.read(t.name, locals)), locals);
+      return;
+    }
+    if (t.k === 'member') {
+      const obj = evalNode(t.obj, ctx);
+      if (!obj || typeof obj !== 'object' || obj instanceof Date || Array.isArray(obj)) throw new Error(l10n.t('Code: cannot assign to .{0}', t.name));
+      const rec = obj as Record<string, unknown>;
+      const key = Object.keys(rec).find(k => k.toLowerCase() === t.name.toLowerCase()) ?? t.name;
+      rec[key] = combine(rec[key]);
+      return;
+    }
+    const arr = this.read(t.name, locals);
+    if (!Array.isArray(arr)) throw new Error(l10n.t('Code: {0} is not an array', t.name));
+    const idx = t.idx.map(i => toNum(evalNode(i, ctx)));
+    // copy the path for Shared arrays so that earlier versions (atVersion) keep their values
+    const shared = !locals.has(t.name);
+    const root = shared ? [...arr] : arr;
+    let cur: unknown[] = root;
+    idx.forEach((n, level) => {
+      if (n < 0 || n >= cur.length || !Number.isInteger(n)) throw new Error(l10n.t('Index {0} is outside the bounds of the array', n));
+      if (level === idx.length - 1) cur[n] = combine(cur[n]);
+      else {
+        if (!Array.isArray(cur[n])) throw new Error(l10n.t('Code: {0} is not an array', t.name));
+        if (shared) cur[n] = [...(cur[n] as unknown[])];
+        cur = cur[n] as unknown[];
+      }
+    });
+    if (shared) this.assign(t.name, root, locals);
+  }
+
+  /** ReDim without Preserve: elements become the default of the old elements' type (0 for numbers). */
+  private fillLike(arr: unknown[], old: unknown[]) {
+    const sample = old.find(x => !isNothing(x) && !Array.isArray(x));
+    const def = typeof sample === 'number' ? 0 : typeof sample === 'boolean' ? false : null;
+    const fill = (a: unknown[]) => a.forEach((x, i) => (Array.isArray(x) ? fill(x) : (a[i] = def)));
+    fill(arr);
+  }
+
   /** Runs one loop iteration; false when the loop is left with Exit. */
   private iterate(kind: LoopKind, body: Stmt[], locals: Map<string, unknown>, ctx: EvalContext): boolean {
-    if (++this.steps > 100000) throw new Error(l10n.t('Code: too many statements (endless loop?)'));
+    if (++this.steps > 100000) throw new LimitError(l10n.t('Code: too many statements (endless loop?)'));
     try {
       this.run(body, locals, ctx);
       return true;

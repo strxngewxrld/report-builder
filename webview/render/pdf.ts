@@ -1,7 +1,11 @@
 // PDF export of the paginated preview: the laid-out pages in the DOM are drawn onto PDF pages – text word by word at
-// its position with the standard PDF fonts, backgrounds and borders as vectors, images and SVG (charts, gauges)
-// embedded as pictures. What the browser shows is what the PDF contains, without a print dialog.
+// its position, backgrounds and borders as vectors, images and SVG (charts, gauges) embedded as pictures. What the
+// browser shows is what the PDF contains, without a print dialog.
+//
+// Text uses the installed TrueType/OpenType fonts of the report (a subset embedded, all Unicode characters the font
+// has); the PDF standard fonts (WinAnsi characters only) are the fallback when no font file is available.
 
+import type Fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 
 interface Rect { left: number; top: number; right: number; bottom: number }
@@ -23,10 +27,23 @@ function color(css: string): { c: ReturnType<typeof rgb>; a: number } | null {
 /** Characters the standard fonts (WinAnsi) cannot show become "?". */
 const winAnsi = (s: string) => s.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '').replace(/[^\x20-\x7E\xA0-\xFF€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '?');
 
-function fontKey(cs: CSSStyleDeclaration): StandardFonts {
+/** The font a computed style asks for: its family list (without quotes) and style. */
+export interface FontStyle { families: string[]; bold: boolean; italic: boolean }
+export function fontStyle(cs: Pick<CSSStyleDeclaration, 'fontFamily' | 'fontWeight' | 'fontStyle'>): FontStyle {
+  return {
+    families: cs.fontFamily.split(',').map(f => f.trim().replace(/^["']|["']$/g, '')).filter(Boolean),
+    bold: Number(cs.fontWeight) >= 600 || cs.fontWeight === 'bold',
+    italic: cs.fontStyle === 'italic' || cs.fontStyle === 'oblique',
+  };
+}
+const styleKey = (f: FontStyle) => `${f.families.join(',').toLowerCase()}|${f.bold ? 'b' : ''}${f.italic ? 'i' : ''}`;
+
+/** Loads the font files for font styles (null where none is installed). */
+export type FontLoader = (styles: FontStyle[]) => Promise<(Uint8Array | null)[]>;
+
+function standardFont(cs: CSSStyleDeclaration): StandardFonts {
   const family = cs.fontFamily.toLowerCase();
-  const bold = Number(cs.fontWeight) >= 600 || cs.fontWeight === 'bold';
-  const italic = cs.fontStyle === 'italic' || cs.fontStyle === 'oblique';
+  const { bold, italic } = fontStyle(cs);
   if (/courier|consolas|mono/.test(family)) {
     return bold ? (italic ? StandardFonts.CourierBoldOblique : StandardFonts.CourierBold) : italic ? StandardFonts.CourierOblique : StandardFonts.Courier;
   }
@@ -67,19 +84,88 @@ async function pictureOf(el: Element, width: number, height: number): Promise<{ 
   }
 }
 
+type FontkitWindow = { bcReportBuilderFontkit?: typeof Fontkit };
+let fontkitLoading: Promise<typeof Fontkit> | null = null;
+
+/** Loads out/fontkit.js next to the webview script (with its CSP nonce) the first time a font file is embedded. */
+function loadFontkit(): Promise<typeof Fontkit> {
+  const w = window as unknown as FontkitWindow;
+  if (w.bcReportBuilderFontkit) return Promise.resolve(w.bcReportBuilderFontkit);
+  fontkitLoading ??= new Promise((resolve, reject) => {
+    const main = document.querySelector<HTMLScriptElement>('script[src*="webview.js"]');
+    if (!main) { reject(new Error('webview.js not found')); return; }
+    const script = document.createElement('script');
+    script.nonce = main.nonce;
+    script.src = main.src.replace(/webview\.js(?=[?#]|$)/, 'fontkit.js');
+    script.onload = () => (w.bcReportBuilderFontkit ? resolve(w.bcReportBuilderFontkit) : reject(new Error('fontkit missing')));
+    script.onerror = () => reject(new Error('fontkit.js could not be loaded'));
+    document.head.appendChild(script);
+  }).catch(e => { fontkitLoading = null; throw e; }) as Promise<typeof Fontkit>;
+  return fontkitLoading;
+}
+
+/** The fonts of a document: embedded font files by style, standard fonts as fallback. */
+class Fonts {
+  private standard = new Map<StandardFonts, PDFFont>();
+  private custom = new Map<string, { font: PDFFont; chars: Set<number> } | null>();
+  constructor(private doc: PDFDocument) {}
+
+  /** Embeds the font files for all styles (in one request to the loader). */
+  async load(styles: FontStyle[], loader: FontLoader | undefined) {
+    const todo = styles.filter(s => !this.custom.has(styleKey(s)));
+    if (!todo.length || !loader) return;
+    let files = await loader(todo).catch(() => todo.map(() => null));
+    if (files.some(Boolean)) {
+      try {
+        this.doc.registerFontkit(await loadFontkit());
+      } catch {
+        files = todo.map(() => null);
+      }
+    }
+    for (const [i, s] of todo.entries()) {
+      const bytes = files[i];
+      let entry: { font: PDFFont; chars: Set<number> } | null = null;
+      if (bytes) {
+        try {
+          const font = await this.doc.embedFont(bytes, { subset: true });
+          entry = { font, chars: new Set(font.getCharacterSet()) };
+        } catch { entry = null; } // a font fontkit cannot read: standard font
+      }
+      this.custom.set(styleKey(s), entry);
+    }
+  }
+
+  /** The font for a style and the text as that font can show it. */
+  async get(cs: CSSStyleDeclaration, text: string): Promise<{ font: PDFFont; text: string }> {
+    const custom = this.custom.get(styleKey(fontStyle(cs)));
+    const clean = text.replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '');
+    if (custom) return { font: custom.font, text: [...clean].map(c => (custom.chars.has(c.codePointAt(0)!) ? c : '?')).join('') };
+    const key = standardFont(cs);
+    let f = this.standard.get(key);
+    if (!f) { f = await this.doc.embedFont(key); this.standard.set(key, f); }
+    return { font: f, text: winAnsi(clean) };
+  }
+}
+
+/** The font styles of all text in the elements. */
+function usedStyles(roots: Element[]): FontStyle[] {
+  const out = new Map<string, FontStyle>();
+  for (const root of roots) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.nodeValue?.trim() || !n.parentElement) continue;
+      const s = fontStyle(getComputedStyle(n.parentElement));
+      out.set(styleKey(s), s);
+    }
+  }
+  return [...out.values()];
+}
+
 class PageWriter {
-  private fonts = new Map<StandardFonts, PDFFont>();
-  constructor(private doc: PDFDocument, private page: PDFPage, private origin: DOMRect, private k: number, private height: number) {}
+  constructor(private fonts: Fonts, private doc: PDFDocument, private page: PDFPage, private origin: DOMRect, private k: number, private height: number) {}
 
   private x = (px: number) => (px - this.origin.left) * this.k;
   private y = (px: number) => this.height - (px - this.origin.top) * this.k;
-
-  private async font(cs: CSSStyleDeclaration) {
-    const key = fontKey(cs);
-    let f = this.fonts.get(key);
-    if (!f) { f = await this.doc.embedFont(key); this.fonts.set(key, f); }
-    return f;
-  }
 
   async element(el: Element, clip: Rect) {
     const cs = getComputedStyle(el);
@@ -149,7 +235,6 @@ class PageWriter {
   private async text(node: Text, cs: CSSStyleDeclaration, clip: Rect) {
     const content = node.data;
     if (!content.trim()) return;
-    const font = await this.font(cs);
     const c = color(cs.color) ?? { c: rgb(0, 0, 0), a: 1 };
     const sizePx = parseFloat(cs.fontSize);
     const size = sizePx * this.k;
@@ -164,7 +249,7 @@ class PageWriter {
         if (mid.x < clip.left || mid.x > clip.right || mid.y < clip.top || mid.y > clip.bottom) continue;
         const word = range.getClientRects().length > 1 ? textIn(node, m.index!, m[0], box) : m[0];
         const baseline = box.top + (box.height - sizePx) / 2 + sizePx * 0.8;
-        const text = winAnsi(word);
+        const { font, text } = await this.fonts.get(cs, word);
         if (!text) continue;
         try {
           this.page.drawText(text, { x: this.x(box.left), y: this.y(baseline), size, font, color: c.c, opacity: c.a });
@@ -193,10 +278,12 @@ function textIn(node: Text, start: number, word: string, box: DOMRect): string {
 
 /**
  * Draws the preview pages (elements of the paginated preview, rendered at zoom 1) into a PDF with the report's
- * page size in inches.
+ * page size in inches. `loadFont` supplies the installed font files; without it the standard PDF fonts are used.
  */
-export async function pagesToPdf(pages: HTMLElement[], size: { width: number; height: number }, title: string): Promise<Uint8Array> {
+export async function pagesToPdf(pages: HTMLElement[], size: { width: number; height: number }, title: string, loadFont?: FontLoader): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
+  const fonts = new Fonts(doc);
+  await fonts.load(usedStyles(pages), loadFont);
   doc.setTitle(title);
   doc.setCreator('Business Central Report Builder');
   doc.setProducer('Business Central Report Builder (pdf-lib)');
@@ -204,7 +291,7 @@ export async function pagesToPdf(pages: HTMLElement[], size: { width: number; he
   for (const el of pages) {
     const page = doc.addPage([W, H]);
     const origin = el.getBoundingClientRect();
-    const writer = new PageWriter(doc, page, origin, W / origin.width, H);
+    const writer = new PageWriter(fonts, doc, page, origin, W / origin.width, H);
     await writer.element(el, { left: origin.left, top: origin.top, right: origin.right, bottom: origin.bottom });
   }
   return doc.save();

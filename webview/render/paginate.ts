@@ -43,7 +43,13 @@ function mergeBlocks(list: Interval[]): Interval[] {
 export function paginate(m: Measured, available: number): PageSlice[] {
   const avail = Math.max(available, 20);
   const blocks = mergeBlocks([...m.leaves, ...m.keeps.filter(k => k.bottom - k.top <= avail)]);
-  const forced = [...m.forced].sort((a, b) => a.y - b.y);
+  // Multiple nested containers may request the same boundary; a page-number reset wins.
+  const forced = [...m.forced].sort((a, b) => a.y - b.y).reduce<{ y: number; reset: boolean }[]>((out, f) => {
+    const last = out.at(-1);
+    if (last && Math.abs(last.y - f.y) <= EPS) last.reset ||= f.reset;
+    else out.push({ ...f });
+    return out;
+  }, []);
   const pages: PageSlice[] = [];
   let start = 0;
   let reset = false;

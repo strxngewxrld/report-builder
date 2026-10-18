@@ -450,32 +450,67 @@ const headerTextbox = (r: Report, value: string, taken: Set<string>, bold: boole
 
 /** Why a column group cannot be added to column `col` (null: it can). */
 export function columnGroupBlocker(t: TableItem, col: number): string | null {
-  const leaf = leavesOf(t.columnMembers)[col];
-  if (!leaf) return l10n.t('No column selected');
-  if (headerLevels(t.columnMembers).length) return l10n.t('The table has column headers already – use "Insert Matrix" for cross tables');
-  if (!t.columnMembers.includes(leaf) || leaf.group) return l10n.t('The column belongs to a column group already');
-  return null;
+  return leavesOf(t.columnMembers)[col] ? null : l10n.t('No column selected');
 }
 
 /**
- * Adds a column group around column `col` (Report Builder: Add Group › Column Group › Parent Group): the column
- * repeats per group instance, a header row above the table shows the group value. The other columns get an empty
- * header cell, so every column has the same header levels. Works on tables without column headers.
+ * Adds a column group (Report Builder: Add Group › Column Group › Parent Group) as the parent of the outermost
+ * column member that holds column `col` – the column itself in a plain table, its column group in a matrix or a
+ * table with column groups. The group gets a header cell showing the group value on a new top header level; every
+ * other top-level column gets an empty header cell there (directly, or through a static member around it when it
+ * has a header already), so that all columns keep the same header levels. A corner grows by a row.
  */
 export function addColumnGroup(r: Report, t: TableItem, col: number, opts: { name: string; expression: string }): RowMember | null {
   if (columnGroupBlocker(t, col)) return null;
   const leaf = leavesOf(t.columnMembers)[col];
+  const target = t.columnMembers.find(m => leavesOf([m]).includes(leaf) || m === leaf)!;
+  const hadLevels = headerLevels(t.columnMembers).length;
   const taken = new Set<string>();
   const size = 0.25;
-  for (const m of t.columnMembers) if (m !== leaf) m.header = { size, cell: headerTextbox(r, '', taken, true) };
+  t.columnMembers = t.columnMembers.map(m => {
+    if (m === target) return m;
+    const header = { size, cell: headerTextbox(r, '', taken, true) };
+    if (!m.header) { m.header = header; return m; }
+    return { id: newId(), header, sort: [], extra: [], children: [m] };
+  });
   const group: RowMember = {
     id: newId(), group: newGroup(opts.name, opts.expression ? [opts.expression] : []),
     header: { size, cell: headerTextbox(r, opts.expression, taken, true) },
-    sort: opts.expression ? [{ value: opts.expression, descending: false }] : [], extra: [], children: [leaf],
+    sort: opts.expression ? [{ value: opts.expression, descending: false }] : [], extra: [], children: [target],
   };
-  t.columnMembers.splice(t.columnMembers.indexOf(leaf), 1, group);
+  t.columnMembers.splice(t.columnMembers.indexOf(target), 1, group);
+  if (hadLevels && t.corner?.length) growCorner(r, t);
   syncCorner(r, t);
   return group;
+}
+
+/** The corner gets a row on top for a new column header level (a single corner cell just spans it as well). */
+function growCorner(r: Report, t: TableItem) {
+  const corner = t.corner!;
+  const rowLevels = headerLevels(t.rowMembers).length;
+  const items = corner.flat().filter(c => c.item);
+  if (items.length === 1 && corner[0][0]?.item) {
+    corner[0][0].rowSpan = corner.length + 1;
+    corner.push(Array.from({ length: rowLevels }, () => ({ item: null })));
+    return;
+  }
+  const cell = headerTextbox(r, '', new Set(), true);
+  if (rowLevels > 1) cell.colSpan = rowLevels;
+  corner.unshift(Array.from({ length: rowLevels }, (_, k) => (k === 0 ? { item: cell } : { item: null })));
+}
+
+/** The corner loses its top row with the top column header level. */
+function shrinkCorner(t: TableItem) {
+  const corner = t.corner;
+  if (!corner || corner.length < 2) return;
+  const first = corner[0][0];
+  if (first?.item && (first.rowSpan ?? 1) > 1) {
+    // a cell spanning the levels: one level less, the (empty) last row goes
+    first.rowSpan = (first.rowSpan ?? 1) - 1 > 1 ? (first.rowSpan ?? 1) - 1 : undefined;
+    corner.pop();
+    return;
+  }
+  corner.shift();
 }
 
 /**
@@ -503,11 +538,18 @@ export function deleteColumnGroup(r: Report, t: TableItem, memberId: string, col
   return true;
 }
 
-/** Removes the top column header level when all its cells are empty textboxes of static members. */
+/**
+ * Removes the top column header level when all its cells are empty textboxes of static members; static members
+ * that only carried such a header around one other member are unwrapped again.
+ */
 function dropEmptyHeaderLevel(t: TableItem) {
   const top = t.columnMembers;
   if (!top.length || !top.every(m => !m.group && m.header?.cell.type === 'textbox' && !m.header.cell.value)) return;
-  for (const m of top) m.header = undefined;
+  t.columnMembers = top.flatMap(m => {
+    m.header = undefined;
+    return m.children.length === 1 && !m.extra.length && !m.sort.length ? m.children : [m];
+  });
+  if (headerLevels(t.columnMembers).length) shrinkCorner(t);
 }
 
 /**
