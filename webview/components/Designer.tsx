@@ -753,9 +753,8 @@ function TextContent({ tb, r }: { tb: TextboxItem; r: RenderProps }) {
         onPointerDown={e => e.stopPropagation()}
         onBlur={e => done(e.currentTarget.value)}
         onKeyDown={e => {
-          e.stopPropagation();
-          if (e.key === 'Escape') done(null);
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.blur();
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); }
         }}
       />
     );

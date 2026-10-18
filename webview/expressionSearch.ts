@@ -57,3 +57,11 @@ export function expressionReferences(value: string): { kind: 'Fields' | 'Paramet
   for (const m of value.matchAll(token)) if (m[1]) out.push({ kind: m[1].toLowerCase() === 'fields' ? 'Fields' : 'Parameters', name: (m[2] ?? m[3]).replace(/""/g, '"') });
   return out;
 }
+
+export function renameParameterReference(value: string, from: string, to: string): string {
+  return value.replace(/"(?:[^"]|"")*"|\bParameters\s*(?:!\s*([A-Za-z_]\w*)|\(\s*"((?:[^"]|"")*)"\s*\))/gi, (whole, bang: string, key: string) => {
+    const name = bang ?? key?.replace(/""/g, '"');
+    if (name?.toLowerCase() !== from.toLowerCase()) return whole;
+    return bang ? `Parameters!${to}` : `Parameters("${to}")`;
+  });
+}

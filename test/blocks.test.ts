@@ -113,6 +113,8 @@ test('saved blocks contain only selected presentation dependencies, without sour
 
 test('block scope remapping distinguishes aggregate scopes from ordinary strings and Code calls', async () => {
   const { remapBlockExpression } = await import('../webview/blocks');
+  assert.equal(remapBlockExpression('=CountRows("Data") & ReportItems!Data.Value & "Data"', new Map([['Data', 'Renamed']]), false),
+    '=CountRows("Renamed") & ReportItems!Data.Value & "Data"');
   const names = new Map([['Group1', 'Group1_2'], ['ReportItems', 'ReportItems_2']]);
   assert.equal(remapBlockExpression('=IIf(True, "Group1", Sum(Fields!A.Value, "Group1")) & Code.Sum(1, "Group1")', names),
     '=IIf(True, "Group1", Sum(Fields!A.Value, "Group1_2")) & Code.Sum(1, "Group1")');

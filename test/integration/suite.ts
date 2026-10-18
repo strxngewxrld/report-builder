@@ -2,16 +2,19 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import type { EditorProbe } from '../../src/testing';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
+import { parseRdl, serializeRdl, XmlDom } from '../../webview/rdl';
+import { allReportItems } from '../../webview/model';
 
 type Api = { probes: Map<string, EditorProbe>; service: { lintAll(): Promise<void> } };
 
 /** Slow machines and CI (or a run right after the corpus test) need longer: BC_RB_TIMEOUT_SCALE=3. */
 const SCALE = Math.max(1, Number(process.env.BC_RB_TIMEOUT_SCALE) || 1);
 
-async function until<T>(what: string, fn: () => T | undefined | false, timeout = 20000): Promise<T> {
+async function until<T>(what: string, fn: () => T | undefined | false | Promise<T | undefined | false>, timeout = 20000): Promise<T> {
   const end = Date.now() + timeout * SCALE;
   for (;;) {
-    const v = fn();
+    const v = await fn();
     if (v) return v;
     if (Date.now() > end) throw new Error(`Zeitüberschreitung: ${what}`);
     await new Promise(r => setTimeout(r, 50));
@@ -267,6 +270,10 @@ async function withAnswers<T>(answers: { input?: string[]; pick?: string[][] }, 
     showInformationMessage: w.showInformationMessage, showWarningMessage: w.showWarningMessage, showErrorMessage: w.showErrorMessage,
   };
   const inputs = [...(answers.input ?? [])], picks = [...(answers.pick ?? [])];
+  const extension = vscode.extensions.all.find(extension => extension.packageJSON.name === 'bc-report-builder')!;
+  const language = process.env.BC_RB_TEST_LANGUAGE || vscode.env.language;
+  const translations: Record<string, string> = language.startsWith('de')
+    ? JSON.parse(new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'l10n/bundle.l10n.de.json')))) : {};
   const asked: string[] = [];
   w.showInputBox = async (o: vscode.InputBoxOptions) => {
     asked.push(`input:${o.title ?? o.prompt}`);
@@ -279,7 +286,9 @@ async function withAnswers<T>(answers: { input?: string[]; pick?: string[][] }, 
     asked.push(`pick:${o?.title ?? ''}`);
     const labels = picks.shift();
     const all = await items;
-    return labels && all.filter(i => labels.includes(i.label));
+    const wanted = new Set(labels?.flatMap(label => [label, translations[label]].filter(Boolean)));
+    const chosen = labels && all.filter(i => wanted.has(i.label));
+    return o?.canPickMany ? chosen : chosen?.[0];
   };
   w.showInformationMessage = async (message: string) => { asked.push(`info:${message}`); return undefined; };
   w.showWarningMessage = async (message: string) => { asked.push(`warning:${message}`); return undefined; };
@@ -488,10 +497,72 @@ async function domAction(api: Api, uri: vscode.Uri, probe: EditorProbe, selector
   return reply;
 }
 
+test('Dialoge: Fokus, Tab-Grenzen, Escape und unverändertes Dokument beim Abbrechen', async api => {
+  const { uri, doc, probe } = await open(api, 'Umsatzbericht.rdl');
+  const original = doc.getText();
+  const trigger = '.toolbar .action-group:first-child .action-item:last-child';
+  await domAction(api, uri, probe, trigger, 'click');
+  assert.equal((await domAction(api, uri, probe, '.modal')).focusInside, true, 'Diagrammdialog übernimmt den Fokus');
+  for (const command of ['insert.chart', 'insert.matrix', 'reportProperties']) {
+    if (command !== 'insert.chart') await vscode.commands.executeCommand(`bcReportBuilder.${command}`, uri);
+    for (const shortcut of ['Meta+v', 'Control+v', 'Meta+c', 'Control+x']) {
+      const keyboard = await domAction(api, uri, probe, '.modal-body input', 'keydown', shortcut);
+      assert.equal(keyboard.propagated, true, command + ': Zwischenablage-Tastenkürzel erreicht VS Code');
+      assert.equal(keyboard.defaultPrevented, false);
+    }
+    const first = '.modal-title button';
+    const last = '.modal-footer button:not(.primary)';
+    await domAction(api, uri, probe, last, 'focus');
+    assert.equal((await domAction(api, uri, probe, last, 'keydown', 'Tab')).defaultPrevented, true, command);
+    assert.equal((await domAction(api, uri, probe, first)).focused, true, command + ': Tab bleibt im Dialog');
+    await domAction(api, uri, probe, first, 'keydown', 'Shift+Tab');
+    assert.equal((await domAction(api, uri, probe, last)).focused, true, command + ': Shift-Tab bleibt im Dialog');
+    const closed = await domAction(api, uri, probe, '.modal', 'keydown', 'Escape');
+    assert.equal(closed.count, 0, command + ': Escape schließt');
+    assert.equal(doc.getText(), original, command + ': Abbrechen ändert nichts');
+  }
+  assert.equal((await domAction(api, uri, probe, trigger)).focused, true, 'Fokus kehrt zum Auslöser zurück');
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Diagramm und Matrix: validierte Dialogeingaben, Einfügen und Vorschau', async api => {
+  const { uri, doc, probe } = await open(api, 'Umsatzbericht.rdl');
+  await vscode.commands.executeCommand('bcReportBuilder.insert.chart', uri);
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.modal-body > .form-row > .expr-prop .field-pick', 'input', 'Region');
+  await domAction(api, uri, probe, '.list-editor .list-row .field-pick', 'input', 'Umsatz');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, false);
+  await domAction(api, uri, probe, '.series-name', 'input', 'Umsatz & Erlös');
+  await domAction(api, uri, probe, '.series-extra select', 'input', 'MovingAverage');
+  await domAction(api, uri, probe, '.series-extra input[type="number"]', 'input', '0');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.series-extra input[type="number"]', 'input', '3');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Diagramm eingefügt', () => doc.getText().includes('<Chart Name='));
+  assert.doesNotMatch(String((await domAction(api, uri, probe, '.props-pane .pane-description')).text), /not editable|Nicht editierbares/);
+  assert.match(doc.getText(), /Umsatz &amp; Erlös/);
+  assert.match(doc.getText(), /MovingAverage/);
+  await vscode.commands.executeCommand('bcReportBuilder.insert.matrix', uri);
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Region');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(3) .field-pick', 'input', 'Kunde');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(4) .field-pick', 'input', 'Umsatz');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, false);
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Matrix eingefügt', () => (doc.getText().match(/<Tablix Name=/g) ?? []).length === 2);
+  const previews = probe.received.filter(m => m.type === 'previewReady').length;
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const preview = await until('Vorschau mit Diagramm und Matrix', () => probe.received.filter(m => m.type === 'previewReady')[previews]);
+  assert.ok(Number(preview.pages) > 0);
+  assert.equal(preview.errors, 0);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
 test('Ausdruckssuche: echte Dialogeingaben, Vorschau, Ersetzen und Rückgängig', async api => {
   const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
   const original = doc.getText();
   await vscode.commands.executeCommand('bcReportBuilder.findExpressions', uri);
+  assert.equal((await domAction(api, uri, probe, '.expression-search input', 'keydown', 'Meta+v')).propagated, true);
   await domAction(api, uri, probe, '.expression-search select', 'input', 'uses');
   await domAction(api, uri, probe, '.expression-search .form-row:nth-child(2) select', 'input', 'Fields!UnitPrice_Line');
   assert.ok(Number((await domAction(api, uri, probe, '.expression-result')).count) > 0);
@@ -532,6 +603,7 @@ test('Bausteine: Datei laden, echte Dialogbestätigung und gemeinsames Rückgän
       await probe.deliver({ type: 'pickBlock' });
     });
     await domAction(api, uri, probe, '.block-dialog');
+    assert.equal((await domAction(api, uri, probe, '.block-dialog input', 'keydown', 'Meta+v')).propagated, true);
     await domAction(api, uri, probe, '.block-dialog .modal-footer .primary', 'click');
     await until('Baustein eingefügt', () => doc.getText() !== original);
     const result = parseRdl(doc.getText(), dom);
@@ -544,6 +616,409 @@ test('Bausteine: Datei laden, echte Dialogbestätigung und gemeinsames Rückgän
   } finally {
     w.showOpenDialog = originalOpen;
     await vscode.workspace.fs.delete(temporary);
+  }
+});
+
+const uiDom: XmlDom = {
+  parse: xml => new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document,
+  serialize: node => new XMLSerializer().serializeToString(node as never),
+};
+
+async function openUi(api: Api) {
+  await vscode.workspace.fs.writeFile(file('UI-Abnahme.rdl'), await vscode.workspace.fs.readFile(file('Umsatzbericht.rdl')));
+  return open(api, 'UI-Abnahme.rdl');
+}
+
+async function selectUi(api: Api, uri: vscode.Uri, probe: EditorProbe, name: string) {
+  await domAction(api, uri, probe, '.left-pane .pane-header [role="tab"]:first-child', 'click');
+  await domAction(api, uri, probe, '.outline button:has(.codicon-expand-all)', 'click');
+  await domAction(api, uri, probe, `.outline [data-key="item:${name}"]`, 'click');
+}
+
+test('UI: Datenquelle anlegen, validieren, umbenennen, Referenzen aktualisieren und löschen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  await domAction(api, uri, probe, '.tree-group:nth-child(3) .tree-group-head button', 'click');
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', '1 invalid');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'TestSource');
+  await domAction(api, uri, probe, '.modal-body textarea', 'input', 'Data Source=localhost;Initial Catalog=UI');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Datenquelle gespeichert', () => doc.getText().includes('Name="TestSource"'));
+  await vscode.commands.executeCommand('bcReportBuilder.data.edit', { entryKind: 'dataSource', name: 'Vertrieb' });
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'TestSource');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'SalesSource');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Datenquellenreferenz umbenannt', () => doc.getText().includes('<DataSourceName>SalesSource</DataSourceName>'));
+  await vscode.commands.executeCommand('bcReportBuilder.data.delete', { entryKind: 'dataSource', name: 'TestSource' });
+  await until('Datenquelle gelöscht', () => !doc.getText().includes('Name="TestSource"'));
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Dataset aus SQL ableiten, Feldtypen und berechnete Felder, Duplikate sperren', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  await domAction(api, uri, probe, '.tree-group:nth-child(4) .tree-group-head button', 'click');
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'UiData');
+  await domAction(api, uri, probe, '.modal-body textarea', 'input', 'SELECT Customer, Amount FROM Sales');
+  await domAction(api, uri, probe, '.modal-body .button-row button', 'click');
+  assert.equal((await domAction(api, uri, probe, 'table.grid tbody tr')).count, 2);
+  await domAction(api, uri, probe, 'table.grid tbody tr:nth-child(2) td:first-child input', 'input', 'Customer');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, 'table.grid tbody tr:nth-child(2) td:first-child input', 'input', 'Amount');
+  await domAction(api, uri, probe, 'table.grid tbody tr:nth-child(2) select', 'input', 'System.Decimal');
+  await domAction(api, uri, probe, '.modal-body .button-row button:nth-child(2)', 'click');
+  await domAction(api, uri, probe, 'table.grid tbody tr:nth-child(3) td:nth-child(2) input', 'input', '=Fields!Amount.Value * 2');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Dataset gespeichert', () => doc.getText().includes('<DataSet Name="UiData">'));
+  const dataset = parseRdl(doc.getText(), uiDom).dataSets.find(dataset => dataset.name === 'UiData')!;
+  assert.equal(dataset.fields[1].typeName, 'System.Decimal');
+  assert.equal(dataset.fields[2].value, '=Fields!Amount.Value * 2');
+  await vscode.commands.executeCommand('bcReportBuilder.data.delete', { entryKind: 'dataSet', name: 'UiData' });
+  await until('Dataset gelöscht', () => !doc.getText().includes('<DataSet Name="UiData">'));
+  await vscode.commands.executeCommand('bcReportBuilder.data.edit', { entryKind: 'dataSet', name: 'Umsaetze' });
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'UiSales');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Dataset umbenannt', () => doc.getText().includes('<DataSet Name="UiSales">'));
+  assert.match(doc.getText(), /CountRows\("UiSales"\)/);
+  assert.doesNotMatch(doc.getText(), /<DataSetName>Umsaetze<\/DataSetName>/);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Berichtsdaten per Tastatur öffnen und Enter in Auswahlfeldern bestätigt nicht den Dialog', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const original = doc.getText();
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  const header = '.tree-group:nth-child(3) .tree-group-head';
+  await domAction(api, uri, probe, header, 'focus');
+  assert.equal((await domAction(api, uri, probe, header)).focused, true);
+  await domAction(api, uri, probe, `${header} button`, 'focus');
+  assert.equal((await domAction(api, uri, probe, `${header} button`)).focused, true, 'Aktion ohne Maus fokussierbar');
+  await domAction(api, uri, probe, `${header} button`, 'click');
+  const selected = await domAction(api, uri, probe, '.modal-body select', 'keydown', 'Enter');
+  assert.equal(selected.count, 1, 'Enter im Auswahlfeld schließt den Dialog nicht');
+  await domAction(api, uri, probe, '.modal', 'keydown', 'Escape');
+  assert.equal(doc.getText(), original);
+});
+
+test('UI: Parameter umbenennen aktualisiert auch Abfrageparameter und weitere Ausdrücke', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  await domAction(api, uri, probe, '.tree-group');
+  await vscode.commands.executeCommand('bcReportBuilder.data.edit', { entryKind: 'parameter', name: 'Jahr' });
+  await domAction(api, uri, probe, '.modal-body .form-row input', 'input', 'FiscalYear');
+  await domAction(api, uri, probe, '.modal-body .form-row:nth-child(4) input', 'input', '2027');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Parameter umbenannt', () => doc.getText().includes('ReportParameter Name="FiscalYear"'));
+  assert.doesNotMatch(doc.getText(), /Parameters!Jahr\b/);
+  assert.match(doc.getText(), /<QueryParameter[^]*?Parameters!FiscalYear.Value/);
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Parametervorschau', () => probe.received.find(message => message.type === 'previewReady'));
+  assert.match(String((await domAction(api, uri, probe, '.rv-page')).text), /2027/);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Ausdruckseditor Syntaxfehler, Live-Ergebnis, Kategorien, Bestätigen und Abbrechen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await selectUi(api, uri, probe, 'Titel');
+  await vscode.commands.executeCommand('bcReportBuilder.editExpression', uri);
+  await domAction(api, uri, probe, '.expr-editor', 'input', '=1 +');
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.expr-editor', 'input', '=1 + 2');
+  assert.match(String((await domAction(api, uri, probe, '.expr-result')).text), /3/);
+  await domAction(api, uri, probe, '.expr-cats button:nth-child(4)', 'click');
+  assert.ok(Number((await domAction(api, uri, probe, '.expr-items button')).count) > 5);
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Ausdruck übernommen', () => allReportItems(parseRdl(doc.getText(), uiDom)).some(item => item.name === 'Titel' && item.type === 'textbox' && item.value === '=1 + 2'));
+  const saved = doc.getText();
+  await vscode.commands.executeCommand('bcReportBuilder.editExpression', uri);
+  await domAction(api, uri, probe, '.expr-editor', 'input', '=999');
+  await domAction(api, uri, probe, '.expr-editor', 'keydown', 'Escape');
+  assert.equal(doc.getText(), saved);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Direkter Texteditor erlaubt Zwischenablage und übernimmt mit Ctrl-Enter; Escape verwirft', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await domAction(api, uri, probe, '.item[data-name="Titel"]', 'doubleClick');
+  assert.equal((await domAction(api, uri, probe, '.inline-editor', 'keydown', 'Meta+v')).propagated, true);
+  await domAction(api, uri, probe, '.inline-editor', 'input', 'UI & Überprüfung');
+  await domAction(api, uri, probe, '.inline-editor', 'keydown', 'Control+Enter');
+  await until('Direkttext gespeichert', () => doc.getText().includes('<Value>UI &amp; Überprüfung</Value>'));
+  const saved = doc.getText();
+  await domAction(api, uri, probe, '.item[data-name="Titel"]', 'doubleClick');
+  await domAction(api, uri, probe, '.inline-editor', 'input', 'Verwerfen');
+  await domAction(api, uri, probe, '.inline-editor', 'keydown', 'Escape');
+  assert.equal(doc.getText(), saved);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Rich Text aufteilen, Textteil und Absatz hinzufügen, formatieren, zusammenfassen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await selectUi(api, uri, probe, 'hKunde');
+  await domAction(api, uri, probe, '.props-pane button:has(.codicon-symbol-text)', 'click');
+  await domAction(api, uri, probe, '.rich-run-tools button:has(.codicon-add)', 'click');
+  assert.equal((await domAction(api, uri, probe, '.rich-run')).count, 2);
+  await domAction(api, uri, probe, '.rich-run:nth-child(3) > input', 'input', 'UI & Überprüfung');
+  await domAction(api, uri, probe, '.rich-run:nth-child(3) > input', 'keydown', 'Enter');
+  await domAction(api, uri, probe, '.rich-run:nth-child(3) button:has(.codicon-bold)', 'click');
+  await domAction(api, uri, probe, '.rich-head button:has(.codicon-add)', 'click');
+  assert.equal((await domAction(api, uri, probe, '.rich-paragraph')).count, 2);
+  await until('Rich Text gespeichert', () => doc.getText().includes('UI &amp; Überprüfung'));
+  assert.match(doc.getText(), /<FontWeight>Bold<\/FontWeight>/);
+  await domAction(api, uri, probe, '.props-pane .prop-value > button:has(.codicon-whole-word)', 'click');
+  await until('einfaches Textfeld', () => allReportItems(parseRdl(doc.getText(), uiDom)).some(item => item.name === 'hKunde' && item.type === 'textbox'));
+  assert.ok(doc.getText().includes('UI &amp; Überprüfung'));
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Eingebettetes Bild laden, auf Fläche ziehen, umbenennen, abbrechen und löschen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const png = file('UiLogo.png');
+  await vscode.workspace.fs.writeFile(png, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64'));
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalOpen = windowApi.showOpenDialog;
+  windowApi.showOpenDialog = async () => [png];
+  try {
+    await domAction(api, uri, probe, '.tree-group:last-child .tree-group-head button', 'click');
+    await until('Bild eingebettet', () => doc.getText().includes('<EmbeddedImage Name="UiLogo">'));
+    await domAction(api, uri, probe, '.section-body', 'drop', '.image-entry');
+    await until('Bildelement angelegt', () => doc.getText().includes('<Source>Embedded</Source>'));
+    await domAction(api, uri, probe, '.image-entry button:first-child', 'click');
+    await domAction(api, uri, probe, '.image-entry input', 'input', 'RenamedLogo');
+    await domAction(api, uri, probe, '.image-entry input', 'keydown', 'Enter');
+    await until('Bildverweise umbenannt', () => doc.getText().includes('<Value>RenamedLogo</Value>'));
+    const beforeCancel = doc.getText();
+    await domAction(api, uri, probe, '.image-entry button:first-child', 'click');
+    await domAction(api, uri, probe, '.image-entry input', 'input', 'CancelledLogo');
+    await domAction(api, uri, probe, '.image-entry input', 'keydown', 'Escape');
+    assert.equal(doc.getText(), beforeCancel);
+    await domAction(api, uri, probe, '.image-entry button:last-child', 'click');
+    await until('Bild entfernt', () => !doc.getText().includes('<EmbeddedImage Name="RenamedLogo">'));
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    windowApi.showOpenDialog = originalOpen;
+    await vscode.workspace.fs.delete(png);
+  }
+});
+
+test('UI: Dataset und Feld ziehen erzeugt Tabelle bzw. Zellbindung, Formatierung und Aktionen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  await domAction(api, uri, probe, '.section-body', 'drop', '.tree-node[draggable="true"]');
+  await until('Tabelle erzeugt', () => (doc.getText().match(/<Tablix Name=/g) ?? []).length === 2);
+  await domAction(api, uri, probe, '[data-name="Kunde"].cell', 'drop', '.tree-leaf.field:nth-child(5)');
+  await until('Zellbindung geändert', () => allReportItems(parseRdl(doc.getText(), uiDom)).some(item => item.name === 'Kunde' && item.type === 'textbox' && item.value === '=Fields!Umsatz.Value'));
+  await selectUi(api, uri, probe, 'Titel');
+  await domAction(api, uri, probe, '.toolbar button:has(.codicon-bold)', 'click');
+  await domAction(api, uri, probe, '.toolbar .font-size', 'input', '18pt');
+  await domAction(api, uri, probe, '.props-pane select:has(option[value="hyperlink"])', 'input', 'hyperlink');
+  const url = '.props-pane .prop-row:has(select option[value="hyperlink"]) + .prop-row input';
+  await domAction(api, uri, probe, url, 'input', 'https://example.com/report');
+  await domAction(api, uri, probe, url, 'keydown', 'Enter');
+  await until('Aktion geschrieben', () => doc.getText().includes('<Hyperlink>https://example.com/report</Hyperlink>'));
+  const title = allReportItems(parseRdl(doc.getText(), uiDom)).find(item => item.name === 'Titel')!;
+  assert.equal(title.style.FontSize, '18pt');
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Vorschau', () => probe.received.find(message => message.type === 'previewReady'));
+  assert.ok(Number((await domAction(api, uri, probe, '.rv-page [data-action]')).count) > 0);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Gliederung filtern, Tastaturnavigation und Zoom ohne Dokumentänderung', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const original = doc.getText();
+  await domAction(api, uri, probe, '.outline .filter-input input', 'input', 'fUmsatz');
+  assert.match(String((await domAction(api, uri, probe, '.outline-tree')).text), /fUmsatz/);
+  assert.doesNotMatch(String((await domAction(api, uri, probe, '.outline-tree')).text), /Untertitel/);
+  await domAction(api, uri, probe, '.outline .filter-input input', 'input', '');
+  await selectUi(api, uri, probe, 'Titel');
+  await domAction(api, uri, probe, '.outline-tree', 'focus');
+  await domAction(api, uri, probe, '.outline-tree', 'keydown', 'ArrowDown');
+  assert.match(String((await domAction(api, uri, probe, '.props-pane .pane-description')).text), /Untertitel/);
+  await vscode.commands.executeCommand('bcReportBuilder.zoomIn', uri);
+  await until('Zoom erhöht', () => [...probe.received].reverse().find(message => message.type === 'state' && Number((message.state as { zoom: number }).zoom) > 1));
+  await vscode.commands.executeCommand('bcReportBuilder.zoomReset', uri);
+  await until('Zoom zurückgesetzt', () => (probe.received.filter(message => message.type === 'state').at(-1)?.state as { zoom: number })?.zoom === 1);
+  assert.equal(doc.getText(), original);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Neuer Bericht über Speicherdialog, Eigenschaften und Seitenkopf/-fuß', async api => {
+  const target = file('UI-NeuerBericht.rdlc');
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalSave = windowApi.showSaveDialog;
+  windowApi.showSaveDialog = async () => target;
+  try {
+    await vscode.commands.executeCommand('bcReportBuilder.newReport');
+    const { uri, doc, probe } = await open(api, 'UI-NeuerBericht.rdlc');
+    const original = parseRdl(doc.getText(), uiDom);
+    await vscode.commands.executeCommand('bcReportBuilder.toggleHeader', uri);
+    await until('Seitenkopf umgeschaltet', () => !!parseRdl(doc.getText(), uiDom).header !== !!original.header);
+    await vscode.commands.executeCommand('bcReportBuilder.toggleFooter', uri);
+    await until('Seitenfuß umgeschaltet', () => !!parseRdl(doc.getText(), uiDom).footer !== !!original.footer);
+    await vscode.commands.executeCommand('bcReportBuilder.reportProperties', uri);
+    await domAction(api, uri, probe, '.modal select', 'input', 'cm');
+    const width = '.modal .with-unit input';
+    await domAction(api, uri, probe, width, 'input', '18.5');
+    await domAction(api, uri, probe, width, 'keydown', 'Enter');
+    await domAction(api, uri, probe, '.modal', 'keydown', 'Escape');
+    await until('Maße übernommen', () => Math.abs(parseRdl(doc.getText(), uiDom).width * 2.54 - 18.5) < 0.01);
+    assert.ok(await doc.save());
+    assert.equal(new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)), doc.getText());
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    windowApi.showSaveDialog = originalSave;
+  }
+});
+
+test('UI: Bausteinbibliothek speichern, auswählen und zweimal mit eindeutigen Namen einfügen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const { createBlock } = await import('../../webview/blocks');
+  const source = parseRdl(doc.getText(), uiDom);
+  const block = serializeRdl(createBlock(source, ['Titel'], uiDom));
+  const saved = await withAnswers({ pick: [['Save to Block Library']], input: ['UiHeader'] }, () => probe.deliver({ type: 'saveBlock', text: block }));
+  assert.ok(saved.asked.some(message => message.startsWith('input:')));
+  for (let index = 0; index < 2; index++) {
+    await withAnswers({ pick: [['UiHeader']] }, () => probe.deliver({ type: 'pickBlock' }));
+    await domAction(api, uri, probe, '.block-dialog');
+    await domAction(api, uri, probe, '.block-dialog .modal-footer .primary', 'click');
+    await until('Baustein eingefügt', () => parseRdl(doc.getText(), uiDom).body.items.length === source.body.items.length + index + 1);
+  }
+  const names = allReportItems(parseRdl(doc.getText(), uiDom)).map(item => item.name);
+  assert.equal(new Set(names).size, names.length);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Alle Diagrammtypen einfügen, Bereichswerte validieren und gemeinsam in Vorschau rendern', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.insert.chart', uri);
+  const types = Number((await domAction(api, uri, probe, '.chart-kind')).count);
+  assert.ok(types >= 19);
+  for (let index = 0; index < types; index++) {
+    if (index > 0) await vscode.commands.executeCommand('bcReportBuilder.insert.chart', uri);
+    await domAction(api, uri, probe, `.chart-kind:nth-child(${index + 1})`, 'click');
+    await domAction(api, uri, probe, '.modal-body > .form-row > .expr-prop .field-pick', 'input', 'Region');
+    await domAction(api, uri, probe, '.list-editor .list-row .field-pick', 'input', 'Umsatz');
+    if ([14, 15, 16].includes(index)) {
+      assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true, 'Bereich braucht Untergrenze');
+      await domAction(api, uri, probe, '.series-extra .field-pick', 'input', 'Menge');
+    }
+    if (index === 0) {
+      await domAction(api, uri, probe, '.modal input[placeholder^="Minimum"]', 'input', 'invalid');
+      assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+      await domAction(api, uri, probe, '.modal input[placeholder^="Minimum"]', 'input', '0');
+      await domAction(api, uri, probe, '.list-editor .list-row > select', 'input', 'Line');
+      await domAction(api, uri, probe, '.list-editor .list-row .check input', 'click');
+    }
+    assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, false, `Diagrammtyp ${index}`);
+    await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+    await until(`Diagramm ${index + 1}`, () => (doc.getText().match(/<Chart Name=/g) ?? []).length === index + 1);
+  }
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const preview = await until('Diagrammtypen in Vorschau', () => probe.received.find(message => message.type === 'previewReady'), 60000);
+  assert.equal(preview.errors, 0);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Gruppen verschachteln, Sortierung, Filter, Umbruch und Spaltengruppe', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await selectUi(api, uri, probe, 'Kunde');
+  await vscode.commands.executeCommand('bcReportBuilder.table.addParentGroup', uri);
+  await domAction(api, uri, probe, '.modal-body > .form-row:first-child input', 'input', 'UiRegion');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Region');
+  await domAction(api, uri, probe, '.modal-body > .check:nth-child(4) input', 'click');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(5) .list-editor > button', 'click');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(5) .list-row > select', 'input', 'd');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(6) .list-editor > button', 'click');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(6) .field-pick', 'input', 'Region');
+  await domAction(api, uri, probe, '.modal-body .filter-value', 'input', 'Nord');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(7) select', 'input', 'Between');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(7) input', 'click');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Gruppe geschrieben', () => doc.getText().includes('<Group Name="UiRegion">'));
+  assert.match(doc.getText(), /<Direction>Descending<\/Direction>/);
+  assert.match(doc.getText(), /<FilterValue>Nord<\/FilterValue>/);
+  assert.match(doc.getText(), /<ResetPageNumber>true<\/ResetPageNumber>/);
+  await selectUi(api, uri, probe, 'Kunde');
+  await vscode.commands.executeCommand('bcReportBuilder.table.addChildGroup', uri);
+  await domAction(api, uri, probe, '.modal-body > .form-row:first-child input', 'input', 'UiCustomer');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Kunde');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Untergruppe geschrieben', () => doc.getText().includes('<Group Name="UiCustomer">'));
+  await selectUi(api, uri, probe, 'Kunde');
+  await vscode.commands.executeCommand('bcReportBuilder.table.addColumnGroup', uri);
+  await domAction(api, uri, probe, '.modal-body > .form-row:first-child input', 'input', 'UiColumns');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Region');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Spaltengruppe geschrieben', () => doc.getText().includes('<Group Name="UiColumns">'));
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const preview = await until('Gruppenvorschau', () => probe.received.find(message => message.type === 'previewReady'));
+  assert.equal(preview.errors, 0);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Vorschaudaten aus CSV laden und ungültige JSON-Zeilen ohne Datenverlust ablehnen', async api => {
+  const { uri, probe } = await openUi(api);
+  const csv = file('UiData.csv');
+  const invalid = file('UiInvalid.json');
+  const sidecar = file('UI-Abnahme.data.json');
+  await vscode.workspace.fs.writeFile(csv, new TextEncoder().encode('Region;Kunde;Bestelldatum;Menge;Umsatz\nNord;Müller;2026-10-18;2;1234,50\n'));
+  await vscode.workspace.fs.writeFile(invalid, new TextEncoder().encode('[null, 42, "kein Objekt"]'));
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalOpen = windowApi.showOpenDialog;
+  try {
+    windowApi.showOpenDialog = async () => [csv];
+    await withAnswers({}, () => probe.deliver({ type: 'importSampleData', dataSet: 'Umsaetze' }));
+    const original = await vscode.workspace.fs.readFile(sidecar);
+    const data = JSON.parse(new TextDecoder().decode(original));
+    assert.equal(data.Umsaetze[0].Kunde, 'Müller');
+    assert.equal(data.Umsaetze[0].Umsatz, 1234.5);
+    windowApi.showOpenDialog = async () => [invalid];
+    const rejected = await withAnswers({}, () => probe.deliver({ type: 'importSampleData', dataSet: 'Umsaetze' }));
+    assert.ok(rejected.asked.some(message => message.startsWith('error:')), 'JSON muss aus Objekten bestehen');
+    assert.deepEqual(await vscode.workspace.fs.readFile(sidecar), original, 'vorhandene Daten bleiben erhalten');
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    await until('Datenvorschau', () => probe.received.find(message => message.type === 'previewReady'));
+    await until('Vorschaudaten sichtbar', async () => /Müller/.test(String((await domAction(api, uri, probe, '.rv-page')).text)));
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    windowApi.showOpenDialog = originalOpen;
+    for (const target of [csv, invalid, sidecar]) await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
+  }
+});
+
+test('UI: Vorschau exportiert Excel und Word über die echten Befehle und den Speicherdialog', async api => {
+  const { uri, probe } = await openUi(api);
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Exportvorschau', () => probe.received.find(message => message.type === 'previewReady'));
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalSave = windowApi.showSaveDialog;
+  try {
+    for (const [command, extension, entry] of [['exportExcel', 'xlsx', 'xl/worksheets/sheet1.xml'], ['exportWord', 'docx', 'word/document.xml']]) {
+      const target = file(`UiExport.${extension}`);
+      windowApi.showSaveDialog = async () => target;
+      await withAnswers({}, async () => {
+        await vscode.commands.executeCommand(`bcReportBuilder.${command}`, uri);
+        await until('Exportanforderung', () => probe.received.find(message => message.type === 'exportDocument' && message.format === extension));
+        let bytes: Uint8Array | undefined;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          bytes = await vscode.workspace.fs.readFile(target).then(value => value, () => undefined);
+          if (bytes?.length) break;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        assert.ok(bytes?.length, `${extension} geschrieben`);
+        const { unzip } = await import('../../src/xlsx');
+        const xml = new TextDecoder().decode(unzip(bytes!).get(entry));
+        assert.match(xml, /Umsatzbericht/);
+        await vscode.workspace.fs.delete(target);
+      });
+    }
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    windowApi.showSaveDialog = originalSave;
   }
 });
 

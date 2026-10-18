@@ -14,7 +14,7 @@ export const vscode = api;
 /** Messages webview → extension (mirrors FromWebview in src/reportEditorProvider.ts). */
 export type ToExtension =
   | { type: 'ready' }
-  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string }
+  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string; focused?: boolean; focusInside?: boolean; defaultPrevented?: boolean; propagated?: boolean; disabled?: boolean }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }
   | { type: 'exportHtml'; html: string }

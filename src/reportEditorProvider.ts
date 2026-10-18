@@ -48,7 +48,7 @@ export interface DesignerSession {
 /** Messages webview → extension. */
 type FromWebview =
   | { type: 'ready' }
-  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string }
+  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string; focused?: boolean; focusInside?: boolean; defaultPrevented?: boolean; propagated?: boolean; disabled?: boolean }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }
   | { type: 'exportHtml'; html: string }
@@ -357,7 +357,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
       vscode.window.showErrorMessage(l10n.t('The file could not be read: {0}', (e as Error).message));
       return false;
     }
-    if (!Array.isArray(rows)) {
+    if (!Array.isArray(rows) || rows.some(row => row === null || typeof row !== 'object' || Array.isArray(row))) {
       vscode.window.showErrorMessage(l10n.t('Expected an Excel or CSV file with a header row or a JSON array of objects.'));
       return false;
     }

@@ -18,6 +18,7 @@ export const globals = (): [string, string][] => [
 
 export const dragProps = (payload: DragPayload) => ({
   draggable: true,
+  tabIndex: 0,
   onDragStart: (e: RDragEvent) => {
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
     e.dataTransfer.effectAllowed = 'copy';
@@ -79,7 +80,7 @@ export function ReportDataPane() {
         <Group label={l10n.t('Data Sources')} open={isOpen('sources')} onToggle={() => toggle('sources')}
           onAdd={() => ed.setDialog({ kind: 'dataSource' })} addTitle={l10n.t('Add Data Source')}>
           {report.dataSources.map(d => (
-            <div key={d.id} className="tree-leaf" onDoubleClick={() => ed.setDialog({ kind: 'dataSource', name: d.name })}
+            <div key={d.id} className="tree-leaf" tabIndex={0} onDoubleClick={() => ed.setDialog({ kind: 'dataSource', name: d.name })}
               {...vsContext({ webviewSection: 'dataEntry', entryKind: 'dataSource', name: d.name })}
               title={d.sharedReference ?? d.connectString}>
               <Codicon name="database" className="glyph" />{d.name}
@@ -138,10 +139,13 @@ export function ReportDataPane() {
 export function Group(props: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; addTitle?: string; children: ReactNode }) {
   return (
     <div className="tree-group">
-      <div className="tree-group-head" onClick={props.onToggle} role="button" aria-expanded={props.open}>
+      <div className="tree-group-head" onClick={props.onToggle} role="button" tabIndex={0} aria-expanded={props.open}
+        onKeyDown={e => {
+          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); props.onToggle(); }
+        }}>
         <Twisty open={props.open} />
         <span className="grow">{props.label}</span>
-        {props.onAdd && <span className="row-actions"><ActionButton icon="add" title={props.addTitle!} onClick={() => props.onAdd!()} /></span>}
+        {props.onAdd && <span className="row-actions" onClick={e => e.stopPropagation()}><ActionButton icon="add" title={props.addTitle!} onClick={() => props.onAdd!()} /></span>}
       </div>
       {props.open && <div className="tree-children">{props.children}</div>}
     </div>

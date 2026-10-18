@@ -30,7 +30,7 @@ export function BlockDialog({ text, name, close }: { text: string; name: string;
     } catch (e) { setError((e as Error).message); }
   };
   return <div className="modal-backdrop"><div ref={focusRef} className="modal wide block-dialog" role="dialog" aria-modal="true" aria-label={l10n.t('Insert Layout Block…')}
-    onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') close(); }}>
+    onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }}>
     <div className="modal-title">{l10n.t('Insert Layout Block…')} · {name}</div>
     <div className="modal-body">
       <p>{l10n.t('{0} layout items. Item names and internal references are adjusted on insertion.', parsed.block?.body.items.length ?? 0)}</p>

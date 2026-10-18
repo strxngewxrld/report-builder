@@ -78,6 +78,10 @@ test('.NET style formatting', () => {
   assert.match(formatValue(9.5, 'C', 'de-DE'), /9,50\s€/);
   assert.equal(formatValue(new Date(2026, 9, 16, 9, 5), 'yyyy-MM-dd HH:mm', 'de-DE'), '2026-10-16 09:05');
   assert.equal(formatValue(null, 'N2'), '');
+  assert.equal(formatValue('', 'C', 'de-DE'), '');
+  assert.equal(formatValue('', 'N0', 'de-DE'), '');
+  assert.equal(formatValue('', 'dd.MM.yyyy', 'de-DE'), '');
+  assert.equal(formatValue(0, 'N0', 'de-DE'), '0');
 });
 
 test('design labels like Report Builder', () => {

@@ -242,7 +242,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
         for (let i = 0; i < bytes.length; i += 0x8000) data += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         post({ type: 'savePdf', name, data: btoa(data) });
       } catch (e) {
-        post({ type: 'error', message: `PDF-Export fehlgeschlagen: ${(e as Error).message}` });
+        post({ type: 'error', message: l10n.t('PDF export failed: {0}', (e as Error).message) });
       } finally {
         setRenderAll(false);
         setPdfExport(false);

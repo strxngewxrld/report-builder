@@ -817,5 +817,8 @@
   "Skip This Version": "Diese Version überspringen",
   "Business Central Report Builder {0} is available (installed: {1}).": "Business Central Report Builder {0} ist verfügbar (installiert: {1}).",
   "Installing Business Central Report Builder {0}…": "Business Central Report Builder {0} wird installiert…",
-  "Could not install Business Central Report Builder {0}: {1}": "Business Central Report Builder {0} konnte nicht installiert werden: {1}"
+  "Could not install Business Central Report Builder {0}: {1}": "Business Central Report Builder {0} konnte nicht installiert werden: {1}",
+  "{0} entries. Select an item to reveal it in the designer and see details.": "{0} Einträge. Element anklicken, um es im Designer auszuwählen und Details zu sehen.",
+  "= hidden (dimmed: conditional).": "= ausgeblendet (abgeblendet: bedingt).",
+  "PDF export failed: {0}": "PDF-Export fehlgeschlagen: {0}"
 }

@@ -52,7 +52,7 @@ export function ExpressionSearchDialog({ close }: { close: () => void }) {
     requestAnimationFrame(() => document.querySelector(`.designer [data-name="${CSS.escape(item)}"]`)?.scrollIntoView({ block: 'nearest' }));
   };
   return <div className="modal-backdrop"><div ref={focusRef} className="modal wide expression-search" role="dialog" aria-modal="true" aria-label={l10n.t('Expressions and References')}
-    onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') close(); }}>
+    onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }}>
     <div className="modal-title">{l10n.t('Expressions and References')}</div>
     <div className="modal-body">
       <label className="form-row"><span>{l10n.t('Mode')}</span><select value={mode} onChange={e => { setMode(e.target.value as typeof mode); setNotice(''); }}>

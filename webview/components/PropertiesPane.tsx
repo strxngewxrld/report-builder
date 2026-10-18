@@ -133,7 +133,7 @@ export function PropertiesPane({ width }: { width: number }) {
 
   return (
     <div className="pane props-pane" style={{ width }}>
-      <PaneTitle description={single ? `${single.name} · ${loc?.cell ? l10n.t('Table cell') : typeLabel(single.type)}` : l10n.t('{0} items', items.length)} />
+      <PaneTitle description={single ? `${single.name} · ${loc?.cell ? l10n.t('Table cell') : single.type === 'raw' && single.kind === 'Chart' ? l10n.t('Chart') : single.type === 'raw' && single.kind === 'Textbox' ? l10n.t('Textbox') : typeLabel(single.type)}` : l10n.t('{0} items', items.length)} />
       <div className="props">
         {single && (
           <Category title={l10n.t('General')}>

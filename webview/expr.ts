@@ -662,7 +662,7 @@ export function designLabel(value: string): string {
 // .NET-style formatting
 
 export function formatValue(v: unknown, fmt: string, locale?: string): string {
-  if (isNothing(v)) return '';
+  if (isNothing(v) || v === '') return '';
   if (!fmt) {
     if (v instanceof Date) {
       // a date without time of day is shown as a date only
