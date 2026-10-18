@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Diagnostic, Dialog, Editor, EditorContext, InsertTool, TablePart, useCommand, useEditor } from './editor';
+import { createBlock } from './blocks';
 import { addEmbeddedImage } from './images';
 import { BcContext, isBcLayout } from './bc';
 import { Report, ReportItem, TextboxItem, allReportItems } from './model';
@@ -346,6 +347,16 @@ function AppCommands() {
   useCommand('toggleProperties', () => setView({ propertiesPane: !view.propertiesPane }));
   useCommand('toggleHeader', () => ed.commit(r => { r.header = r.header ? null : { height: 1, items: [], style: {} }; }));
   useCommand('toggleFooter', () => ed.commit(r => { r.footer = r.footer ? null : { height: 1, items: [], style: {} }; }));
+  useCommand('findExpressions', () => ed.setDialog({ kind: 'expressionSearch' }));
+  useCommand('saveBlock', () => {
+    try { post({ type: 'saveBlock', text: serializeRdl(createBlock(ed.report, ed.selection)) }); }
+    catch (e) { post({ type: 'error', message: (e as Error).message }); }
+  });
+  useCommand('insertBlock', () => post({ type: 'pickBlock' }));
+  useCommand('blocks.load', arg => {
+    const block = arg as { text: string; name: string };
+    ed.setDialog({ kind: 'insertBlock', ...block });
+  });
   useCommand('reportProperties', () => ed.setDialog({ kind: 'reportProperties' }));
   // an image file picked in VS Code (Report data › Images › ＋)
   useCommand('images.add', arg => {

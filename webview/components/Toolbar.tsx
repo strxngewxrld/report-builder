@@ -114,6 +114,14 @@ export function Toolbar() {
         <ActionButton icon="graph" title={l10n.t('Insert Chart…')} onClick={() => ed.commands.get('insert.chart')?.()} />
       </div>
       <Separator />
+      <div className="action-group">
+        <ActionButton icon="search" title={l10n.t('Expressions and References')} onClick={() => ed.commands.get('findExpressions')?.()} />
+        <DropdownAction icon="library" title={l10n.t('Layout Blocks')} items={[
+          { label: l10n.t('Save Selection as Block…'), disabled: !movable.length, run: run('saveBlock') },
+          { label: l10n.t('Insert Layout Block…'), run: run('insertBlock') },
+        ]} />
+      </div>
+      <Separator />
       <div className="action-group" aria-label={l10n.t('Text format')}>
         <select className="dropdown font-family" title={l10n.t('Font')} disabled={noText} value={firstStyle.FontFamily ?? 'Arial'} onChange={e => setStyle('FontFamily', e.target.value)}>
           {[...new Set([firstStyle.FontFamily ?? 'Arial', ...FONTS])].map(f => <option key={f}>{f}</option>)}

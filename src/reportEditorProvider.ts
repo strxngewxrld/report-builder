@@ -6,6 +6,7 @@ import { l10n, localization } from '../webview/l10n';
 import { LayoutService } from './layoutService';
 import { BcContext } from '../webview/bc';
 import { ExportBlock, writeDocx, writeXlsx } from './ooxml';
+import { FontIndex, FontRequest } from './fonts';
 
 /** What the designer reports about itself (status bar, context keys of the editor title and context menus). */
 export interface DesignerState {
@@ -47,6 +48,7 @@ export interface DesignerSession {
 /** Messages webview → extension. */
 type FromWebview =
   | { type: 'ready' }
+  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }
   | { type: 'exportHtml'; html: string }
@@ -56,8 +58,11 @@ type FromWebview =
   | { type: 'info'; message: string }
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
+  | { type: 'saveBlock'; text: string }
+  | { type: 'pickBlock' }
   | { type: 'openLayout'; uri: string }
   | { type: 'savePdf'; name: string; data: string }
+  | { type: 'fonts'; id: number; requests: FontRequest[] }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -76,6 +81,8 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   /** Open designers by document URI. */
   private static sessions = new Map<string, DesignerSession>();
   private static activeSession: DesignerSession | undefined;
+  /** Installed fonts for the PDF export, indexed on first use. */
+  private static fonts = new FontIndex();
   private static changed = new vscode.EventEmitter<DesignerSession | undefined>();
   /** Fires when the active designer changes or reports a new state (undefined: no designer active). */
   static readonly onDidChange = ReportEditorProvider.changed.event;
@@ -99,7 +106,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
 
     // Text the webview produced last; changes equal to it must not be echoed back (it already has that state).
     let lastFromWebview: string | undefined;
-    const probe: EditorProbe | undefined = testing ? { received: [], posted: [], deliver: m => handle(m as FromWebview) } : undefined;
+    const probe: EditorProbe | undefined = testing ? { received: [], posted: [], deliver: m => handle(m as FromWebview), send: m => webview.postMessage(m) } : undefined;
     if (probe) probes.set(document.uri.toString(), probe);
     const post = (msg: { type: string; [k: string]: unknown }) => {
       probe?.posted.push(msg);
@@ -200,9 +207,29 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           case 'info':
             vscode.window.showInformationMessage(msg.message);
             break;
+          case 'saveBlock':
+            try { await this.saveBlock(msg.text); } catch (e) { vscode.window.showErrorMessage((e as Error).message); }
+            break;
+          case 'pickBlock':
+            try {
+              const block = await this.pickBlock();
+              if (block) await session.command('blocks.load', block);
+            } catch (e) { vscode.window.showErrorMessage((e as Error).message); }
+            break;
           case 'pickImage': {
             const image = await pickImage(document.uri);
             if (image) await session.command('images.add', image);
+            break;
+          }
+          case 'fonts': {
+            // installed font files for the PDF export (the webview cannot read them itself)
+            const fonts = await Promise.all(msg.requests.map(async r => {
+              try {
+                const face = await ReportEditorProvider.fonts.find(r);
+                return face ? Buffer.from(await ReportEditorProvider.fonts.bytes(face)).toString('base64') : null;
+              } catch { return null; }
+            }));
+            panel.webview.postMessage({ type: 'fonts', id: msg.id, fonts });
             break;
           }
           case 'savePdf': {
@@ -251,6 +278,43 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   private defaultDataSet(document: vscode.TextDocument): string {
     const names = [...document.getText().matchAll(/<DataSet\s+Name="([^"]+)"/g)].map(m => m[1]);
     return names.find(n => n === 'DataSet_Result') ?? names[0] ?? 'DataSet_Result';
+  }
+
+  private get blockDirectory() { return vscode.Uri.joinPath(this.context.globalStorageUri, 'blocks'); }
+
+  private async saveBlock(text: string) {
+    const mode = await vscode.window.showQuickPick([
+      { label: l10n.t('Save to Block Library'), destination: 'library' },
+      { label: l10n.t('Export Block to File…'), destination: 'file' },
+    ], { title: l10n.t('Save Selection as Block…') });
+    if (!mode) return;
+    let uri: vscode.Uri | undefined;
+    if (mode.destination === 'file') {
+      uri = await vscode.window.showSaveDialog({ filters: { RDLC: ['rdlc'] }, saveLabel: l10n.t('Save Block') });
+    } else {
+      const name = await vscode.window.showInputBox({ title: l10n.t('Block Name'), validateInput: n =>
+        !n.trim() || /[\\/:*?"<>|\x00-\x1f]/.test(n) || n.trim() === '.' || n.trim() === '..' ? l10n.t('Enter a valid file name.') : undefined });
+      if (!name) return;
+      await vscode.workspace.fs.createDirectory(this.blockDirectory);
+      uri = vscode.Uri.joinPath(this.blockDirectory, `${name.trim()}.rdlc`);
+      const exists = await vscode.workspace.fs.stat(uri).then(() => true, () => false);
+      if (exists && await vscode.window.showWarningMessage(l10n.t('Replace block "{0}"?', name.trim()), { modal: true }, l10n.t('Replace')) !== l10n.t('Replace')) return;
+    }
+    if (!uri) return;
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(text));
+    vscode.window.showInformationMessage(l10n.t('Layout block saved.'));
+  }
+
+  private async pickBlock(): Promise<{ name: string; text: string } | undefined> {
+    const files = await vscode.workspace.fs.readDirectory(this.blockDirectory).then(x => x, () => []);
+    const choices = files.filter(([n, t]) => t === vscode.FileType.File && /\.rdlc$/i.test(n)).map(([name]) => ({ label: name.replace(/\.rdlc$/i, ''), file: name }));
+    const pick = await vscode.window.showQuickPick([
+      { label: l10n.t('Import Block from File…'), file: '' }, ...choices.sort((a, b) => a.label.localeCompare(b.label)),
+    ], { title: l10n.t('Insert Layout Block…') });
+    if (!pick) return;
+    const uri = pick.file ? vscode.Uri.joinPath(this.blockDirectory, pick.file) : (await vscode.window.showOpenDialog({ canSelectMany: false, filters: { RDLC: ['rdlc', 'rdl'] }, openLabel: l10n.t('Insert Layout Block…') }))?.[0];
+    if (!uri) return;
+    return { name: uri.path.split('/').pop()!, text: new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)) };
   }
 
   private async replaceDocument(document: vscode.TextDocument, text: string) {
@@ -344,7 +408,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   <link href="${asset('webview.css')}" rel="stylesheet">
   <title>Business Central Report Builder</title>
 </head>
-<body>
+<body${testing ? ' data-testing="true"' : ''}>
   <div id="root"></div>
   <script type="application/json" id="l10n">${JSON.stringify(localization()).replace(/</g, '\\u003c')}</script>
   <script nonce="${nonce}" src="${asset('webview.js')}"></script>

@@ -38,6 +38,26 @@ const CONVERT = Symbol('Convert');
 const SYSTEM = Symbol('System');
 const STRING_NS = Symbol('String');
 const MATH_NS = Symbol('Math');
+const ARRAY_NS = Symbol('Array');
+
+/** The array of dimension `d` (1-based, as UBound's second argument): the first element's sub-array for d > 1. */
+function arrayDim(a: unknown, d: unknown): unknown[] {
+  let cur = a;
+  for (let i = 1; i < (isNothing(d) ? 1 : toNum(d)); i++) cur = Array.isArray(cur) ? cur[0] : undefined;
+  if (!Array.isArray(cur)) throw new Error(l10n.t('Not an array'));
+  return cur;
+}
+
+/** a(i) / a(i, j) on an array variable; multi-dimensional arrays are nested. */
+export function indexArray(a: unknown[], idx: unknown[]): unknown {
+  let cur: unknown = a;
+  for (const i of idx) {
+    const n = toNum(i);
+    if (!Array.isArray(cur) || n < 0 || n >= cur.length || !Number.isInteger(n)) throw new Error(l10n.t('Index {0} is outside the bounds of the array', n));
+    cur = cur[n];
+  }
+  return cur ?? null;
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Tokenizer
@@ -87,7 +107,7 @@ function tokenize(src: string): Tok[] {
     } else {
       const two = src.slice(i, i + 2);
       if (['<>', '<=', '>='].includes(two)) { out.push({ t: 'op', v: two }); i += 2; }
-      else if ('=<>&+-*/\\^(),.!'.includes(c)) { out.push({ t: 'op', v: c }); i++; }
+      else if ('=<>&+-*/\\^(),.!{}'.includes(c)) { out.push({ t: 'op', v: c }); i++; }
       else throw new Error(l10n.t("Unexpected character '{0}'", c));
     }
   }
@@ -194,6 +214,15 @@ class ExprParser {
       case 'num': case 'str': case 'date': return { k: 'lit', v: t.v };
       case 'op':
         if (t.v === '(') { const n = this.or(); this.expectOp(')'); return n; }
+        if (t.v === '{') {
+          // array literal {1, 2, 3} (Code block: Dim a() As Integer = {1, 2, 3})
+          const items: Node[] = [];
+          if (!this.isOp('}')) {
+            do { items.push(this.or()); } while (this.isOp(',') && this.next());
+          }
+          this.expectOp('}');
+          return { k: 'call', name: '__array', args: items };
+        }
         throw new Error(l10n.t("Unexpected '{0}'", t.v));
       case 'eof': throw new Error(l10n.t('Incomplete expression'));
       case 'id': {
@@ -389,6 +418,10 @@ const FUNCTIONS: Record<string, Fn> = {
   instrrev: ([a, b]) => toStr(a).lastIndexOf(toStr(b)) + 1,
   strreverse: ([s]) => [...toStr(s)].reverse().join(''),
   cobj: ([v]) => v,
+  __array: args => args,
+  ubound: ([a, d]) => arrayDim(a, d).length - 1,
+  lbound: () => 0,
+  isarray: ([a]) => Array.isArray(a),
   __codeerror: ([msg]) => { throw new Error(toStr(msg)); },
 };
 
@@ -413,6 +446,7 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
     if (lname === 'string') return STRING_NS;
     if (lname === 'math') return MATH_NS;
     if (lname === 'convert') return CONVERT;
+    if (lname === 'array') return ARRAY_NS;
     throw new Error(l10n.t('{0} is not supported', `System.${name}`));
   }
   if (obj === STRING_NS) {
@@ -441,7 +475,26 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
     }
     throw new Error(l10n.t('{0} is not supported', `Math.${name}`));
   }
-  if (Array.isArray(obj) && lname === 'length') return obj.length;
+  if (Array.isArray(obj)) {
+    switch (lname) {
+      case 'length': case 'count': return obj.length;
+      case 'getupperbound': return arrayDim(obj, toNum(args[0] ?? 0) + 1).length - 1;
+      case 'getlength': return arrayDim(obj, toNum(args[0] ?? 0) + 1).length;
+      case 'getlowerbound': return 0;
+      case 'contains': return obj.some(x => compare(x, args[0]) === 0);
+    }
+  }
+  if (obj === ARRAY_NS) {
+    const [a, v] = args;
+    if (!Array.isArray(a)) throw new Error(l10n.t('Array.{0} expects an array', name));
+    switch (lname) {
+      case 'indexof': return a.findIndex(x => compare(x, v) === 0);
+      case 'sort': a.sort(compare); return null;
+      case 'reverse': a.reverse(); return null;
+      case 'clear': a.fill(null); return null;
+    }
+    throw new Error(l10n.t('{0} is not supported', `Array.${name}`));
+  }
   if (obj && typeof obj === 'object' && !(obj instanceof Date) && !args.length) {
     const key = Object.keys(obj).find(k => k.toLowerCase() === name.toLowerCase());
     if (key) return (obj as Record<string, unknown>)[key];
@@ -477,6 +530,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       if (n.name === 'system') return SYSTEM;
       if (n.name === 'string') return STRING_NS;
       if (n.name === 'math') return MATH_NS;
+      if (n.name === 'array') return ARRAY_NS;
       if (n.name in FUNCTIONS && ['now', 'today'].includes(n.name)) return FUNCTIONS[n.name]([], ctx);
       throw new Error(l10n.t("Unknown identifier '{0}'", n.name));
     }
@@ -487,6 +541,9 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       return n.op === '-' ? -toNum(v) : !toBool(v);
     }
     case 'call': {
+      // a(i) on an array variable of the Code block
+      const variable = ctx.lookup?.(n.name);
+      if (Array.isArray(variable?.value)) return indexArray(variable.value, n.args.map(a => evalNode(a, ctx)));
       if (AGGREGATES.has(n.name)) return aggregate(n.name, n.args, ctx);
       if (n.name === 'iif') {
         if (n.args.length !== 3) throw new Error(l10n.t('IIf() expects 3 arguments'));

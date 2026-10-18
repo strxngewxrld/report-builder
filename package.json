@@ -1,21 +1,37 @@
 {
   "name": "bc-report-builder",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "%description%",
+  "publisher": "Tom-Knueppel",
+  "author": {
+    "name": "Tom Knüppel",
+    "url": "https://github.com/strxngewxrld"
+  },
   "main": "./out/extension.js",
   "l10n": "./l10n",
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit -p .",
-    "test": "node esbuild.mjs --test && node --test out/test/*.test.js",
-    "package": "npm run build && vsce package --no-dependencies",
+    "test": "node esbuild.mjs --test && node --test out/test/*.test.js test/*.test.mjs",
+    "package": "node scripts/package.mjs",
     "test:corpus": "node esbuild.mjs --corpus && node --enable-source-maps out/corpus.js",
-    "test:vscode": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js"
+    "test:vscode": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js",
+    "check:package": "node scripts/check-package.mjs",
+    "publish:github": "node tools/publish-github.mjs"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strxngewxrld/report-builder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strxngewxrld/report-builder/issues"
+  },
+  "homepage": "https://github.com/strxngewxrld/report-builder#readme",
   "type": "commonjs",
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -38,7 +54,6 @@
     "color": "#0b5f86",
     "theme": "dark"
   },
-  "publisher": "tknueppe",
   "private": true,
   "engines": {
     "vscode": "^1.90.0"
@@ -555,6 +570,21 @@
         "title": "%command.insert.matrix%",
         "category": "%category%",
         "icon": "$(symbol-array)"
+      },
+      {
+        "command": "bcReportBuilder.findExpressions",
+        "title": "%command.findExpressions%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.saveBlock",
+        "title": "%command.saveBlock%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.insertBlock",
+        "title": "%command.insertBlock%",
+        "category": "%category%"
       }
     ],
     "submenus": [
@@ -950,6 +980,18 @@
         },
         {
           "command": "bcReportBuilder.insert.matrix",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.findExpressions",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.saveBlock",
+          "when": "activeCustomEditorId == bcReportBuilder.designer"
+        },
+        {
+          "command": "bcReportBuilder.insertBlock",
           "when": "activeCustomEditorId == bcReportBuilder.designer"
         }
       ],
@@ -1522,6 +1564,12 @@
             "200 %"
           ],
           "description": "%config.defaultZoom%"
+        },
+        "bcReportBuilder.checkForUpdates": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.checkForUpdates%"
         }
       }
     }

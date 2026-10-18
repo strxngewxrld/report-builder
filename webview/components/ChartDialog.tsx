@@ -3,12 +3,18 @@ import { Dialog, useEditor } from '../editor';
 import { validateExpression } from '../expr';
 import { RawItem, uniqueName } from '../model';
 import { locate, rawItem, sectionOf } from '../ops';
-import { chartKinds, ChartAxisSpec, ChartKind, ChartSpec, PALETTES, SERIES_KINDS, chartXml, emptyAxis, isPie, patchChart, readChart } from '../charts';
+import {
+  chartKinds, ChartAxisSpec, ChartKind, ChartSpec, MARKERS, PALETTES, SERIES_KINDS, TrendFormula, chartXml, emptyAxis, isCartesian, isPolar, isRange,
+  isShape, patchChart, readChart, trendFormulas,
+} from '../charts';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
 import { l10n } from '../l10n';
 
-/** Insert / edit a chart: type, category (x axis), series with their values, title, legend, palette. */
+/**
+ * Insert / edit a chart: type, category (x axis), series with their values (high/low for range charts), colors and
+ * markers of their data points, calculated series (moving average, mean, …), title, legend, palette, axes.
+ */
 export function ChartDialog({ d, close, Modal, Field }: {
   d: Extract<Dialog, { kind: 'chart' }>; close: () => void;
   Modal: (p: { title: string; children: React.ReactNode; onOk?: () => void; onCancel: () => void; okLabel?: string; error?: string | null; wide?: boolean }) => JSX.Element;
@@ -25,16 +31,21 @@ export function ChartDialog({ d, close, Modal, Field }: {
   });
   const set = (p: Partial<ChartSpec>) => setSpec({ ...spec, ...p });
   const fields = ed.report.dataSets.find(x => x.name === spec.dataSetName)?.fields ?? [];
-  const pie = isPie(spec.kind);
-  const horizontal = spec.kind === 'Bar' || spec.kind === 'StackedBar';
+  const pie = isShape(spec.kind);
+  const horizontal = spec.kind === 'Bar' || spec.kind === 'StackedBar' || spec.kind === 'RangeBar';
+  const cartesian = isCartesian(spec.kind);
+  const kindOf = (s: ChartSpec['series'][number]) => s.kind ?? spec.kind;
+  const withMarkers = (k: ChartKind) => ['Line', 'SmoothLine', 'Scatter', 'Area', 'StackedArea', 'Polar', 'Radar'].includes(k);
   const bound = (v: string) => v === '' || v.startsWith('=') || Number.isFinite(Number(v.replace(',', '.')));
   const axes = [spec.valueAxis, spec.secondaryAxis];
   const error = !/^[A-Za-z_]\w*$/.test(spec.name) ? l10n.t('Invalid name')
     : !existing && locate(ed.report, spec.name) ? l10n.t('"{0}" is taken already', spec.name)
     : !spec.dataSetName ? l10n.t('Choose a dataset')
     : !spec.series.length || spec.series.some(s => !s.value.trim()) ? l10n.t('Every series needs a value (e.g. =Sum(Fields!Amount.Value))')
+    : spec.series.some(s => isRange(kindOf(s)) && !s.low?.trim()) ? l10n.t('Range charts need a low and a high value')
+    : spec.series.some(s => s.trend && !(s.trend.period >= 1)) ? l10n.t('The period of a moving average is a whole number from 1')
     : axes.some(a => !bound(a.min) || !bound(a.max)) ? l10n.t('Minimum/maximum: a number, =expression or empty (automatic)')
-    : [spec.category, ...spec.series.map(s => s.value)].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
+    : [spec.category, ...spec.series.flatMap(s => [s.value, s.low ?? '', s.color ?? ''])].map(e => (e.trim().startsWith('=') ? validateExpression(e) : null)).find(Boolean) ?? null;
   const setSeries = (i: number, p: Partial<ChartSpec['series'][number]>) => set({ series: spec.series.map((x, j) => (j === i ? { ...x, ...p } : x)) });
   const axisFields = (label: string, a: ChartAxisSpec, key: 'categoryAxis' | 'valueAxis' | 'secondaryAxis', values: boolean) => (
     <div className="form-row"><span>{label}</span>
@@ -105,7 +116,7 @@ export function ChartDialog({ d, close, Modal, Field }: {
                 <ExpressionInput value={s.value} onChange={v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) })} dataSetName={spec.dataSetName} placeholder="=Sum(Fields!…Value)" />
                 {fieldPick(v => set({ series: spec.series.map((x, j) => (j === i ? { ...x, value: v } : x)) }), true)}
               </span>
-              {!pie && !horizontal && <>
+              {cartesian && !horizontal && !isRange(spec.kind) && <>
                 <select value={s.kind ?? ''} title={l10n.t('Type of this series (combined chart)')} onChange={e => setSeries(i, { kind: (e.target.value || undefined) as ChartKind | undefined })}>
                   <option value="">{l10n.t('as chart')}</option>
                   {SERIES_KINDS.map(k => <option key={k} value={k}>{chartKinds().find(c => c[0] === k)![1]}</option>)}
@@ -114,7 +125,41 @@ export function ChartDialog({ d, close, Modal, Field }: {
               </>}
               <ActionButton icon="trash" title={l10n.t('Remove Series')} disabled={spec.series.length <= 1} onClick={() => set({ series: spec.series.filter((_, j) => j !== i) })} />
             </div>
-          ))}
+          )).flatMap((row, i) => {
+            const s = spec.series[i];
+            const k = kindOf(s);
+            // second line per series: low value (range), color of the points, marker, calculated series
+            return [row, (
+              <div key={`x${i}`} className="list-row series-extra">
+                {isRange(k) && (
+                  <span className="expr-prop" title={l10n.t('Low value of each point (the value above is the high value)')}>
+                    <ExpressionInput value={s.low ?? ''} onChange={v => setSeries(i, { low: v })} dataSetName={spec.dataSetName} placeholder={l10n.t('Low value, e.g. =Min(Fields!…Value)')} />
+                    {fieldPick(v => setSeries(i, { low: v }), true)}
+                  </span>
+                )}
+                <span className="expr-prop" title={l10n.t('Color of the data points: a color name, #RRGGBB or an expression per point')}>
+                  <ExpressionInput value={s.color ?? ''} onChange={v => setSeries(i, { color: v || undefined })} dataSetName={spec.dataSetName} placeholder={l10n.t('Color (palette), e.g. =IIf(Fields!…Value < 0, "Red", "Green")')} />
+                </span>
+                {withMarkers(k) && (
+                  <select value={s.marker ?? ''} title={l10n.t('Marker of the data points')} onChange={e => setSeries(i, { marker: e.target.value || undefined })}>
+                    <option value="">{l10n.t('Marker: automatic')}</option>
+                    {MARKERS.map(m => <option key={m} value={m}>{m === 'None' ? l10n.t('no marker') : m}</option>)}
+                  </select>
+                )}
+                {cartesian && !horizontal && (
+                  <select value={s.trend?.formula ?? ''} title={l10n.t('Calculated series derived from this series (shown as a dashed line)')}
+                    onChange={e => setSeries(i, { trend: e.target.value ? { formula: e.target.value as TrendFormula, period: s.trend?.period ?? 2 } : undefined })}>
+                    <option value="">{l10n.t('No calculated series')}</option>
+                    {trendFormulas().map(([f, label]) => <option key={f} value={f}>{label}</option>)}
+                  </select>
+                )}
+                {s.trend && s.trend.formula.endsWith('MovingAverage') && (
+                  <input className="axis-format" type="number" min={1} step={1} value={s.trend.period} title={l10n.t('Period: number of points averaged')}
+                    onChange={e => setSeries(i, { trend: { ...s.trend!, period: Math.round(Number(e.target.value)) } })} />
+                )}
+              </div>
+            )];
+          })}
           {!pie && <button className="secondary small" onClick={() => set({ series: [...spec.series, { name: l10n.t('Series{0}', spec.series.length + 1), value: '' }] })}><Codicon name="add" /> {l10n.t('Series')}</button>}
         </div>
       </div>
@@ -126,11 +171,12 @@ export function ChartDialog({ d, close, Modal, Field }: {
           <select value={spec.palette} onChange={e => set({ palette: e.target.value })} title={l10n.t('Color palette')}>{PALETTES.map(p => <option key={p}>{p}</option>)}</select>
         </span>
       </Field>
-      {!pie && <>
+      {cartesian && <>
         {axisFields(horizontal ? l10n.t('Category axis (y)') : l10n.t('Category axis (x)'), spec.categoryAxis, 'categoryAxis', false)}
         {axisFields(horizontal ? l10n.t('Value axis (x)') : l10n.t('Value axis (y)'), spec.valueAxis, 'valueAxis', true)}
         {spec.series.some(x => x.secondary) && !horizontal && axisFields(l10n.t('Secondary value axis (right)'), spec.secondaryAxis, 'secondaryAxis', true)}
       </>}
+      {isPolar(spec.kind) && axisFields(l10n.t('Value axis (radius)'), spec.valueAxis, 'valueAxis', true)}
       {existing && <div className="prop-note">{l10n.t('Only what is set here changes – further formatting of the chart stays as in the layout.')}</div>}
     </Modal>
   );

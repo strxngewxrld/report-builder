@@ -101,5 +101,9 @@
   "config.showGrid": "Show the grid on the design surface.",
   "config.snapToGrid": "Snap items to the grid when moving and drawing them (hold `Alt` to place them freely).",
   "config.showRuler": "Show the ruler above the design surface.",
-  "config.defaultZoom": "Zoom level newly opened layouts are shown with."
+  "config.defaultZoom": "Zoom level newly opened layouts are shown with.",
+  "command.findExpressions": "Expressions and References…",
+  "command.saveBlock": "Save Selection as Block…",
+  "command.insertBlock": "Insert Layout Block…",
+  "config.checkForUpdates": "Check GitHub Releases for a newer version on startup and offer to install it."
 }

@@ -1,5 +1,6 @@
-// SVG rendering of a chart from the render engine (column, bar, line, area, scatter – also mixed and stacked –, pie
-// and doughnut). Sizes come from the report item; colors from the report's palette.
+// SVG rendering of a chart from the render engine (column, bar, line, area, scatter – also mixed and stacked –, range,
+// pie, doughnut, funnel, pyramid, polar and radar, calculated series as dashed lines). Sizes come from the report
+// item; colors from the report's palette or the data points' own colors.
 
 import type { CSSProperties } from 'react';
 import { formatValue } from '../expr';
@@ -29,6 +30,26 @@ function smoothPath(pts: readonly (readonly [number, number])[]): string {
   return d;
 }
 
+/** A data point marker (RDL ChartMarker/Type); null for 'None'. */
+function markerShape(type: string | undefined, x: number, y: number, r: number, fill: string, key: string): JSX.Element | null {
+  switch (type) {
+    case 'None': return null;
+    case 'Square': return <rect key={key} x={x - r} y={y - r} width={2 * r} height={2 * r} fill={fill} />;
+    case 'Diamond': return <path key={key} d={`M${x},${y - r * 1.3}L${x + r * 1.3},${y}L${x},${y + r * 1.3}L${x - r * 1.3},${y}Z`} fill={fill} />;
+    case 'Triangle': return <path key={key} d={`M${x},${y - r * 1.3}L${x + r * 1.2},${y + r}L${x - r * 1.2},${y + r}Z`} fill={fill} />;
+    case 'Cross': return <path key={key} d={`M${x - r},${y - r}L${x + r},${y + r}M${x + r},${y - r}L${x - r},${y + r}`} stroke={fill} strokeWidth={Math.max(1.5, r / 2)} />;
+    case 'Star4': case 'Star5': case 'Star6': case 'Star10': {
+      const n = Number(type.slice(4));
+      const pts = Array.from({ length: n * 2 }, (_, i) => {
+        const a = -Math.PI / 2 + (i * Math.PI) / n, rr = i % 2 ? r * 0.5 : r * 1.4;
+        return `${x + rr * Math.cos(a)},${y + rr * Math.sin(a)}`;
+      });
+      return <polygon key={key} points={pts.join(' ')} fill={fill} />;
+    }
+    default: return <circle key={key} cx={x} cy={y} r={r} fill={fill} />;
+  }
+}
+
 const fmt = (v: number) => (Math.abs(v) >= 1000 || !Number.isInteger(v) ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : String(v));
 
 /** "Nice" axis bounds and step (1, 2, 5 × 10^n). */
@@ -44,11 +65,19 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
   const W = chart.width * S, H = chart.height * S;
   const pal = colors(chart.palette);
   const font = { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 10, fill: '#333' };
-  const pie = chart.series[0] && (chart.series[0].type === 'Pie' || chart.series[0].type === 'Doughnut');
-  const legendItems = pie ? chart.categories : chart.series.map(s => s.name);
-  const showLegend = chart.legend && legendItems.length > (pie ? 0 : 1);
+  const first = chart.series[0];
+  const pie = !!first && (first.type === 'Pie' || first.type === 'Doughnut');
+  /** Segments of one series: pie, doughnut, funnel, pyramid (the legend lists the categories). */
+  const shape = !!first && (pie || first.type === 'Funnel' || first.type === 'Pyramid');
+  const polar = !!first && (first.type === 'Polar' || first.type === 'Radar');
+  const legendItems = shape ? chart.categories : chart.series.map(s => s.name);
+  const showLegend = chart.legend && legendItems.length > (shape ? 0 : 1);
+  /** Color of a point: its own (data point color) or the palette's – by category for shapes, by series otherwise. */
+  const colorOf = (si: number, ci: number) => chart.series[si]?.colors?.[ci] || pal[(shape ? ci : si) % pal.length];
+  const legendColor = (i: number) => (shape ? colorOf(0, i) : pal[i % pal.length]);
+  const markerR = (si: number, fallback: number) => (chart.series[si].marker?.size ? (chart.series[si].marker!.size! / 72) * S / 2 : fallback);
   const titleH = chart.title ? 18 : 4;
-  const legendW = showLegend ? Math.min(W * 0.32, 12 + Math.max(...legendItems.map(l => l.length)) * 6) : 0;
+  const legendW = showLegend ? Math.min(W * 0.32, 22 + Math.max(...legendItems.map(l => l.length)) * 6) : 0;
   const plot = { x: 8, y: titleH + 4, w: W - legendW - 16, h: H - titleH - 12 };
 
   let body: JSX.Element[] = [];
@@ -60,6 +89,7 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
     let a0 = -Math.PI / 2;
     body = values.map((v, i) => {
       const a1 = a0 + (v / total) * Math.PI * 2;
+      if (v <= 0) return <g key={i} />;
       const large = a1 - a0 > Math.PI ? 1 : 0;
       const p = (a: number, rr: number) => `${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)}`;
       const inner = chart.series[0].type === 'Doughnut' ? r * 0.5 : 0;
@@ -69,10 +99,78 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
           ? `M${p(a0, r)}A${r},${r} 0 ${large} 1 ${p(a1, r)}L${p(a1, inner)}A${inner},${inner} 0 ${large} 0 ${p(a0, inner)}Z`
           : `M${cx},${cy}L${p(a0, r)}A${r},${r} 0 ${large} 1 ${p(a1, r)}Z`;
       a0 = a1;
-      return <path key={i} d={d} fill={pal[i % pal.length]} stroke="white" strokeWidth={1}><title>{`${chart.categories[i]}: ${fmt(v)}`}</title></path>;
+      return <path key={i} d={d} fill={colorOf(0, i)} stroke="white" strokeWidth={1}><title>{`${chart.categories[i]}: ${fmt(v)}`}</title></path>;
+    });
+  } else if (shape) {
+    // funnel: segments from the top, the height of each proportional to its value, narrowing to a neck;
+    // pyramid: the first point at the base
+    const s0 = chart.series[0];
+    const values = s0.values.map(v => Math.max(0, v ?? 0));
+    const total = values.reduce((a, b) => a + b, 0) || 1;
+    const funnel = s0.type === 'Funnel';
+    const cx = plot.x + plot.w / 2, w = Math.max(10, plot.w - 8), h = Math.max(10, plot.h - 4), top = plot.y + 2;
+    const neckW = w * 0.25, neckY = h * 0.75;
+    const widthAt = (y: number) => (funnel ? (y >= neckY ? neckW : w - (w - neckW) * (y / neckY)) : w * (y / h));
+    const order = funnel ? values.map((_, i) => i) : values.map((_, i) => values.length - 1 - i);
+    let y = 0;
+    for (const i of order) {
+      const y0 = y, y1 = y + (values[i] / total) * h;
+      y = y1;
+      if (values[i] <= 0) continue;
+      const ys = [y0, ...(funnel && y0 < neckY && y1 > neckY ? [neckY] : []), y1];
+      const left = ys.map(yy => `${cx - widthAt(yy) / 2},${top + yy}`);
+      const right = ys.map(yy => `${cx + widthAt(yy) / 2},${top + yy}`).reverse();
+      body.push(<polygon key={`s${i}`} points={[...left, ...right].join(' ')} fill={colorOf(0, i)} stroke="white" strokeWidth={1}><title>{`${chart.categories[i]}: ${fmt(s0.values[i] ?? 0)}`}</title></polygon>);
+      if (chart.dataLabels && y1 - y0 > 9) {
+        body.push(<text key={`d${i}`} x={cx} y={top + (y0 + y1) / 2 + 3} textAnchor="middle" {...font} fontSize={9}>{fmt(s0.values[i] ?? 0)}</text>);
+      }
+    }
+  } else if (polar) {
+    // categories at equal angles from the top, clockwise; values as distance from the center
+    const n = Math.max(1, chart.categories.length);
+    const r = Math.max(4, Math.min(plot.w, plot.h) / 2 - 14);
+    const cx = plot.x + plot.w / 2, cy = plot.y + plot.h / 2;
+    const all = [0, ...chart.series.flatMap(s => s.values.filter((v): v is number => v !== null))];
+    const nice = axis(chart.valueAxis?.min ?? Math.min(...all), chart.valueAxis?.max ?? Math.max(...all));
+    const lo = chart.valueAxis?.min ?? nice.lo, hi = Math.max(chart.valueAxis?.max ?? nice.hi, lo + 1e-9);
+    const at = (ci: number, v: number) => {
+      const a = -Math.PI / 2 + (ci / n) * Math.PI * 2, d = ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * r;
+      return [cx + d * Math.cos(a), cy + d * Math.sin(a)] as const;
+    };
+    const radar = first.type === 'Radar';
+    for (let v = lo + nice.step; v <= hi + nice.step / 2; v += nice.step) {
+      body.push(radar
+        ? <polygon key={`g${v}`} points={chart.categories.map((_, ci) => at(ci, v).join(',')).join(' ')} fill="none" stroke="#e0e0e0" />
+        : <circle key={`g${v}`} cx={cx} cy={cy} r={((v - lo) / (hi - lo)) * r} fill="none" stroke="#e0e0e0" />);
+      // the outermost ring is not labelled: its label would cover the first category's
+      if (v < hi - nice.step / 2) body.push(<text key={`gl${v}`} x={cx + 2} y={at(0, v)[1] - 2} {...font} fontSize={8} fill="#777">{chart.valueAxis?.format ? formatValue(v, chart.valueAxis.format) : fmt(v)}</text>);
+    }
+    chart.categories.forEach((c, ci) => {
+      const [x, y] = at(ci, hi);
+      body.push(<line key={`sp${ci}`} x1={cx} y1={cy} x2={x} y2={y} stroke="#e0e0e0" />);
+      const [lx, ly] = [cx + (x - cx) * 1.08, cy + (y - cy) * 1.08];
+      body.push(<text key={`c${ci}`} x={lx} y={ly + 3} textAnchor={Math.abs(lx - cx) < 4 ? 'middle' : lx > cx ? 'start' : 'end'} {...font}>{c}</text>);
+    });
+    chart.series.forEach((s, si) => {
+      const color = pal[si % pal.length];
+      const pts = s.values.map((v, ci) => (v === null ? null : at(ci, v)));
+      const present = pts.filter((p): p is readonly [number, number] => !!p);
+      if (radar && present.length > 1) {
+        body.push(<polygon key={`r${si}`} points={present.map(p => p.join(',')).join(' ')} fill={color} fillOpacity={s.derived ? 0 : 0.35} stroke={color} strokeWidth={2} strokeDasharray={s.derived ? '5 3' : undefined} />);
+      } else if (s.derived && present.length > 1) {
+        body.push(<polygon key={`r${si}`} points={present.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="5 3" />);
+      }
+      if (!s.derived) {
+        pts.forEach((p, ci) => {
+          if (!p) return;
+          const m = markerShape(s.marker?.type ?? (radar ? 'None' : 'Circle'), p[0], p[1], markerR(si, 3), colorOf(si, ci), `p${si}-${ci}`);
+          if (m) body.push(m);
+          if (chart.dataLabels) body.push(<text key={`d${si}-${ci}`} x={p[0]} y={p[1] - 6} textAnchor="middle" {...font} fontSize={9}>{fmt(s.values[ci] ?? 0)}</text>);
+        });
+      }
     });
   } else {
-    const horizontal = chart.series.some(s => s.type === 'Bar');
+    const horizontal = chart.series.some(s => s.type === 'Bar' || s.type === 'RangeBar');
     const n = chart.categories.length || 1;
     // 100 % stacking: each category's stack sums to 100
     const values = chart.series.map(s => (s.percent
@@ -87,7 +185,7 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
       if (!idx.length) return null;
       const stackedIdx = idx.filter(i => chart.series[i].stacked);
       const sums = chart.categories.map((_, ci) => stackedIdx.reduce((a, i) => a + Math.max(0, values[i][ci] ?? 0), 0));
-      const all = [0, ...sums, ...idx.filter(i => !chart.series[i].stacked).flatMap(i => values[i].filter((v): v is number => v !== null))];
+      const all = [0, ...sums, ...idx.filter(i => !chart.series[i].stacked).flatMap(i => [...values[i], ...chart.series[i].low ?? []].filter((v): v is number => v !== null))];
       const spec = secondary ? chart.secondaryAxis : chart.valueAxis;
       const nice = axis(spec?.min ?? Math.min(...all), spec?.max ?? Math.max(...all));
       const lo = spec?.min ?? nice.lo, hi = spec?.max ?? nice.hi;
@@ -141,7 +239,8 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
         vTitle(chart.secondaryAxis?.title, plot.x + plot.w - 4, 'ts')].filter((x): x is JSX.Element => !!x));
     }
 
-    const barSeries = chart.series.filter(s => s.type === 'Column' || s.type === 'Bar');
+    const isBar = (s: { type: string }) => s.type === 'Column' || s.type === 'Bar' || s.type === 'RangeColumn' || s.type === 'RangeBar';
+    const barSeries = chart.series.filter(isBar);
     const anyStackedBars = barSeries.some(s => s.stacked);
     const bw = band * 0.7 / (anyStackedBars ? 1 : Math.max(1, barSeries.length));
     const stackBase = [false, true].map(() => chart.categories.map(() => 0));
@@ -156,19 +255,21 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
       const { v: toPx } = scaleFor(si);
       const side = onSecondary(si) ? 1 : 0;
       const vs = values[si];
-      if (s.type === 'Column' || s.type === 'Bar') {
+      if (isBar(s)) {
         const k = barSeries.indexOf(s);
+        const range = s.type === 'RangeColumn' || s.type === 'RangeBar';
         vs.forEach((v, ci) => {
-          if (v === null) return;
-          const from = s.stacked ? stackBase[side][ci] : 0;
-          const to = from + v;
+          if (v === null || (range && s.low?.[ci] == null)) return;
+          const from = range ? s.low![ci]! : s.stacked ? stackBase[side][ci] : 0;
+          const to = range ? v : from + v;
           if (s.stacked) stackBase[side][ci] = to;
           const start = (horizontal ? area.y : area.x) + band * ci + band * 0.15 + (anyStackedBars ? 0 : k * bw);
           const a = toPx(from), b = toPx(to);
-          const tip = <title>{`${s.name} – ${chart.categories[ci]}: ${fmt(s.values[ci] ?? 0)}`}</title>;
+          const tip = <title>{`${s.name} – ${chart.categories[ci]}: ${range ? `${fmt(from)} – ` : ''}${fmt(s.values[ci] ?? 0)}`}</title>;
+          const fill = colorOf(si, ci);
           body.push(horizontal
-            ? <rect key={`b${si}-${ci}`} x={Math.min(a, b)} y={start} width={Math.abs(b - a)} height={bw} fill={color}>{tip}</rect>
-            : <rect key={`b${si}-${ci}`} x={start} y={Math.min(a, b)} width={bw} height={Math.abs(b - a)} fill={color}>{tip}</rect>);
+            ? <rect key={`b${si}-${ci}`} x={Math.min(a, b)} y={start} width={Math.abs(b - a)} height={bw} fill={fill}>{tip}</rect>
+            : <rect key={`b${si}-${ci}`} x={start} y={Math.min(a, b)} width={bw} height={Math.abs(b - a)} fill={fill}>{tip}</rect>);
           if (horizontal) dataLabel(`d${si}-${ci}`, Math.max(a, b) + 3, start + bw / 2 + 3, s.values[ci] ?? v, si, 'start');
           else dataLabel(`d${si}-${ci}`, start + bw / 2, (s.stacked ? (a + b) / 2 + 3 : Math.min(a, b) - 3), s.values[ci] ?? v, si);
         });
@@ -178,6 +279,15 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
         const top = vs.map((v, ci) => (v === null ? null : stackedArea ? areaBase[side][ci] + v : v));
         const pts = top.map((v, ci) => (v === null ? null : [x(ci), toPx(v)] as const)).filter((p): p is readonly [number, number] => !!p);
         if (!pts.length) return;
+        if (s.type === 'Range') {
+          // the band between the low and the high values
+          const lows = (s.low ?? []).map((v, ci) => (v === null || vs[ci] === null ? null : [x(ci), toPx(v)] as const)).filter((p): p is readonly [number, number] => !!p);
+          const upper = s.smooth ? smoothPath(pts) : `M${pts.map(p => p.join(',')).join('L')}`;
+          const lower = [...lows].reverse();
+          body.push(<path key={`a${si}`} d={`${upper}L${lower.map(p => p.join(',')).join('L')}Z`} fill={color} opacity={0.6}><title>{s.name}</title></path>);
+          vs.forEach((v, ci) => { if (v !== null) dataLabel(`d${si}-${ci}`, x(ci), toPx(v) - 6, v, si); });
+          return;
+        }
         if (s.type === 'Area') {
           const lower = stackedArea
             ? top.map((v, ci) => (v === null ? null : [x(ci), toPx(areaBase[side][ci])] as const)).filter((p): p is readonly [number, number] => !!p).reverse()
@@ -186,12 +296,20 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
           if (stackedArea) vs.forEach((v, ci) => { if (v !== null) areaBase[side][ci] += v; });
         }
         if (s.type !== 'Scatter') {
+          const dash = s.derived ? '6 3' : undefined, width = s.derived ? 1.5 : 2;
           body.push(s.smooth
-            ? <path key={`l${si}`} d={smoothPath(pts)} fill="none" stroke={color} strokeWidth={2} />
-            : <polyline key={`l${si}`} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={2} />);
+            ? <path key={`l${si}`} d={smoothPath(pts)} fill="none" stroke={color} strokeWidth={width} strokeDasharray={dash} />
+            : <polyline key={`l${si}`} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={width} strokeDasharray={dash}><title>{s.name}</title></polyline>);
         }
-        pts.forEach((p, i) => body.push(<circle key={`p${si}-${i}`} cx={p[0]} cy={p[1]} r={s.type === 'Scatter' ? 3.5 : 2.5} fill={color} />));
-        vs.forEach((v, ci) => { if (v !== null && top[ci] !== null) dataLabel(`d${si}-${ci}`, x(ci), toPx(top[ci]!) - 6, s.values[ci] ?? v, si); });
+        if (!s.derived) {
+          // markers: the series' own shape, the data point colors
+          vs.forEach((v, ci) => {
+            if (v === null || top[ci] === null) return;
+            const m = markerShape(s.marker?.type, x(ci), toPx(top[ci]!), markerR(si, s.type === 'Scatter' ? 3.5 : 2.5), colorOf(si, ci), `p${si}-${ci}`);
+            if (m) body.push(m);
+          });
+        }
+        if (!s.derived) vs.forEach((v, ci) => { if (v !== null && top[ci] !== null) dataLabel(`d${si}-${ci}`, x(ci), toPx(top[ci]!) - 6, s.values[ci] ?? v, si); });
       }
     });
     body.unshift(<rect key="frame" x={area.x} y={area.y} width={area.w} height={area.h} fill="none" stroke="#bbb" />);
@@ -205,7 +323,9 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
       {body}
       {showLegend && legendItems.map((l, i) => (
         <g key={`lg${i}`} transform={`translate(${W - legendW + 4}, ${titleH + 6 + i * 14})`}>
-          <rect width={9} height={9} fill={pal[i % pal.length]} />
+          {!shape && chart.series[i]?.derived
+            ? <line x1={0} x2={9} y1={4.5} y2={4.5} stroke={pal[i % pal.length]} strokeWidth={2} strokeDasharray="3 2" />
+            : <rect width={9} height={9} fill={legendColor(i)} />}
           <text x={13} y={8} {...font}>{l.length > (legendW - 16) / 5.5 ? `${l.slice(0, Math.max(1, Math.floor((legendW - 16) / 5.5) - 1))}…` : l}</text>
         </g>
       ))}

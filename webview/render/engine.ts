@@ -10,7 +10,7 @@ import { XmlDom, child, elements, text } from '../rdl';
 import { parseSize } from '../units';
 import { CodeModule } from '../vb';
 import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RGauge, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
-import { axesOf, readAxis } from '../charts';
+import { axesOf, deriveValues, readAxis, renderTypeOf } from '../charts';
 import { l10n } from '../l10n';
 
 export interface RenderOptions {
@@ -60,6 +60,8 @@ interface Leaf {
   rows: Row[];
   ctx: EvalContext;
   breakBefore: boolean;
+  breakAfter?: boolean;
+  resetAfter?: boolean;
   reset: boolean;
   repeat: boolean;
 }
@@ -256,7 +258,14 @@ class Engine {
     };
     const hidden = this.visible(child(el, 'Visibility'), ctx, ctx, l10n.t('{0} (visibility)', name));
     const keepTogether = (text(el, 'KeepTogether') ?? '').toLowerCase() === 'true';
-    const base = { key: this.key(), name, ...box, hidden, seq: this.code?.version ?? 0, keepTogether, ...this.actionInfo(el, ctx, name) };
+    const pb = child(el, 'PageBreak');
+    const location = (text(pb, 'BreakLocation') ?? '').toLowerCase();
+    const breakEnabled = !this.design && !hidden && !this.evalBool(child(pb, 'Disabled'), ctx, name);
+    const base = { key: this.key(), name, ...box, hidden, seq: this.code?.version ?? 0, keepTogether,
+      pageBreakBefore: breakEnabled && (location === 'start' || location === 'startandend'),
+      pageBreakAfter: breakEnabled && (location === 'end' || location === 'startandend'),
+      resetPageNumber: breakEnabled && this.evalBool(child(pb, 'ResetPageNumber'), ctx, name),
+      ...this.actionInfo(el, ctx, name) };
     switch (el.localName) {
       case 'Textbox': return this.textbox(el, ctx, base);
       case 'Rectangle': {
@@ -480,7 +489,7 @@ class Engine {
         cells.push({ colSpan: cs, rowSpan: 1, node: cellNode(contents, cctx, width, height) });
         c += cs;
       }
-      outRows.push({ key: this.key(), height, cells, breakBefore: leaf.breakBefore, resetPageNumber: leaf.reset, repeat: leaf.repeat });
+      outRows.push({ key: this.key(), height, cells, breakBefore: leaf.breakBefore, breakAfter: leaf.breakAfter, resetPageNumberAfter: leaf.resetAfter, resetPageNumber: leaf.reset, repeat: leaf.repeat });
     });
 
     // no data: NoRowsMessage instead of the (empty) region
@@ -534,13 +543,13 @@ class Engine {
         const sortedHere = inherited.sorted || (!!group && userSorts.some(u => !u.scope));
         const pb = child(group, 'PageBreak');
         const loc = (text(pb, 'BreakLocation') ?? '').toLowerCase();
-        const reset = (text(pb, 'ResetPageNumber') ?? '').toLowerCase() === 'true';
         instances.forEach((inst, i) => {
           // a toggled member belongs to the instance around it (c): each document/group expands on its own
           if (this.visible(child(m, 'Visibility'), inst.ctx, c, l10n.t('{0} (visibility)', gname || region))) return;
           const start = leaves.length;
-          const breakHere = !this.design && ((loc === 'between' && i > 0) || loc === 'start' || loc === 'startandend'
-            || ((loc === 'end' || loc === 'startandend') && i > 0));
+          const enabled = !this.design && !this.evalBool(child(pb, 'Disabled'), inst.ctx, gname || region);
+          const reset = enabled && this.evalBool(child(pb, 'ResetPageNumber'), inst.ctx, gname || region);
+          const breakHere = enabled && ((loc === 'between' && i > 0) || loc === 'start' || loc === 'startandend');
           if (kids && elements(kids, 'TablixMember').length) {
             walk(kids, inst.rows, inst.ctx, level + 1, { repeat: repeat && !group, sorted: sortedHere });
           } else {
@@ -549,6 +558,10 @@ class Engine {
           if (leaves.length > start && breakHere) {
             leaves[start].breakBefore = true;
             leaves[start].reset = reset;
+          }
+          if (enabled && leaves.length > start && (loc === 'end' || loc === 'startandend')) {
+            leaves[leaves.length - 1].breakAfter = true;
+            leaves[leaves.length - 1].resetAfter = reset;
           }
           if (headerEl && leaves.length > start) {
             headers.push({ level, start, span: leaves.length - start, contents: child(headerEl, 'CellContents'), size: parseSize(text(headerEl, 'Size'), 1), ctx: inst.ctx });
@@ -597,18 +610,44 @@ class Engine {
     if (secondaryName && seriesEls.some(x => text(x, 'ValueAxisName') === secondaryName)) out.secondaryAxis = evalAxis(axes.secondary);
     out.dataLabels = seriesEls.some(x => (text(x, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataLabel', 'Visible') ?? '').toLowerCase() === 'true');
     const typeOf = (s: Element): Omit<RChartSeries, 'name' | 'values'> => {
-      const t = (text(s, 'Type') ?? 'Column') as string;
       const sub = (text(s, 'Subtype') ?? '').toLowerCase();
-      const type: ChartType = t === 'Shape' ? (sub === 'doughnut' ? 'Doughnut' : 'Pie') : (['Column', 'Bar', 'Line', 'Area', 'Scatter'].includes(t) ? t as ChartType : 'Column');
+      const type: ChartType = renderTypeOf(text(s, 'Type') ?? 'Column', sub);
+      const markerType = text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartMarker', 'Type');
+      const markerSize = parseFloat(text(s, 'ChartDataPoints', 'ChartDataPoint', 'ChartMarker', 'Size') ?? '');
       return {
         type, stacked: sub.includes('stacked'),
         ...(sub === 'percentstacked' ? { percent: true } : {}), ...(sub === 'smooth' ? { smooth: true } : {}),
         ...(secondaryName && text(s, 'ValueAxisName') === secondaryName ? { secondary: true } : {}),
+        ...(markerType && markerType !== 'Auto' ? { marker: { type: markerType, ...(markerSize > 0 ? { size: markerSize } : {}) } } : {}),
       };
+    };
+    // calculated series (moving average, mean, …) from the values of the series they derive from
+    const derivedEls = elements(child(el, 'ChartData', 'ChartDerivedSeriesCollection'), 'ChartDerivedSeries');
+    const addDerived = (sources: { el: Element; series: RChartSeries }[]) => {
+      for (const d of derivedEls) {
+        const formula = text(d, 'DerivedSeriesFormula') ?? '';
+        const params: Record<string, string> = {};
+        for (const p of elements(child(d, 'ChartFormulaParameters'), 'ChartFormulaParameter')) params[p.getAttribute('Name') ?? ''] = text(p, 'Value') ?? '';
+        const own = child(d, 'ChartSeries');
+        for (const src of sources.filter(x => x.el.getAttribute('Name') === text(d, 'SourceChartSeriesName'))) {
+          const values = deriveValues(formula, src.series.values, params);
+          if (!values) continue;
+          out.series.push({
+            name: `${src.series.name} (${own?.getAttribute('Name') ?? formula})`, type: 'Line', stacked: false, values, derived: true,
+            ...(src.series.secondary ? { secondary: true } : {}),
+          });
+        }
+      }
     };
     if (this.design) {
       out.categories = ['A', 'B', 'C', 'D'];
-      out.series = seriesEls.map((s, i) => ({ name: s.getAttribute('Name') ?? l10n.t('Series {0}', i + 1), ...typeOf(s), values: [3, 5, 2, 4].map(v => v + i) }));
+      const sources = seriesEls.map((s, i) => {
+        const t = typeOf(s);
+        const values = [3, 5, 2, 4].map(v => v + i);
+        return { el: s, series: { name: s.getAttribute('Name') ?? l10n.t('Series {0}', i + 1), ...t, values, ...(t.type.startsWith('Range') ? { low: values.map(v => v - 1.5) } : {}) } };
+      });
+      out.series = sources.map(x => x.series);
+      addDerived(sources);
       return out;
     }
     const dsName = text(el, 'DataSetName') ?? '';
@@ -639,20 +678,40 @@ class Engine {
     const categories = cats.length ? cats : [{ label: '', rows, ctx: base0, member: el }];
     out.categories = categories.map(c => c.label);
     // static series members correspond to the ChartSeries in order; a dynamic series repeats the (single) ChartSeries
+    const sources: { el: Element; series: RChartSeries }[] = [];
     series.forEach((s, i) => {
       const seriesEl = seriesEls[Math.min(i, seriesEls.length - 1)] ?? seriesEls[0];
       if (!seriesEl) return;
-      const y = text(seriesEl, 'ChartDataPoints', 'ChartDataPoint', 'ChartDataPointValues', 'Y') ?? '';
+      const point = child(seriesEl, 'ChartDataPoints', 'ChartDataPoint');
+      const type = typeOf(seriesEl);
+      const range = type.type.startsWith('Range');
+      // range charts: High/Low (Y as high value when High is missing)
+      const y = (range ? text(point, 'ChartDataPointValues', 'High') : undefined) ?? text(point, 'ChartDataPointValues', 'Y') ?? '';
+      const low = range ? text(point, 'ChartDataPointValues', 'Low') ?? '' : '';
+      const color = text(point, 'Style', 'Color') ?? '';
       const inSeries = new Set(s.rows);
-      const values = categories.map(c => {
-        const both = c.rows.filter(r => inSeries.has(r));
-        if (!both.length) return null;
-        const v = this.eval(y, { ...c.ctx, scopeRows: both, row: both[0], scopes: { ...c.ctx.scopes, ...s.ctx.scopes } }, l10n.t('{0} (data point)', name));
+      const where = l10n.t('{0} (data point)', name);
+      const num = (v: unknown) => {
         const n = typeof v === 'number' ? v : Number(v);
         return Number.isFinite(n) ? n : null;
+      };
+      const points = categories.map(c => {
+        const both = c.rows.filter(r => inSeries.has(r));
+        if (!both.length) return null;
+        const pctx = { ...c.ctx, scopeRows: both, row: both[0], scopes: { ...c.ctx.scopes, ...s.ctx.scopes } };
+        return {
+          value: num(this.eval(y, pctx, where)),
+          low: low ? num(this.eval(low, pctx, where)) : null,
+          color: color ? toStr(this.eval(color, pctx, l10n.t('{0} (color)', name))) || null : null,
+        };
       });
-      out.series.push({ name: s.label || seriesEl.getAttribute('Name') || l10n.t('Series {0}', i + 1), ...typeOf(seriesEl), values });
+      const rs: RChartSeries = { name: s.label || seriesEl.getAttribute('Name') || l10n.t('Series {0}', i + 1), ...type, values: points.map(p => p?.value ?? null) };
+      if (range) rs.low = points.map(p => p?.low ?? null);
+      if (color) rs.colors = points.map(p => p?.color ?? null);
+      out.series.push(rs);
+      sources.push({ el: seriesEl, series: rs });
     });
+    addDerived(sources);
     return out;
   }
 

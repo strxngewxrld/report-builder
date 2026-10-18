@@ -14,6 +14,7 @@ export const vscode = api;
 /** Messages webview → extension (mirrors FromWebview in src/reportEditorProvider.ts). */
 export type ToExtension =
   | { type: 'ready' }
+  | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }
   | { type: 'exportHtml'; html: string }
@@ -23,8 +24,11 @@ export type ToExtension =
   | { type: 'info'; message: string }
   | { type: 'openLink'; url: string }
   | { type: 'pickImage' }
+  | { type: 'saveBlock'; text: string }
+  | { type: 'pickBlock' }
   | { type: 'openLayout'; uri: string }
   | { type: 'savePdf'; name: string; data: string }
+  | { type: 'fonts'; id: number; requests: FontRequest[] }
   | { type: 'loaded'; items: number; raw: number }
   | { type: 'revealAl'; line: number; character: number }
   | { type: 'showProblems' }
@@ -51,6 +55,33 @@ export interface DesignerState {
 export interface DesignerConfig { grid: boolean; snap: boolean; ruler: boolean; defaultZoom: number }
 
 export const post = (msg: ToExtension) => api.postMessage(msg);
+
+/** A font family list (CSS order) and style the PDF export needs; mirrors src/fonts.ts. */
+export interface FontRequest { families: string[]; bold: boolean; italic: boolean }
+
+let fontRequests = 0;
+/**
+ * Asks the extension for the installed font files of the requests (base64, null where none is found). Outside of
+ * VS Code, or when the extension does not answer in time, every font is null and the PDF uses the standard fonts.
+ */
+export function requestFonts(requests: FontRequest[], timeout = 15000): Promise<(string | null)[]> {
+  const none = requests.map(() => null);
+  if (typeof acquireVsCodeApi !== 'function' || !requests.length) return Promise.resolve(none);
+  const id = ++fontRequests;
+  return new Promise(resolve => {
+    const done = (fonts: (string | null)[]) => {
+      window.removeEventListener('message', onMessage);
+      clearTimeout(timer);
+      resolve(fonts);
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'fonts' && e.data.id === id) done(e.data.fonts);
+    };
+    const timer = setTimeout(() => done(none), timeout);
+    window.addEventListener('message', onMessage);
+    post({ type: 'fonts', id, requests });
+  });
+}
 
 /**
  * Context for VS Code's native webview context menu (menus › webview/context in package.json): VS Code merges the

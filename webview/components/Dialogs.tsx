@@ -8,6 +8,8 @@ import { post } from '../vscode';
 import { ReportProps, ToggleSelect } from './PropertiesPane';
 import { ActionButton, Codicon } from './Icon';
 import { ExpressionInput } from './ExpressionInput';
+import { ExpressionSearchDialog } from './ExpressionSearchDialog';
+import { BlockDialog } from './BlockDialog';
 import { ChartDialog } from './ChartDialog';
 import { BreakLocation, RowMember, SortExpression, TableFilter, TableItem } from '../model';
 import { locate } from '../ops';
@@ -62,6 +64,8 @@ export function Dialogs() {
   if (!dialog) return null;
   const close = () => setDialog(null);
   switch (dialog.kind) {
+    case 'expressionSearch': return <ExpressionSearchDialog close={close} />;
+    case 'insertBlock': return <BlockDialog text={dialog.text} name={dialog.name} close={close} />;
     case 'dataSource': return <DataSourceDialog name={dialog.name} close={close} />;
     case 'dataSet': return <DataSetDialog name={dialog.name} close={close} />;
     case 'parameter': return <ParameterDialog name={dialog.name} close={close} />;

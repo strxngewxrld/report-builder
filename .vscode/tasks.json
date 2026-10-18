@@ -1,4 +1,9 @@
 {
   "version": "2.0.0",
-  "tasks": [{ "type": "npm", "script": "build", "group": "build", "problemMatcher": [] }]
+  "tasks": [
+    { "type": "npm", "script": "build", "group": "build", "problemMatcher": [] },
+    { "type": "npm", "script": "test", "group": "test", "problemMatcher": [] },
+    { "type": "npm", "script": "package", "problemMatcher": [] },
+    { "type": "shell", "command": "npm", "label": "Report Builder: Publishing-Probelauf", "detail": "Tests, VSIX-Prüfung und Release-Plan ohne GitHub-Aufruf", "args": ["run", "publish:github", "--", "--dry-run"], "options": { "cwd": "${workspaceFolder}" }, "problemMatcher": [] }
+  ]
 }

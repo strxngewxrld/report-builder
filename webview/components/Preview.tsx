@@ -9,7 +9,7 @@ import { Measured, PageSlice, paginate } from '../render/paginate';
 import { Flow, NodeView, RenderOptionsProvider } from '../render/RenderView';
 import { PageInfo, RAction, RNode, RTable } from '../render/types';
 import { bindRows, mockRows, numericFieldsFromLayout } from '../sampleData';
-import { post } from '../vscode';
+import { post, requestFonts } from '../vscode';
 import { ActionButton, Codicon, DropdownAction, Separator } from './Icon';
 import { exportBlocks } from '../render/export';
 import { pagesToPdf } from '../render/pdf';
@@ -59,7 +59,10 @@ function measure(root: HTMLElement): { m: Measured; marks: Mark[]; tableLeft: Ma
       height: root.scrollHeight,
       leaves: all('[data-leaf]').map(rel),
       keeps: all('[data-keep]').map(rel),
-      forced: all('tr[data-break]').map(r => ({ y: rel(r).top, reset: r.getAttribute('data-break') === 'reset' })),
+      forced: [
+        ...all('[data-break]').map(r => ({ y: rel(r).top, reset: r.getAttribute('data-break') === 'reset' })),
+        ...all('[data-break-after]').map(r => ({ y: rel(r).bottom, reset: r.getAttribute('data-break-after') === 'reset' })),
+      ],
       tables,
     },
     marks: all('[data-seq]').map(e => ({ top: rel(e).top, key: e.getAttribute('data-key')!, seq: Number(e.getAttribute('data-seq')), values: e.hasAttribute('data-values') })),
@@ -144,11 +147,23 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
     const el = measureRef.current;
     if (!el) return;
     let frame = 0;
-    const update = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setMeasured(measure(el))); };
+    let disposed = false;
+    // Flush layout so the FontFaceSet knows which report fonts need loading.
+    el.getBoundingClientRect();
+    let fontsReady = false;
+    setMeasured(null);
+    const update = () => {
+      cancelAnimationFrame(frame);
+      if (!disposed && fontsReady) frame = requestAnimationFrame(() => setMeasured(measure(el)));
+    };
+    // Start font loading for the actual report text before measuring page boundaries.
+    void document.fonts.ready.then(() => { fontsReady = true; update(); });
+    const loaded = () => { fontsReady = true; update(); };
+    document.fonts.addEventListener('loadingdone', loaded);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => { ro.disconnect(); cancelAnimationFrame(frame); };
+    return () => { disposed = true; ro.disconnect(); cancelAnimationFrame(frame); document.fonts.removeEventListener('loadingdone', loaded); };
   }, [result]);
 
   const p = result.page;
@@ -219,8 +234,10 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(async () => {
       const name = fileName.replace(/\.rdlc?$/i, '');
       try {
+        await document.fonts.ready;
         const els = Array.from(pagesRef.current?.querySelectorAll<HTMLElement>('.rv-page') ?? []);
-        const bytes = await pagesToPdf(els, { width: p.width, height: p.height }, name);
+        const bytes = await pagesToPdf(els, { width: p.width, height: p.height }, name, async styles =>
+          (await requestFonts(styles)).map(b64 => (b64 ? Uint8Array.from(atob(b64), c => c.charCodeAt(0)) : null)));
         let data = '';
         for (let i = 0; i < bytes.length; i += 0x8000) data += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         post({ type: 'savePdf', name, data: btoa(data) });

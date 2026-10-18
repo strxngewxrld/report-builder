@@ -520,7 +520,7 @@ table.grid input, table.grid select { width: 100%; }
 .nested-editor .rich-text { padding: 2px 8px; }
 
 /* ---------------------------------------------------------------- chart dialog */
-.chart-kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.chart-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
 .chart-kind {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; background: none; color: var(--fg);
   border: 1px solid var(--widget-border); border-radius: 4px; font-size: 12px;
@@ -529,6 +529,9 @@ table.grid input, table.grid select { width: 100%; }
 .chart-kind:hover { background: var(--hover); }
 .chart-kind.on { border-color: var(--focus); background: var(--option-bg); }
 .series-name { width: 110px; flex-shrink: 0; }
+/* second line of a series: low value, point color, marker, calculated series */
+.series-extra { padding-left: 114px; margin-bottom: 6px; flex-wrap: wrap; }
+.series-extra .expr-prop { min-width: 160px; }
 .grouping-sub { font-size: 11px; color: var(--muted); padding: 4px 6px 2px; text-transform: uppercase; letter-spacing: .02em; }
 .grouping-list.column-groups { padding-bottom: 0; }
 .item.table .header-cell { background-color: color-mix(in srgb, var(--select) 6%, transparent); }
@@ -549,3 +552,11 @@ body.vscode-high-contrast .designer .item:not(.selected):not(.cell),
 body.vscode-high-contrast-light .designer .item:not(.selected):not(.cell) { outline: 1px dashed var(--vscode-contrastBorder, currentColor); }
 body.vscode-high-contrast .designer .item.selected,
 body.vscode-high-contrast-light .designer .item.selected { outline: 2px solid var(--vscode-contrastActiveBorder, var(--select)) !important; }
+
+.expression-search .modal-body { overflow: auto; }
+.expression-results { max-height: 45vh; overflow: auto; }
+.expression-result { border-top: 1px solid var(--vscode-panel-border); padding: 10px 0; }
+.expression-result small { display: block; opacity: .8; overflow-wrap: anywhere; }
+.expression-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family); }
+.expression-result .replacement-preview { border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground); padding-left: 8px; }
+.expression-result button + button { margin-left: 8px; }

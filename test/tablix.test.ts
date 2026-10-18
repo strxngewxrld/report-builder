@@ -248,7 +248,7 @@ test('Spaltengruppe zu einer Tabelle hinzufügen, Vorschau, löschen (nur Gruppe
   const g = addColumnGroup(r, t, 2, { name: 'Belege', expression: '=Fields!DocNo.Value' })!;
   assert.ok(g);
   assert.deepEqual(columnGroupList(t).map(x => x.member.group!.name), ['Belege']);
-  assert.match(columnGroupBlocker(t, 0) ?? '', /column headers/);
+  assert.match(columnGroupBlocker(t, 7) ?? '', /No column/);
   assert.equal(t.corner, undefined, 'ohne Zeilenköpfe keine Ecke');
 
   const { xml, t: back } = roundTrip(r);
@@ -279,4 +279,53 @@ test('Spaltengruppe zu einer Tabelle hinzufügen, Vorschau, löschen (nur Gruppe
   assert.ok(t.columnMembers.every(m => !m.header));
   assert.ok(t.rows.every(row => cellLayout(row).reduce((n, c) => n + c.span, 0) === 2));
   roundTrip(r);
+});
+
+test('Spaltengruppe bei vorhandenen Spaltenköpfen: zweite Gruppe in einer Tabelle, Elterngruppe einer Matrix', async () => {
+  const { addColumnGroup, columnGroupList, createMatrix, deleteColumnGroup, headerLevels } = await import('../webview/tablix');
+  const { r, t } = report();
+  const amount = t.rows.find(x => x.kind === 'detail')!.cells[2] as TextboxItem;
+  amount.value = '=Sum(Fields!Amount.Value)';
+  addColumnGroup(r, t, 2, { name: 'Belege', expression: '=Fields!DocNo.Value' });
+  // the second column of a table that has column headers now: a second level on top
+  const second = addColumnGroup(r, t, 1, { name: 'Artikel', expression: '=Fields!Item.Value' })!;
+  assert.ok(second);
+  assert.deepEqual(columnGroupList(t).map(x => x.member.group!.name), ['Artikel', 'Belege']);
+  assert.deepEqual(headerLevels(t.columnMembers), [0.25, 0.25]);
+  const { xml, t: back } = roundTrip(r);
+  assert.equal(columnGroupList(back).length, 2);
+  const out = renderReport(xml, { dom, mode: 'preview', data: { Lines: rows }, reportName: 'R', parameters: {} });
+  const table = out.body.nodes[0] as RTable;
+  const texts = (row: RTable['rows'][number]) => row.cells.map(c => (c.node && c.node.kind === 'box' ? c.node.paragraphs?.map(p => p.runs.map(x => x.text).join('')).join('') : ''));
+  // column 0 static, column 1 per item (Lampe, Stuhl, Tisch), column 2 per document (A, B)
+  assert.equal(table.columns.length, 6);
+  // the empty header above the document group spans both of its instances
+  assert.deepEqual(texts(table.rows[0]), ['', 'Lampe', 'Stuhl', 'Tisch', '']);
+  assert.deepEqual(texts(table.rows[1]), ['', '', '', '', 'A', 'B']);
+  // deleting the new group again removes its header level and the wrappers
+  assert.ok(deleteColumnGroup(r, t, second.id, false));
+  assert.deepEqual(headerLevels(t.columnMembers), [0.25]);
+  assert.equal(t.columnMembers.length, 3);
+  roundTrip(r);
+
+  // matrix: a parent group around its column group; the corner grows with the header levels
+  const r2 = report().r;
+  r2.body.items = [];
+  const m = createMatrix(r2, { top: 0, left: 0 }, { dataSetName: 'Lines', rowGroup: '=Fields!DocNo.Value', columnGroup: '=Fields!Item.Value', value: '=Sum(Fields!Amount.Value)', rowTotal: false, columnTotal: true });
+  r2.body.items.push(m);
+  const year = addColumnGroup(r2, m, 0, { name: 'Jahr', expression: '="2026"' })!;
+  assert.deepEqual(headerLevels(m.columnMembers), [0.25, 0.25]);
+  assert.equal(m.corner?.length, 2);
+  assert.equal(m.corner?.[0][0].rowSpan, 2);
+  const mx = serializeRdl(r2, dom);
+  assert.equal(serializeRdl(parseRdl(mx, dom), dom), mx, 'stabil');
+  const grid = (renderReport(mx, { dom, mode: 'preview', data: { Lines: rows } }).body.nodes[0] as RTable).rows.map(texts);
+  assert.deepEqual(grid[0], ['', '2026', ''], 'the year spans the item columns, an empty header the total');
+  assert.deepEqual(grid[1], ['Lampe', 'Stuhl', 'Tisch', 'Total'], 'the corner spans both header rows');
+  assert.deepEqual(grid[2], ['A', '', '50', '100', '150']);
+  assert.ok(deleteColumnGroup(r2, m, year.id, false));
+  assert.equal(m.corner?.length, 1);
+  assert.equal(m.corner?.[0][0].rowSpan, undefined);
+  const mx2 = serializeRdl(r2, dom);
+  assert.equal(serializeRdl(parseRdl(mx2, dom), dom), mx2);
 });

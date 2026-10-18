@@ -101,5 +101,9 @@
   "config.showGrid": "Raster auf der Entwurfsfläche anzeigen.",
   "config.snapToGrid": "Elemente beim Verschieben und Aufziehen am Raster ausrichten (mit gedrückter `Alt`-Taste frei).",
   "config.showRuler": "Lineal über der Entwurfsfläche anzeigen.",
-  "config.defaultZoom": "Zoomstufe, mit der neu geöffnete Layouts angezeigt werden."
+  "config.defaultZoom": "Zoomstufe, mit der neu geöffnete Layouts angezeigt werden.",
+  "command.findExpressions": "Ausdrücke und Verwendungen…",
+  "command.saveBlock": "Auswahl als Baustein speichern…",
+  "command.insertBlock": "Layout-Baustein einfügen…",
+  "config.checkForUpdates": "Beim Start in den GitHub Releases nach einer neueren Version suchen und die Installation anbieten."
 }

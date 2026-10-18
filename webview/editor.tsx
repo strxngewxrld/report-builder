@@ -12,6 +12,8 @@ export type Dialog =
   | { kind: 'parameter'; name?: string }
   | { kind: 'expression'; title: string; value: string; dataSetName?: string; onOk: (value: string) => void }
   | { kind: 'reportProperties' }
+  | { kind: 'expressionSearch' }
+  | { kind: 'insertBlock'; text: string; name: string }
   /** Properties of a row group (member id), or a new group next to a row. */
   | { kind: 'group'; table: string; member?: string; create?: { rowId: string; mode: 'parent' | 'child' } | { column: number; mode: 'column' } }
   /** Insert a chart (create: where) or edit an existing one (name). */

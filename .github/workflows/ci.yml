@@ -9,6 +9,9 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     if: github.event_name != 'schedule'
@@ -32,12 +35,13 @@ jobs:
           BC_RB_TIMEOUT_SCALE: '3'
           BC_RB_TEST_LANGUAGE: de
           BC_RB_ONLY: Lokalisierung
-      - name: VSIX bauen
+      - name: VSIX bauen und prüfen
         run: npm run package
       - uses: actions/upload-artifact@v4
         with:
-          name: vsix
-          path: '*.vsix'
+          name: bc-report-builder
+          path: artifacts/*.vsix
+          if-no-files-found: error
 
   corpus:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
