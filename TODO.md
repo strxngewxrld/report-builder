@@ -16,6 +16,9 @@ Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md) und
       erstellen* starten AL-Befehle; ggf. `limited` mit Beschreibung wie bei Sheets
 
 ## Absichern (vor einer Veröffentlichung) – braucht Hand und echte Umgebungen
+- [ ] KI-Werkzeuge mit Copilot im Agentenmodus an echten Aufgaben abnehmen (neuer Bericht aus AL-Report, Gruppen/Summen,
+      Diagramm, Labels, Build); prüfen, ob das Modell XML- und Werkzeugweg wie beschrieben wählt, und die
+      `modelDescription`s danach nachschärfen
 - [ ] Restliche manuelle Fälle aus `docs/ABNAHME.md` abnehmen (insbesondere Baustein-Ersetzen bestätigen/abbrechen, Konfliktpfade und kombinierte Vorschau-Umbrüche)
 - [ ] Noch offene Dialog-/Navigationsvarianten prüfen: verschachtelte Spaltengruppen, berechnete Diagrammreihen und Punktfarben,
       Bookmark/Drillthrough samt Navigation sowie komplexe Filter-/Drilldown-Kombinationen; Details in `docs/UI-TESTMATRIX.md`

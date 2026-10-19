@@ -1022,6 +1022,37 @@ test('UI: Vorschau exportiert Excel und Word über die echten Befehle und den Sp
   }
 });
 
+test('Sprachmodell-Tools: registriert, lesen den AL-Kontext, ändern das Layout im offenen Designer, Rückgängig', async api => {
+  const { uri, probe, doc } = await open(api, 'Verkaufsrechnung.rdlc');
+  const original = doc.getText();
+  const contributed = (vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!.packageJSON.contributes.languageModelTools as { name: string }[]).map(t => t.name);
+  await until('Tools registriert', () => contributed.every(n => vscode.lm.tools.some(t => t.name === n)));
+  const invoke = async (name: string, input: object) => {
+    const res = await vscode.lm.invokeTool(`bcReport_${name}`, { input, toolInvocationToken: undefined });
+    return res.content.map(p => (p instanceof vscode.LanguageModelTextPart ? p.value : '')).join('');
+  };
+  try {
+    assert.match(await invoke('inspectLayout', {}), /Tablix Table_Lines L\d+-\d+/);
+    assert.match(await invoke('getReportData', {}), /AL report 50100 "Contoso Verkaufsrechnung"[\s\S]*dataitem Line/);
+    const out = await invoke('editTable', { table: 'Table_Lines', operations: [{ op: 'insertColumn', at: 1, values: [null, '=Fields!LineNo_Line.Value'], width: '1cm' }] });
+    assert.match(out, /Verkaufsrechnung\.rdlc changed: column 1 inserted/);
+    assert.match(out, /row 1 detail .*\| Textbox\d+="=Fields!LineNo_Line\.Value" \|/);
+    assert.ok(doc.getText().includes('=Fields!LineNo_Line.Value'));
+    assert.equal(doc.isDirty, false, 'a layout without unsaved changes is saved again');
+    // the designer reloads the changed document
+    await until('Designer lädt neu', () => probe.posted.filter(m => m.type === 'load').length >= 2);
+    await invoke('showInDesigner', { item: 'Quantity_Line' });
+    await until('Element ausgewählt', () => ([...probe.received].reverse().find(m => m.type === 'state')?.state as { hasSelection: boolean } | undefined)?.hasSelection);
+    // errors are reported to the model, not thrown at the user
+    await assert.rejects(invoke('editTable', { table: 'Table_Lines', operations: [{ op: 'deleteRow', row: 7 }] }), /has rows 0–2, not 7/);
+    await vscode.commands.executeCommand('undo');
+    await until('Rückgängig', () => doc.getText() === original);
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    await restore(uri, original);
+  }
+});
+
 export async function run(): Promise<void> {
   const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
   const api = (await ext.activate()) as Api;

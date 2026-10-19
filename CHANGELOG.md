@@ -6,6 +6,12 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 ## [1.0.0] - 2026-10-18
 
 ### Hinzugefügt
+- **KI-Werkzeuge für GitHub Copilot** (Agentenmodus, `vscode.lm`): 14 Tools, mit denen ein Sprachmodell RDLC-Berichte
+  vollständig bauen kann – Überblick mit XML-Zeilennummern, Prüfung (auch falsch geschachtelte Tags, `Fields!` im
+  Seitenkopf, Leerseiten durch zu breiten Textkörper), Vorschau als Text, AL-Kontext mit Tabellenfeldern aus den Symbolen;
+  Einfügen von Elementen, Tabellen-/Gruppenstruktur, Diagramme, Anordnen, Seitenlayout; AL-Spalten und -Labels, Spalte
+  umbenennen, Projekt erstellen, Anzeige im Designer. Einfache Eigenschaften ändert die KI direkt im XML.
+  Voraussetzung jetzt VS Code 1.95
 - **Updates**: Beim Start sucht die Erweiterung in den GitHub Releases nach einer neueren Version und bietet an, sie direkt
   zu installieren (VSIX mit geprüfter SHA-256-Prüfsumme), den Release zu öffnen oder die Version zu überspringen
   (Einstellung `bcReportBuilder.checkForUpdates`)

@@ -10,6 +10,7 @@ import { newReportTemplate } from '../webview/templates';
 import { probes, testing } from './testing';
 import { LayoutService } from './layoutService';
 import { registerBcCommands } from './bcCommands';
+import { registerTools } from './tools';
 import { checkForUpdates, downloadVsix } from './updateCheck';
 
 const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -127,6 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
   registerBcCommands(context, service);
+  registerTools(context, service);
   void startUpdateCheck(context).catch(() => undefined);
   return api;
 }

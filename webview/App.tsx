@@ -431,6 +431,18 @@ function AppCommands() {
       (it as TextboxItem).value = value;
     });
   });
+  // from the extension (language model tool): select an item by name, also one inside a region kept verbatim
+  useCommand('selectItem', arg => {
+    const { name } = arg as { name: string };
+    const items = allReportItems(ed.report);
+    const target = items.find(i => i.name === name)
+      ?? items.find(i => i.type === 'raw' && new RegExp(`<\\w+ Name="${name.replace(/\W/g, '\\$&')}"`).test(i.xml));
+    if (!target) return;
+    ed.setMode('design');
+    ed.select([target.name]);
+    if (target.name !== name) ed.setNested(name);
+    requestAnimationFrame(() => document.querySelector(`.designer [data-name="${CSS.escape(target.name)}"]`)?.scrollIntoView({ block: 'center', inline: 'nearest' }));
+  });
   // CodeLens in AL: select the first textbox using a column/label (also inside regions kept verbatim)
   useCommand('revealReference', arg => {
     const { name } = arg as { name: string };
