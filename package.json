@@ -32,6 +32,7 @@
   "type": "commonjs",
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
+    "@xmldom/xmldom": "^0.8.10",
     "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -40,11 +41,10 @@
     "@types/node": "^20.19.43",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.95.0",
     "@vscode/codicons": "^0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
-    "@xmldom/xmldom": "^0.8.10",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.3"
   },
@@ -56,7 +56,7 @@
   },
   "private": true,
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Visualization",
@@ -1572,7 +1572,1344 @@
           "description": "%config.checkForUpdates%"
         }
       }
-    }
+    },
+    "languageModelTools": [
+      {
+        "name": "bcReport_inspectLayout",
+        "displayName": "%tool.inspectLayout%",
+        "toolReferenceName": "reportLayout",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-tree)",
+        "userDescription": "%tool.inspectLayout.description%",
+        "modelDescription": "Overview of an RDLC/RDL report layout (Business Central or SSRS): page setup with the blank-page check, datasets and their fields, parameters, Code block functions, embedded images, and the tree of report items with names, positions (in the report unit), values/expressions, table rows/columns/groups and the XML line range of every item. Call it first before changing a layout, and with `item` for all details (styles) of one item.\n\nHow to edit layouts: change simple properties directly in the XML file at the given lines – a textbox <Value>, <Style> children (FontWeight, FontSize, Color, Format, TextAlign, BackgroundColor, Border), <Visibility><Hidden>, <Top>/<Left>/<Width>/<Height>, <CanGrow>, the <Code> block, the dataset of a data region. Use the bcReport_* tools for structure: new items (bcReport_insertItems), table columns/rows/groups (bcReport_editTable), charts (bcReport_editChart), alignment/deleting (bcReport_arrangeItems), page size/margins/header/footer (bcReport_setPageLayout), AL columns/labels (bcReport_addAlColumns, bcReport_createAlLabel). Business Central regenerates <DataSets> and the label parameters from AL when building – do not edit those by hand. Run bcReport_validateLayout after editing.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "item": {
+              "type": "string",
+              "description": "Name of one report item to show with all details (styles, full values)."
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_validateLayout",
+        "displayName": "%tool.validateLayout%",
+        "toolReferenceName": "validateReportLayout",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(check-all)",
+        "userDescription": "%tool.validateLayout.description%",
+        "modelDescription": "Checks a layout: XML errors (with line), Fields!/Parameters!/ReportItems!/Code. references that do not exist (and drift against the AL report: columns not built yet or removed), duplicate item/group names, Fields! in the page header/footer, a body wider than the printable page (blank pages in PDF/print), items outside their section, expressions that cannot be parsed, and evaluation errors of the preview with sample data, plus Business Central hints (missing <Column>Format, fixed texts that should be labels). Run it after every direct XML edit and before you finish.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_previewReport",
+        "displayName": "%tool.previewReport%",
+        "toolReferenceName": "previewReport",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(open-preview)",
+        "userDescription": "%tool.previewReport.description%",
+        "modelDescription": "Renders the report with its preview data (the <layout>.data.json sidecar, else generated rows shaped like the AL dataset) and returns what the reader sees: textbox values, tables row by row (groups expanded, sorted, filtered, totals), charts as categories and series values, page header/footer of page 1, and evaluation errors. Use it to verify expressions, formats, grouping, visibility and totals after a change. Page breaks/pagination are not computed.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Report parameter values (name → value) for the preview."
+            },
+            "maxRows": {
+              "type": "number",
+              "description": "Maximum number of table rows in the output (default 60)."
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_getReportData",
+        "displayName": "%tool.getReportData%",
+        "toolReferenceName": "reportData",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(database)",
+        "userDescription": "%tool.getReportData.description%",
+        "modelDescription": "The Business Central side of a layout: the AL report or report extension using it with its data items and columns (marked whether the layout dataset has them yet), labels, caption parameters, the other layouts of the report and the preview data sidecar (<layout>.data.json – write it as JSON to test with realistic data). With `tableFieldsOf` (a data item name) it also lists the fields of that data item's table from the workspace and the symbol packages (.alpackages), i.e. what bcReport_addAlColumns can add. Use it to know which Fields!/Parameters! a layout can reference.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "tableFieldsOf": {
+              "type": "string",
+              "description": "Name of a data item whose table fields to list."
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_insertItems",
+        "displayName": "%tool.insertItems%",
+        "toolReferenceName": "insertReportItems",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(add)",
+        "userDescription": "%tool.insertItems.description%",
+        "modelDescription": "Inserts report items with unique names and the XML structure the designer writes, following Business Central conventions: textbox; rectangle (a container, use its name as `parent` of further items); line; image (embedded from `imageFile`, or `value` = embedded image name / URL / expression); table (one column per entry of `fields`: header captions from <Field>Caption parameters, number formats from <Field>Format fields); matrix (row group × column group with a value); chart (`chart` with kind, category and series). Sizes are numbers in the report unit or strings with unit. Without `top` an item goes below the existing items of its container. A missing page header/footer is created. Prefer this over writing new items as XML; adjust details afterwards.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "items": {
+              "type": "array",
+              "description": "Items to insert, in order.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "textbox",
+                      "rectangle",
+                      "line",
+                      "image",
+                      "table",
+                      "matrix",
+                      "chart"
+                    ]
+                  },
+                  "section": {
+                    "type": "string",
+                    "enum": [
+                      "body",
+                      "header",
+                      "footer"
+                    ],
+                    "description": "Default body."
+                  },
+                  "parent": {
+                    "type": "string",
+                    "description": "Rectangle to insert into (position relative to it)."
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Item name (letters, digits, _; unique). Default: Textbox1, Tablix1 …"
+                  },
+                  "top": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Top: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "left": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Left: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Width: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "Textbox: text or expression (=Fields!X.Value, =Parameters!XLbl.Value, =\"Page \" & Globals!PageNumber). Image: embedded name, URL or expression."
+                  },
+                  "style": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "RDL style values, e.g. {\"FontWeight\":\"Bold\",\"FontSize\":\"9pt\",\"Color\":\"#1F4E79\",\"TextAlign\":\"Right\",\"Format\":\"N2\",\"BackgroundColor\":\"LightGrey\",\"BorderStyle\":\"Solid\",\"BorderColor\":\"Black\",\"BorderWidth\":\"1pt\",\"PaddingLeft\":\"2pt\"}. Values may be expressions. \"\" removes a value."
+                  },
+                  "hidden": {
+                    "type": "string",
+                    "description": "\"true\" or an expression that hides the item."
+                  },
+                  "canGrow": {
+                    "type": "boolean"
+                  },
+                  "dataSet": {
+                    "type": "string",
+                    "description": "Table/matrix/chart dataset (default: the first, in Business Central DataSet_Result)."
+                  },
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Table: dataset fields, one column each."
+                  },
+                  "columns": {
+                    "type": "number",
+                    "description": "Table without fields: number of empty columns."
+                  },
+                  "matrix": {
+                    "type": "object",
+                    "required": [
+                      "rowGroup",
+                      "columnGroup",
+                      "value"
+                    ],
+                    "properties": {
+                      "rowGroup": {
+                        "type": "string",
+                        "description": "e.g. =Fields!Region.Value"
+                      },
+                      "columnGroup": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "e.g. =Sum(Fields!Amount.Value)"
+                      },
+                      "rowTotal": {
+                        "type": "boolean"
+                      },
+                      "columnTotal": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "chart": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "Column",
+                          "StackedColumn",
+                          "PercentColumn",
+                          "Bar",
+                          "StackedBar",
+                          "Line",
+                          "SmoothLine",
+                          "Area",
+                          "StackedArea",
+                          "Scatter",
+                          "Pie",
+                          "Doughnut",
+                          "Funnel",
+                          "Pyramid",
+                          "Range",
+                          "RangeColumn",
+                          "RangeBar",
+                          "Polar",
+                          "Radar"
+                        ]
+                      },
+                      "dataSetName": {
+                        "type": "string"
+                      },
+                      "category": {
+                        "type": "string",
+                        "description": "Category grouping (x axis / slices), e.g. =Fields!Region.Value; \"\" for one category."
+                      },
+                      "series": {
+                        "type": "array",
+                        "description": "All series (replaces the existing list).",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name",
+                            "value"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string",
+                              "description": "Aggregate expression, e.g. =Sum(Fields!Amount.Value)"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "description": "Own chart kind in a combined chart"
+                            },
+                            "secondary": {
+                              "type": "boolean",
+                              "description": "Plot against the secondary (right) value axis"
+                            },
+                            "low": {
+                              "type": "string",
+                              "description": "Range charts: the low value"
+                            },
+                            "color": {
+                              "type": "string",
+                              "description": "Point color or expression, e.g. =IIf(Sum(Fields!X.Value) < 0, \"Red\", \"Green\")"
+                            },
+                            "marker": {
+                              "type": "string",
+                              "enum": [
+                                "None",
+                                "Circle",
+                                "Square",
+                                "Diamond",
+                                "Triangle",
+                                "Cross",
+                                "Star5"
+                              ]
+                            },
+                            "trend": {
+                              "type": "object",
+                              "properties": {
+                                "formula": {
+                                  "type": "string",
+                                  "enum": [
+                                    "MovingAverage",
+                                    "ExponentialMovingAverage",
+                                    "WeightedMovingAverage",
+                                    "TriangularMovingAverage",
+                                    "Mean",
+                                    "Median"
+                                  ]
+                                },
+                                "period": {
+                                  "type": "number"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "legend": {
+                        "type": "boolean"
+                      },
+                      "palette": {
+                        "type": "string",
+                        "enum": [
+                          "BrightPastel",
+                          "Pastel",
+                          "EarthTones",
+                          "Berry",
+                          "Chocolate",
+                          "Fire",
+                          "Grayscale",
+                          "SemiTransparent"
+                        ]
+                      },
+                      "dataLabels": {
+                        "type": "boolean",
+                        "description": "Show values at the data points"
+                      },
+                      "categoryAxis": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string",
+                            "description": "Label format, e.g. N0, P0, C"
+                          },
+                          "min": {
+                            "type": "string"
+                          },
+                          "max": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "valueAxis": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string",
+                            "description": "Label format, e.g. N0, P0, C"
+                          },
+                          "min": {
+                            "type": "string"
+                          },
+                          "max": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "secondaryAxis": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "format": {
+                            "type": "string",
+                            "description": "Label format, e.g. N0, P0, C"
+                          },
+                          "min": {
+                            "type": "string"
+                          },
+                          "max": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "imageFile": {
+                    "type": "string",
+                    "description": "Image: PNG/JPEG/GIF/BMP/SVG file to embed (absolute or workspace-relative)."
+                  },
+                  "sizing": {
+                    "type": "string",
+                    "enum": [
+                      "AutoSize",
+                      "Fit",
+                      "FitProportional",
+                      "Clip"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_editTable",
+        "displayName": "%tool.editTable%",
+        "toolReferenceName": "editReportTable",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(table)",
+        "userDescription": "%tool.editTable.description%",
+        "modelDescription": "Changes the structure of a table/matrix (Tablix) – error-prone in XML because TablixColumns, TablixRows, cells, the row/column hierarchies and spans must stay consistent. Operations (run in order; row and column numbers are 0-based as listed by bcReport_inspectLayout and refer to the table as left by the previous operation):\n- insertColumn {at?, width?, field?, values?}: new column at index (default: end); `field` fills header caption and detail =Fields!<field>.Value with BC formats; `values` per row index\n- deleteColumn {at}; setColumnWidth {at, width}\n- insertRow {row, place: above|below|outsideAbove|outsideBelow, values?}: outside* = outside the innermost group of that row\n- deleteRow {row}; setRowHeight {row, height}\n- headerRow / footerRow {present}: table header/footer row outside all groups\n- addGroup {row, mode: parent|child, expression, name?, header?, footer?}: row group around the group of `row` (parent) or inside it around the details (child), with group header (default) / footer rows\n- deleteGroup {group, deleteRows?}; addGroupRow {group, which: header|footer}\n- setGroup {group, expressions?, sort?: [{value, descending?}], filters?: [{expression, operator?, values}], pageBreak?: \"\"|Start|End|StartAndEnd|Between, hidden?}\n- addColumnGroup {column, expression, name?}; deleteColumnGroup {group, deleteColumns?}\n- mergeCells {cells: [names]} (adjacent cells of one row); splitCell {cell}\n- setCell {row, column, value?, style?}\n- setDataSet {dataSet}\nReturns the new structure. A Tablix not marked \"editable with bcReport_editTable\" in the overview must be edited in the XML.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "table",
+            "operations"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "table": {
+              "type": "string",
+              "description": "Name of the Tablix."
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "op"
+                ],
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": [
+                      "insertColumn",
+                      "deleteColumn",
+                      "setColumnWidth",
+                      "insertRow",
+                      "deleteRow",
+                      "setRowHeight",
+                      "headerRow",
+                      "footerRow",
+                      "addGroup",
+                      "deleteGroup",
+                      "addGroupRow",
+                      "setGroup",
+                      "addColumnGroup",
+                      "deleteColumnGroup",
+                      "mergeCells",
+                      "splitCell",
+                      "setCell",
+                      "setDataSet"
+                    ]
+                  },
+                  "at": {
+                    "type": "number",
+                    "description": "Column index"
+                  },
+                  "column": {
+                    "type": "number",
+                    "description": "Column index (setCell, addColumnGroup)"
+                  },
+                  "row": {
+                    "type": "number",
+                    "description": "Row index"
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Column width: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Row height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "field": {
+                    "type": "string",
+                    "description": "insertColumn: dataset field to show"
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "description": "insertColumn: value per row index; insertRow: value per column (null = empty)"
+                  },
+                  "place": {
+                    "type": "string",
+                    "enum": [
+                      "above",
+                      "below",
+                      "outsideAbove",
+                      "outsideBelow"
+                    ]
+                  },
+                  "present": {
+                    "type": "boolean"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "parent",
+                      "child"
+                    ]
+                  },
+                  "expression": {
+                    "type": "string",
+                    "description": "Group expression, e.g. =Fields!Region.Value"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "New group name"
+                  },
+                  "header": {
+                    "type": "boolean"
+                  },
+                  "footer": {
+                    "type": "boolean"
+                  },
+                  "group": {
+                    "type": "string",
+                    "description": "Group name"
+                  },
+                  "deleteRows": {
+                    "type": "boolean",
+                    "description": "deleteGroup: also delete its header/footer rows (default true)"
+                  },
+                  "deleteColumns": {
+                    "type": "boolean"
+                  },
+                  "which": {
+                    "type": "string",
+                    "enum": [
+                      "header",
+                      "footer"
+                    ]
+                  },
+                  "expressions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "sort": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        },
+                        "descending": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ]
+                    }
+                  },
+                  "filters": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "expression": {
+                          "type": "string"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "description": "Equal, NotEqual, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Like, In, Between, TopN, BottomN …"
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "expression",
+                        "values"
+                      ]
+                    }
+                  },
+                  "pageBreak": {
+                    "type": "string",
+                    "enum": [
+                      "",
+                      "Start",
+                      "End",
+                      "StartAndEnd",
+                      "Between"
+                    ]
+                  },
+                  "hidden": {
+                    "type": "string"
+                  },
+                  "cells": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cell": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "style": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "RDL style values, e.g. {\"FontWeight\":\"Bold\",\"FontSize\":\"9pt\",\"Color\":\"#1F4E79\",\"TextAlign\":\"Right\",\"Format\":\"N2\",\"BackgroundColor\":\"LightGrey\",\"BorderStyle\":\"Solid\",\"BorderColor\":\"Black\",\"BorderWidth\":\"1pt\",\"PaddingLeft\":\"2pt\"}. Values may be expressions. \"\" removes a value."
+                  },
+                  "dataSet": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_editChart",
+        "displayName": "%tool.editChart%",
+        "toolReferenceName": "editReportChart",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(graph)",
+        "userDescription": "%tool.editChart.description%",
+        "modelDescription": "Reads or changes a chart. Without `set` it returns the chart description (kind, dataset, category, series with value expressions, title, legend, palette, data labels, axes). With `set` it applies the given properties; `series` replaces the whole list (existing series keep their formatting, new ones are added like the last). Chart XML is long and deeply nested – use this tool instead of editing it, except for properties it does not cover.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "chart"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "chart": {
+              "type": "string",
+              "description": "Name of the chart."
+            },
+            "set": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "Column",
+                    "StackedColumn",
+                    "PercentColumn",
+                    "Bar",
+                    "StackedBar",
+                    "Line",
+                    "SmoothLine",
+                    "Area",
+                    "StackedArea",
+                    "Scatter",
+                    "Pie",
+                    "Doughnut",
+                    "Funnel",
+                    "Pyramid",
+                    "Range",
+                    "RangeColumn",
+                    "RangeBar",
+                    "Polar",
+                    "Radar"
+                  ]
+                },
+                "dataSetName": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string",
+                  "description": "Category grouping (x axis / slices), e.g. =Fields!Region.Value; \"\" for one category."
+                },
+                "series": {
+                  "type": "array",
+                  "description": "All series (replaces the existing list).",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "value"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string",
+                        "description": "Aggregate expression, e.g. =Sum(Fields!Amount.Value)"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "description": "Own chart kind in a combined chart"
+                      },
+                      "secondary": {
+                        "type": "boolean",
+                        "description": "Plot against the secondary (right) value axis"
+                      },
+                      "low": {
+                        "type": "string",
+                        "description": "Range charts: the low value"
+                      },
+                      "color": {
+                        "type": "string",
+                        "description": "Point color or expression, e.g. =IIf(Sum(Fields!X.Value) < 0, \"Red\", \"Green\")"
+                      },
+                      "marker": {
+                        "type": "string",
+                        "enum": [
+                          "None",
+                          "Circle",
+                          "Square",
+                          "Diamond",
+                          "Triangle",
+                          "Cross",
+                          "Star5"
+                        ]
+                      },
+                      "trend": {
+                        "type": "object",
+                        "properties": {
+                          "formula": {
+                            "type": "string",
+                            "enum": [
+                              "MovingAverage",
+                              "ExponentialMovingAverage",
+                              "WeightedMovingAverage",
+                              "TriangularMovingAverage",
+                              "Mean",
+                              "Median"
+                            ]
+                          },
+                          "period": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "title": {
+                  "type": "string"
+                },
+                "legend": {
+                  "type": "boolean"
+                },
+                "palette": {
+                  "type": "string",
+                  "enum": [
+                    "BrightPastel",
+                    "Pastel",
+                    "EarthTones",
+                    "Berry",
+                    "Chocolate",
+                    "Fire",
+                    "Grayscale",
+                    "SemiTransparent"
+                  ]
+                },
+                "dataLabels": {
+                  "type": "boolean",
+                  "description": "Show values at the data points"
+                },
+                "categoryAxis": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "description": "Label format, e.g. N0, P0, C"
+                    },
+                    "min": {
+                      "type": "string"
+                    },
+                    "max": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "valueAxis": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "description": "Label format, e.g. N0, P0, C"
+                    },
+                    "min": {
+                      "type": "string"
+                    },
+                    "max": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "secondaryAxis": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string",
+                      "description": "Label format, e.g. N0, P0, C"
+                    },
+                    "min": {
+                      "type": "string"
+                    },
+                    "max": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_arrangeItems",
+        "displayName": "%tool.arrangeItems%",
+        "toolReferenceName": "arrangeReportItems",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(layout)",
+        "userDescription": "%tool.arrangeItems.description%",
+        "modelDescription": "Positions, aligns, sizes, orders or deletes report items, with unit conversion and section growth handled: `boxes` sets top/left/width/height per item; `align` aligns `items` to the first one; `sameSize` gives them the first one's width/height; `distribute` spaces 3+ items evenly; `center` centers them in their section/rectangle; `order` brings them to front/back; `delete` removes them (table cells are cleared). Items of align/size/distribute must share a container. Table cells are sized with bcReport_editTable.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Item names; the first is the reference for align/sameSize."
+            },
+            "boxes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "top": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Top: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "left": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Left: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "width": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Width: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  },
+                  "height": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                  }
+                }
+              }
+            },
+            "align": {
+              "type": "string",
+              "enum": [
+                "left",
+                "center",
+                "right",
+                "top",
+                "middle",
+                "bottom"
+              ]
+            },
+            "sameSize": {
+              "type": "string",
+              "enum": [
+                "width",
+                "height",
+                "both"
+              ]
+            },
+            "distribute": {
+              "type": "string",
+              "enum": [
+                "horizontal",
+                "vertical"
+              ]
+            },
+            "center": {
+              "type": "string",
+              "enum": [
+                "horizontal",
+                "vertical"
+              ]
+            },
+            "order": {
+              "type": "string",
+              "enum": [
+                "front",
+                "back"
+              ]
+            },
+            "delete": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_setPageLayout",
+        "displayName": "%tool.setPageLayout%",
+        "toolReferenceName": "reportPageSetup",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file)",
+        "userDescription": "%tool.setPageLayout.description%",
+        "modelDescription": "Page size and margins, body width/height, page header and footer (add/remove, height, print on first/last page) and the report unit (cm/in, changes only how sizes are written). `fitBodyToPage` sets the body to the printable width (page width minus left and right margins) – the fix for a blank page after every page. A4 portrait is 21cm × 29.7cm, landscape 29.7cm × 21cm; Letter 8.5in × 11in.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "pageWidth": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Page width: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "pageHeight": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Page height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "marginTop": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Top margin: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "marginBottom": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Bottom margin: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "marginLeft": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Left margin: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "marginRight": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Right margin: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "bodyWidth": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Body width: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "bodyHeight": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Body height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+            },
+            "fitBodyToPage": {
+              "type": "boolean"
+            },
+            "header": {
+              "type": "object",
+              "properties": {
+                "present": {
+                  "type": "boolean"
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                },
+                "printOnFirstPage": {
+                  "type": "boolean"
+                },
+                "printOnLastPage": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "footer": {
+              "type": "object",
+              "properties": {
+                "present": {
+                  "type": "boolean"
+                },
+                "height": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Height: a number in the report's unit or a string with unit (\"2.5cm\", \"1in\", \"10pt\", \"5mm\")."
+                },
+                "printOnFirstPage": {
+                  "type": "boolean"
+                },
+                "printOnLastPage": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "cm",
+                "in"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_addAlColumns",
+        "displayName": "%tool.addAlColumns%",
+        "toolReferenceName": "addAlColumns",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(symbol-field)",
+        "userDescription": "%tool.addAlColumns.description%",
+        "modelDescription": "Adds columns to a data item of the AL report behind the layout (for a report extension inside an add() block), named by the Business Central convention <Field>_<DataItem> unless `name` is given. `field` is a field of the data item's table (checked against the workspace and symbols; bcReport_getReportData with tableFieldsOf lists them), `source` any AL expression. The layout can use them (=Fields!<Name>.Value) after a build (bcReport_buildProject). For other AL changes edit the .al file directly.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "dataItem",
+            "columns"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "dataItem": {
+              "type": "string",
+              "description": "Data item name as in AL, e.g. Header, Line."
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "description": "Table field name, e.g. \"Unit Price\""
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "AL expression instead of a field"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Column name"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_createAlLabel",
+        "displayName": "%tool.createAlLabel%",
+        "toolReferenceName": "createAlLabel",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(symbol-string)",
+        "userDescription": "%tool.createAlLabel.description%",
+        "modelDescription": "Creates a translatable label in the AL report (labels block; optional Comment for translators, MaxLength, Locked) and with `textbox` makes that textbox show it as =Parameters!<Label>.Value – both files in one undoable edit. Business Central layouts should use labels instead of fixed texts (validate reports those as \"literal-text\"). The name defaults to the base app convention (<Text>Lbl).",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "text": {
+              "type": "string",
+              "description": "Label text in the app's base language."
+            },
+            "name": {
+              "type": "string"
+            },
+            "textbox": {
+              "type": "string",
+              "description": "Textbox (single text run) that should show the label."
+            },
+            "comment": {
+              "type": "string"
+            },
+            "maxLength": {
+              "type": "number"
+            },
+            "locked": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_renameColumn",
+        "displayName": "%tool.renameColumn%",
+        "toolReferenceName": "renameReportColumn",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(edit)",
+        "userDescription": "%tool.renameColumn.description%",
+        "modelDescription": "Renames a dataset column in AL and in all RDLC layouts of the report and its report extensions – field references, <Column>Format, <Column>Caption, the dataset declarations and textboxes named after the column – in one undoable edit. Never rename columns by search and replace.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "column",
+            "newName"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "column": {
+              "type": "string"
+            },
+            "newName": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "bcReport_buildProject",
+        "displayName": "%tool.buildProject%",
+        "toolReferenceName": "buildAlProject",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(package)",
+        "userDescription": "%tool.buildProject.description%",
+        "modelDescription": "Saves all files and runs \"AL: Package\" (Microsoft AL Language extension). The AL compiler regenerates the <DataSets> and label parameters of the RDLC layouts from the AL report – needed after adding AL columns or labels before the layout can use them without warnings. Check bcReport_validateLayout afterwards.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "bcReport_showInDesigner",
+        "displayName": "%tool.showInDesigner%",
+        "toolReferenceName": "showReportDesigner",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(eye)",
+        "userDescription": "%tool.showInDesigner.description%",
+        "modelDescription": "Opens the layout in the Report Builder designer for the user to see, optionally selects a report item and switches to the paginated preview. Use it at the end of a change so the user can review the result.",
+        "tags": [
+          "bc-report-builder",
+          "rdlc",
+          "business-central"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "description": "Path of the .rdlc/.rdl layout (absolute or workspace-relative). Default: the layout open in the designer or the active editor."
+            },
+            "item": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "design",
+                "preview"
+              ]
+            }
+          }
+        }
+      }
+    ]
   },
   "keywords": [
     "Business Central",

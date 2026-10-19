@@ -14,7 +14,7 @@ VSIX…** ausführen, oder:
 code --install-extension bc-report-builder-1.0.0.vsix
 ```
 
-Voraussetzung ist VS Code 1.90 oder neuer. Das Paket enthält alle Laufzeitabhängigkeiten.
+Voraussetzung ist VS Code 1.95 oder neuer. Das Paket enthält alle Laufzeitabhängigkeiten.
 
 **Updates**: Beim Start prüft die Extension, ob in den GitHub Releases eine neuere Version liegt, und bietet dann
 *Installieren* (lädt die VSIX, prüft die SHA-256-Prüfsumme von GitHub und installiert sie), *Release öffnen* oder *Diese
@@ -172,6 +172,32 @@ Der Designer verhält sich wie ein eingebauter Editor:
 - Oberfläche aus Codicons und den Farben des aktiven Farbdesigns (hell, dunkel, hoher Kontrast): Symbolleiste, Bereiche mit
   ziehbaren Trennern, Bäume mit Einrückungslinien, Filterfeld, Dialoge, Bildlaufleisten
 
+## KI-Unterstützung (GitHub Copilot)
+Die Extension stellt Werkzeuge für den Agentenmodus von Copilot (und jeden anderen Chat, der `vscode.lm`-Tools nutzt)
+bereit. Damit kann die KI Berichte vollständig bauen – mit der Logik des Designers statt durch Raten im XML. Im Chat lassen
+sie sich auch direkt ansprechen, z. B. `#reportLayout` oder `#previewReport`.
+
+Die Aufteilung folgt dem, was im XML leicht bzw. fehleranfällig ist:
+
+| Direkt im XML (die KI editiert die Datei) | Werkzeug |
+|---|---|
+| Wert/Ausdruck eines Textfelds, `<Style>` (Schrift, Farbe, Format, Ausrichtung, Rahmen), `<Hidden>`, Position einzelner Elemente, `<Code>`-Block | – |
+| Überblick mit Namen und **XML-Zeilennummern** jedes Elements, Seiten-/Breitenprüfung, Datasets | `bcReport_inspectLayout` |
+| Prüfung nach jeder Änderung: XML (auch falsch geschachtelte Tags), Verweise, Namen, Leerseiten, `Fields!` im Seitenkopf, Ausdrücke, Vorschau-Fehler | `bcReport_validateLayout` |
+| Ergebnis als Text: Werte, Tabellen zeilenweise mit Gruppen/Summen, Diagrammreihen | `bcReport_previewReport` |
+| AL-Report: Datenelemente, Spalten (schon im Dataset?), Labels, Vorschaudaten, Felder der Tabellen aus den Symbolen | `bcReport_getReportData` |
+| Neue Elemente mit eindeutigen Namen: Textfeld, Rechteck, Linie, Bild (aus Datei eingebettet), Tabelle aus Feldern mit BC-Konventionen, Matrix, Diagramm | `bcReport_insertItems` |
+| Tablix-Struktur: Spalten, Zeilen, Gruppen (Eltern/Kind, Kopf/Fuß, Sortierung, Filter, Umbruch), Spaltengruppen, Zellen verbinden/teilen | `bcReport_editTable` |
+| Diagramm lesen/ändern (Typ, Reihen, Kategorie, Achsen, Legende) | `bcReport_editChart` |
+| Ausrichten, gleiche Größe, verteilen, zentrieren, Reihenfolge, löschen | `bcReport_arrangeItems` |
+| Seitengröße, Ränder, Textkörper, Seitenkopf/-fuß, Einheit | `bcReport_setPageLayout` |
+| AL-Spalten / AL-Label anlegen, Spalte in AL und allen Layouts umbenennen, Projekt erstellen | `bcReport_addAlColumns`, `bcReport_createAlLabel`, `bcReport_renameColumn`, `bcReport_buildProject` |
+| Ergebnis im Designer zeigen (Element auswählen, Vorschau) | `bcReport_showInDesigner` |
+
+Alle Layout-Änderungen sind normale Bearbeitungen des Dokuments: Ein offener Designer lädt sie sofort, *Rückgängig* nimmt sie
+zurück, und Layouts ohne ungespeicherte Änderungen werden wieder gespeichert. Werkzeuge, die AL-Code ändern oder den Compiler
+starten, fragen vorher nach. Für realistische Vorschauen kann die KI die Datei `<Layout>.data.json` mit Beispieldaten schreiben.
+
 ## Vergleich mit Report Builder und Visual Studio
 
 | | Report Builder | Visual Studio (RDLC-Designer) | Diese Erweiterung |
@@ -301,6 +327,7 @@ Integrationstests (`npm run test:vscode`) laufen in der CI – vor einem Release
 | `src/xlsx.ts`, `src/csv.ts` | Excel-/CSV-Import |
 | `src/updateCheck.ts` | Update-Prüfung gegen GitHub Releases, Download und Prüfsumme der VSIX |
 | `scripts/`, `tools/publish-github.mjs` | Paketierung, Paketprüfung, Lizenzhinweise; Veröffentlichung als GitHub Release |
+| `src/tools/` | Sprachmodell-Werkzeuge: Überblick, Prüfung, Text-Vorschau (`inspect.ts`), Strukturänderungen (`edit.ts`), Registrierung (`index.ts`) |
 | `src/layoutEdit.ts` | Layout-Änderungen im Host (Label-Wert, Spalte umbenennen) für gemeinsame Bearbeitungsschritte mit AL |
 | `webview/rdl.ts` | RDL-Parser und quellerhaltender Serializer |
 | `webview/render/` | Vorschau-Engine (RDL → Darstellungsbaum), Seitenumbruch, React-Darstellung, Diagramme, Messgeräte, PDF-Export |

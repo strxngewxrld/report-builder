@@ -76,13 +76,14 @@ export async function checkPackage(path) {
 
   // load the packaged CommonJS bundle with only the VS Code API replaced: catches missing bundles and
   // dependencies that are not bundled (the package has no node_modules)
-  const commands = new Set(), editors = new Set();
+  const commands = new Set(), editors = new Set(), tools = new Set();
   const api = standIn();
   const bundle = text('out/extension.js');
   // esbuild's namespace import copies the module's own keys: list every API name the bundle uses
   const vscode = Object.fromEntries([...bundle.matchAll(/\bvscode\d*\.([A-Za-z_$][\w$]*)/g)].map(m => [m[1], api]));
   vscode.commands = new Proxy({}, { get: (_, k) => k === 'registerCommand' ? (id) => { commands.add(id); return api; } : api });
   vscode.window = new Proxy({}, { get: (_, k) => k === 'registerCustomEditorProvider' ? (id) => { editors.add(id); return api; } : api });
+  vscode.lm = new Proxy({}, { get: (_, k) => k === 'registerTool' ? (id) => { tools.add(id); return api; } : api });
   vscode.l10n = { bundle: undefined, t: (m) => m };
   vscode.env = new Proxy({ language: 'en' }, { get: (t, k) => k in t ? t[k] : api });
   const module = { exports: {} };
@@ -99,9 +100,11 @@ export async function checkPackage(path) {
   module.exports.activate(context);
   const missing = pkg.contributes.commands.map(c => c.command).filter(id => !commands.has(id));
   assert.deepEqual(missing, [], 'Contributed commands that activate() does not register');
+  const unregistered = (pkg.contributes.languageModelTools ?? []).map(t => t.name).filter(id => !tools.has(id));
+  assert.deepEqual(unregistered, [], 'Contributed language model tools that activate() does not register');
   for (const editor of pkg.contributes.customEditors) assert(editors.has(editor.viewType), `Unregistered editor ${editor.viewType}`);
 
-  console.log(`VSIX verified: ${names.length} files, ${commands.size} commands, ${editors.size} editor; packaged extension activates.`);
+  console.log(`VSIX verified: ${names.length} files, ${commands.size} commands, ${tools.size} language model tools, ${editors.size} editor; packaged extension activates.`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

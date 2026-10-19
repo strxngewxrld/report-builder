@@ -43,18 +43,22 @@ export function registerBcCommands(context: vscode.ExtensionContext, service: La
 
 // ------------------------------------------------------------------------------------------------ AL edits
 
-/** The AL report of the active designer, freshly parsed from its (possibly unsaved) document. */
-async function alTarget(service: LayoutService, session: DesignerSession) {
-  const owner = await service.al.ownerOf(session.uri);
-  if (!owner) {
-    vscode.window.showWarningMessage(l10n.t('No AL report in the workspace uses this layout (rendering › LayoutFile).'));
-    return undefined;
-  }
+/** The AL report of a layout, freshly parsed from its (possibly unsaved) document. */
+export async function alReportOf(service: LayoutService, layout: vscode.Uri) {
+  const owner = await service.al.ownerOf(layout);
+  if (!owner) return undefined;
   const doc = await vscode.workspace.openTextDocument(owner.file.uri);
   const src = doc.getText();
   const report = parseAl(src).find(r => r.kind === owner.report.kind && r.name === owner.report.name);
   if (!report) return undefined;
   return { owner, doc, src, report };
+}
+
+/** The AL report of the active designer; warns when there is none. */
+async function alTarget(service: LayoutService, session: DesignerSession) {
+  const target = await alReportOf(service, session.uri);
+  if (!target && !await service.al.ownerOf(session.uri)) vscode.window.showWarningMessage(l10n.t('No AL report in the workspace uses this layout (rendering › LayoutFile).'));
+  return target;
 }
 
 async function applyAndOffer(doc: vscode.TextDocument, insert: TextInsert, done: string, edit = new vscode.WorkspaceEdit()) {
@@ -144,7 +148,7 @@ async function labelOptions(title: string, text: string): Promise<LabelOptions |
  * How the new label gets translated: with the TranslationFile feature the compiler writes it to Translations/*.g.xlf;
  * translations go into the language files there (e.g. with XLIFF Sync).
  */
-async function translationHint(root: vscode.Uri): Promise<string> {
+export async function translationHint(root: vscode.Uri): Promise<string> {
   let features: string[] = [];
   try {
     const app = JSON.parse(new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(root, 'app.json'))));
@@ -200,29 +204,38 @@ async function addColumns(service: LayoutService, arg: MenuArg) {
   await applyAndOffer(target.doc, insert, l10n.t('{0} column(s) added to "{1}": {2}.', columns.length, dataItem.name, columns.map(c => c.name).join(', ')));
 }
 
+export type ColumnHit = { doc: vscode.TextDocument; report: AlReport; column: AlColumn; start: number };
+
+/** The first column of a document's reports that passes `test`. */
+function findInDocument(doc: vscode.TextDocument, test: (c: AlColumn, start: number) => boolean): ColumnHit | undefined {
+  const src = doc.getText();
+  for (const report of parseAl(src)) {
+    for (const column of declaredColumns(report)) {
+      const start = offsetOf(src, column.pos.line, column.pos.character);
+      if (test(column, start)) return { doc, report, column, start };
+    }
+  }
+  return undefined;
+}
+
+/** A column by name in the AL report of a layout or in the report extensions of that report. */
+export async function findColumn(service: LayoutService, layout: vscode.Uri, name: string): Promise<ColumnHit | undefined> {
+  const owner = await service.al.ownerOf(layout);
+  if (!owner) return undefined;
+  const family = owner.report.kind === 'report' ? owner.report.name : owner.report.extends ?? owner.report.name;
+  for (const uri of await service.al.familyFiles(family)) {
+    const hit = findInDocument(await vscode.workspace.openTextDocument(uri), c => c.name.toLowerCase() === name.toLowerCase());
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /** The column to rename: picked in the designer (Report data) or under the cursor in an AL editor. */
 async function columnToRename(service: LayoutService, wanted: string | undefined) {
-  type Hit = { doc: vscode.TextDocument; report: AlReport; column: AlColumn; start: number };
-  const find = (doc: vscode.TextDocument, test: (c: AlColumn, start: number) => boolean): Hit | undefined => {
-    const src = doc.getText();
-    for (const report of parseAl(src)) {
-      for (const column of declaredColumns(report)) {
-        const start = offsetOf(src, column.pos.line, column.pos.character);
-        if (test(column, start)) return { doc, report, column, start };
-      }
-    }
-    return undefined;
-  };
+  const find = findInDocument;
   if (wanted) {
     const session = ReportEditorProvider.active;
-    const owner = session && await service.al.ownerOf(session.uri);
-    if (!owner) return undefined;
-    const family = owner.report.kind === 'report' ? owner.report.name : owner.report.extends ?? owner.report.name;
-    for (const uri of await service.al.familyFiles(family)) {
-      const hit = find(await vscode.workspace.openTextDocument(uri), c => c.name.toLowerCase() === wanted.toLowerCase());
-      if (hit) return hit;
-    }
-    return undefined;
+    return session && findColumn(service, session.uri, wanted);
   }
   const editor = vscode.window.activeTextEditor;
   if (!editor || !/\.al$/i.test(editor.document.uri.path)) return undefined;
@@ -243,12 +256,8 @@ async function renameColumn(service: LayoutService, arg: MenuArg) {
     vscode.window.showInformationMessage(l10n.t('Place the cursor on the name of a column: column(Name; Source).'));
     return;
   }
-  const { doc, report, column, start } = hit;
-  const family = report.kind === 'report' ? report.name : report.extends ?? report.name;
-  const taken = new Set<string>();
-  for (const uri of await service.al.familyFiles(family)) {
-    for (const r of parseAl((await vscode.workspace.openTextDocument(uri)).getText())) for (const c of declaredColumns(r)) taken.add(c.name.toLowerCase());
-  }
+  const { report, column } = hit;
+  const taken = await columnNames(service, report);
   const to = await vscode.window.showInputBox({
     title: l10n.t('Rename Column (AL and Layouts)'), value: column.name, valueSelection: [0, column.name.length],
     prompt: l10n.t('New name for "{0}" in "{1}" – also in all RDLC layouts of the report', column.name, report.name),
@@ -257,6 +266,30 @@ async function renameColumn(service: LayoutService, arg: MenuArg) {
   });
   if (!to || to === column.name) return;
 
+  const { edit, changedLayouts, places, others } = await columnRenameEdit(service, hit, to);
+  if (!await vscode.workspace.applyEdit(edit)) {
+    vscode.window.showErrorMessage(l10n.t('The rename could not be applied.'));
+    return;
+  }
+  vscode.window.showInformationMessage(
+    (changedLayouts
+      ? l10n.t('"{0}" is now "{1}": AL and {2} layout(s) with {3} place(s) – one undo reverts everything.', column.name, to, changedLayouts, places)
+      : l10n.t('"{0}" is now "{1}" in AL – one undo reverts it.', column.name, to))
+    + (others.length ? ` ${l10n.t('Please adapt the Word/Excel layouts ({0}) yourself.', others.join(', '))}` : ''));
+}
+
+/** Column names (lower case) of a report and all report extensions of it – a dataset has one namespace. */
+export async function columnNames(service: LayoutService, report: AlReport): Promise<Set<string>> {
+  const family = report.kind === 'report' ? report.name : report.extends ?? report.name;
+  const taken = new Set<string>();
+  for (const uri of await service.al.familyFiles(family)) {
+    for (const r of parseAl((await vscode.workspace.openTextDocument(uri)).getText())) for (const c of declaredColumns(r)) taken.add(c.name.toLowerCase());
+  }
+  return taken;
+}
+
+/** One edit renaming a column in AL and in every RDLC layout of its report; Word/Excel layouts are listed in `others`. */
+export async function columnRenameEdit(service: LayoutService, { doc, report, column, start }: ColumnHit, to: string) {
   const edit = new vscode.WorkspaceEdit();
   const al = renameIdentifierAt(doc.getText(), start, to)!;
   edit.replace(doc.uri, new vscode.Range(doc.positionAt(al.start), doc.positionAt(al.end)), al.text);
@@ -271,20 +304,11 @@ async function renameColumn(service: LayoutService, arg: MenuArg) {
     changedLayouts++;
     places += count;
   }
-  if (!await vscode.workspace.applyEdit(edit)) {
-    vscode.window.showErrorMessage(l10n.t('The rename could not be applied.'));
-    return;
-  }
-  const others = layouts.filter(l => !/^rdlc$/i.test(l.type)).map(l => l.name);
-  vscode.window.showInformationMessage(
-    (changedLayouts
-      ? l10n.t('"{0}" is now "{1}": AL and {2} layout(s) with {3} place(s) – one undo reverts everything.', column.name, to, changedLayouts, places)
-      : l10n.t('"{0}" is now "{1}" in AL – one undo reverts it.', column.name, to))
-    + (others.length ? ` ${l10n.t('Please adapt the Word/Excel layouts ({0}) yourself.', others.join(', '))}` : ''));
+  return { edit, changedLayouts, places, others: layouts.filter(l => !/^rdlc$/i.test(l.type)).map(l => l.name) };
 }
 
 /** Where new columns of a data item go: the data item itself, or in a report extension its add(...) block. */
-function insertInto(src: string, report: AlReport, dataItem: string, columns: { name: string; source: string }[]): TextInsert | null {
+export function insertInto(src: string, report: AlReport, dataItem: string, columns: { name: string; source: string }[]): TextInsert | null {
   if (report.kind === 'report') {
     const d = findDataItem(report.dataItems, dataItem);
     return d ? insertColumns(src, d, columns) : null;
