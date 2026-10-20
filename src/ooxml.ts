@@ -56,6 +56,49 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 
 // ------------------------------------------------------------------------------------------------ xlsx
 
+/**
+ * Excel number format for the textbox's .NET format string: standard formats (N, F, P, D, C with precision) and custom
+ * numeric patterns ("#,##0.00", "0.0%"); anything else (dates, text) stays General.
+ */
+export function excelNumberFormat(format?: string, text?: string): string {
+  const f = (format ?? '').trim();
+  const std = /^([NFPDC])(\d{0,2})$/i.exec(f);
+  const frac = (digits: string, fallback: number) => {
+    const n = digits === '' ? fallback : Number(digits);
+    return n > 0 ? `.${'0'.repeat(n)}` : '';
+  };
+  if (std) {
+    switch (std[1].toUpperCase()) {
+      case 'N': return `#,##0${frac(std[2], 2)}`;
+      case 'C': {
+        // the currency symbol as the preview shows it ("4.380,50 €", "$1,234.50"), placed like there
+        const shown = (text ?? '').trim().replace(/^[-(−]|\)$/g, '');
+        const symbol = shown.replace(/[\d\s.,'+]/g, '');
+        const number = `#,##0${frac(std[2], 2)}`;
+        if (!symbol) return number;
+        const quoted = `"${symbol.replace(/"/g, '')}"`;
+        if (shown.startsWith(symbol)) return `${quoted}${/^\S+\s/.test(shown) ? ' ' : ''}${number}`;
+        return `${number}${/\s\S+$/.test(shown) ? ' ' : ''}${quoted}`;
+      }
+      case 'F': return `0${frac(std[2], 2)}`;
+      case 'P': return `0${frac(std[2], 2)}%`;
+      case 'D': return std[2] ? '0'.repeat(Number(std[2])) : '0';
+    }
+  }
+  if (/^[#0,.%;\-\s()]+$/.test(f) && /[#0]/.test(f)) return f;
+  return 'General';
+}
+
+/**
+ * Excel format of a date: a custom .NET date pattern ("dd.MM.yyyy") carried over, otherwise Excel's built-in short
+ * date (14) or date and time (22), which Excel shows in the reader's regional format.
+ */
+export function excelDateFormat(format?: string, value?: number): string | number {
+  const f = (format ?? '').trim();
+  if (f.length > 1 && /^[dMy.\/\-\s]+$/.test(f) && /[dMy]/.test(f)) return f.replace(/M/g, 'm');
+  return value !== undefined && value % 1 !== 0 && !/^[dD]$/.test(f) ? 22 : 14;
+}
+
 const colName = (i: number) => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
 
 /**
@@ -67,16 +110,39 @@ export function writeXlsx(blocks: ExportBlock[], sheetName = l10n.t('Report')): 
   const merges: string[] = [];
   let r = 0;
   let widths: number[] = [];
+  // cell formats: bold × number format; custom number formats get ids from 164
+  const numFmts: string[] = [];
+  const xfs = ['<xf xfId="0"/>', '<xf fontId="1" xfId="0" applyFont="1"/>'];
+  const xfIndex = new Map<string, number>();
+  const styleOf = (c: ExportCell) => {
+    const bold = !!(c.header || c.bold);
+    if (typeof c.value !== 'number') return bold ? 1 : 0;
+    const code = c.date ? excelDateFormat(c.format, c.value) : excelNumberFormat(c.format, c.text);
+    const key = `${bold}|${code}`;
+    let i = xfIndex.get(key);
+    if (i === undefined) {
+      let id = 0;
+      if (typeof code === 'number') id = code;
+      else if (code !== 'General') {
+        if (!numFmts.includes(code)) numFmts.push(code);
+        id = 164 + numFmts.indexOf(code);
+      }
+      i = xfs.push(`<xf${bold ? ' fontId="1"' : ''} numFmtId="${id}" xfId="0"${bold ? ' applyFont="1"' : ''} applyNumberFormat="1"/>`) - 1;
+      xfIndex.set(key, i);
+    }
+    return i;
+  };
   const cellXml = (ref: string, c: ExportCell) => {
-    const style = c.header || c.bold ? (typeof c.value === 'number' ? 3 : 1) : typeof c.value === 'number' ? 2 : 0;
+    const style = styleOf(c);
     return typeof c.value === 'number' && Number.isFinite(c.value)
       ? `<c r="${ref}" s="${style}"><v>${c.value}</v></c>`
       : c.text ? `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${esc(c.text)}</t></is></c>` : '';
   };
   for (const b of blocks) {
+    if (b.kind === 'break') continue; // one worksheet: the documents follow each other
     if (b.kind === 'text') {
       r++;
-      rows.push(`<row r="${r}">${cellXml(`A${r}`, { text: b.text, bold: b.bold })}</row>`);
+      rows.push(`<row r="${r}">${cellXml(`A${r}`, { text: b.text, bold: b.bold, value: b.value, format: b.format, date: b.date })}</row>`);
       continue;
     }
     if (b.columns.length > widths.length) widths = b.columns;
@@ -98,11 +164,11 @@ export function writeXlsx(blocks: ExportBlock[], sheetName = l10n.t('Report')): 
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${rows.join('')}</sheetData>${merges.length ? `<mergeCells count="${merges.length}">${merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : ''}</worksheet>`;
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.##"/></numFmts>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${numFmts.length ? `<numFmts count="${numFmts.length}">${numFmts.map((code, i) => `<numFmt numFmtId="${164 + i}" formatCode="${esc(code)}"/>`).join('')}</numFmts>` : ''}
 <fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
 <fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>
 <borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs>
-<cellXfs count="4"><xf xfId="0"/><xf fontId="1" xfId="0" applyFont="1"/><xf numFmtId="164" xfId="0" applyNumberFormat="1"/><xf fontId="1" numFmtId="164" xfId="0" applyFont="1" applyNumberFormat="1"/></cellXfs>
+<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
   return zip({
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -133,6 +199,7 @@ export function writeDocx(blocks: ExportBlock[], page: { width: number; height: 
     return t.split('\n').map((line, i) => `${i ? '<w:r><w:br/></w:r>' : ''}<w:r>${props ? `<w:rPr>${props}</w:rPr>` : ''}<w:t xml:space="preserve">${esc(line)}</w:t></w:r>`).join('');
   };
   const body = blocks.map(b => {
+    if (b.kind === 'break') return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
     if (b.kind === 'text') return `<w:p><w:pPr>${jc(b.align)}</w:pPr>${run(b.text, b.bold, b.size)}</w:p>`;
     const grid = `<w:tblGrid>${b.columns.map(w => `<w:gridCol w:w="${Math.round(w * TWIPS)}"/>`).join('')}</w:tblGrid>`;
     const rows = b.rows.map(row => `<w:tr>${row.map(c => {
@@ -151,12 +218,16 @@ export function writeDocx(blocks: ExportBlock[], page: { width: number; height: 
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`,
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>`,
     '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,
     'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>`,
     'word/document.xml': doc,
     'word/styles.xml': styles,
+    // current Word compatibility: without it Word opens the file in compatibility mode
+    'word/settings.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`,
   });
 }

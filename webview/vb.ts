@@ -191,6 +191,9 @@ export class CodeModule {
   /** Names of the functions defined in the code (for linting). */
   get functionNames(): string[] { return [...this.functions.values()].map(f => f.name); }
 
+  /** Names of the module-level variables (Code.PageNo for "Public Shared PageNo As Integer"), lower case. */
+  get variableNames(): string[] { return [...this.initial.keys()]; }
+
   private expr(text: string, line: number): Node {
     text = this.withify(text);
     try { return parseExpression(text); } catch (e) { throw new Error(l10n.t('Code, line {0}: {1} in "{2}"', line, (e as Error).message, text)); }
@@ -466,6 +469,8 @@ export class CodeModule {
   /** Calls a function of the code block (Code.Name(args)). */
   call(name: string, args: unknown[], ctx: EvalContext): unknown {
     const fn = this.functions.get(name.toLowerCase());
+    // Code.PageNo reads a module-level variable ("Public Shared PageNo As Integer"), as in Base App layouts
+    if (!fn && !args.length && this.has(name.toLowerCase())) return this.get(name.toLowerCase());
     if (!fn) throw new Error(l10n.t('Code.{0} is not defined in the code block', name));
     if (this.depth > 50) throw new LimitError(l10n.t('Code.{0}: recursion too deep', name));
     const locals = new Map<string, unknown>();

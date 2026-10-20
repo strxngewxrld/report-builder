@@ -3,11 +3,12 @@
 // report in the web client, navigating from AL to the layout, and editing the layout's <Code> block in a VB editor.
 
 import * as vscode from 'vscode';
+import { execFile } from 'node:child_process';
 import {
   LabelOptions, applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, offsetOf, renameIdentifierAt, TextInsert,
 } from './al/edit';
 import { renameColumnInLayout, textboxValueEdit } from './layoutEdit';
-import { alConfigurations, reportUrl } from './al/launch';
+import { AlLaunchConfig, alConfigurations, metadataUrl, reportUrl, webEndpointOf } from './al/launch';
 import { mergedDataItems } from './al/context';
 import { AlColumn, AlDataItem, AlReport, allColumns, declaredColumns, parseAl } from './al/parser';
 import { LayoutService } from './layoutService';
@@ -353,7 +354,8 @@ async function runInBc(service: LayoutService) {
     configs.map(c => ({ label: c.name ?? l10n.t('(no name)'), description: reportUrl(c, id), config: c })),
     { title: l10n.t('Run Report {0}', id), placeHolder: l10n.t('Choose the environment') }))?.config;
   if (!config) return;
-  const url = reportUrl(config, id);
+  const endpoint = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: l10n.t('Asking the server for the web client URL…') }, () => webClientEndpoint(config));
+  const url = reportUrl(config, id, endpoint);
   const open = l10n.t('Open'), publish = l10n.t('Publish First');
   const pick = await vscode.window.showInformationMessage(
     l10n.t('Open report {0} "{1}" in the web client? The last published version of the app runs.', id, owner.report.kind === 'report' ? owner.report.name : owner.base?.name ?? ''),
@@ -363,6 +365,27 @@ async function runInBc(service: LayoutService) {
     await vscode.commands.executeCommand('al.publishNoDebug').then(undefined, () => vscode.window.showErrorMessage(l10n.t('Publishing needs the AL Language extension.')));
   }
   if (pick) await vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
+/**
+ * On-prem web client URL from the developer endpoint (like the AL extension with "usePublicURLFromServer"). Undefined
+ * when the server cannot be asked – then the URL is built from `server` in launch.json.
+ */
+async function webClientEndpoint(config: AlLaunchConfig): Promise<string | undefined> {
+  const url = metadataUrl(config);
+  if (!url) return undefined;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return webEndpointOf(await res.text());
+    // Windows authentication (Negotiate/NTLM) is not available to fetch: PowerShell sends the signed-in user's credentials
+    if (res.status === 401 && process.platform === 'win32' && /negotiate|ntlm/i.test(res.headers.get('www-authenticate') ?? '')) {
+      // the URL comes from the workspace's launch.json: passed as data (environment), never as part of the command text
+      return webEndpointOf(await new Promise<string>((resolve, reject) => execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+        'Invoke-RestMethod -UseBasicParsing -UseDefaultCredentials -TimeoutSec 10 -Uri $env:BC_RB_METADATA_URL | ConvertTo-Json -Compress'],
+        { timeout: 15000, windowsHide: true, env: { ...process.env, BC_RB_METADATA_URL: url } }, (err, stdout) => (err ? reject(err) : resolve(stdout)))));
+    }
+  } catch { /* server not reachable */ }
+  return undefined;
 }
 
 // ------------------------------------------------------------------------------------------------ AL → layout

@@ -170,7 +170,7 @@ test('VS-Code-Befehle steuern den Designer, sein Zustand kommt zurück (Statusle
   await until('Eigenschaften eingeblendet', () => state()?.panes.properties === true);
 
   await vscode.commands.executeCommand('bcReportBuilder.insert.textbox');
-  await until('Einfügewerkzeug in der Statusleiste', () => state()?.status.includes('Textbox'));
+  await until('Einfügewerkzeug in der Statusleiste', () => /Textbox|Textfeld/.test(state()?.status ?? ''));
 
   await vscode.commands.executeCommand('bcReportBuilder.showPreview');
   await until('Vorschau', () => state()?.mode === 'preview');
@@ -196,17 +196,17 @@ test('AL-Code: CodeLens zählt Verwendungen im Layout, Klick wählt das Textfeld
     if (!all.some(l => l.command?.command === 'bcReportBuilder.revealInLayout')) await new Promise(r => setTimeout(r, 200));
   }
   const titles = all.map(l => l.command?.title ?? '');
-  assert.ok(titles.some(t => t.includes('Open Verkaufsrechnung.rdlc in the Designer')), titles.join(' | '));
+  assert.ok(titles.some(t => /Open Verkaufsrechnung\.rdlc in the Designer|Verkaufsrechnung\.rdlc im Designer öffnen/.test(t)), titles.join(' | '));
   const qty = all.find(l => l.command?.command === 'bcReportBuilder.revealInLayout' && l.command.arguments?.[1] === 'Quantity_Line');
   assert.ok(qty, 'Lens an Quantity_Line');
-  assert.match(qty!.command!.title, /^\d+× in the layout$/);
+  assert.match(qty!.command!.title, /^\d+× (in the|im) layout$/i);
 
   await vscode.commands.executeCommand(qty!.command!.command, ...qty!.command!.arguments!);
   const probe = await until('Designer', () => api.probes.get(file('Verkaufsrechnung.rdlc').toString()));
   type State = { status: string };
   await until('Auswahl des Textfelds mit Quantity_Line', () => {
     const s = [...probe.received].reverse().find(m => m.type === 'state')?.state as State | undefined;
-    return s && s.status !== '' && /Textbox|Table cell|Item/.test(s.status);
+    return s && s.status !== '' && /Textbox|Table cell|Item|Textfeld|Tabellenzelle|Element/.test(s.status);
   });
   assert.deepEqual(errorsOf(probe), []);
 });
@@ -360,7 +360,7 @@ test('Felder als Spalten hinzufügen: Auswahl aus den Tabellenfeldern', async ap
       }
     });
     assert.ok(offered.includes('Description 2') && !offered.includes('Quantity'), `angeboten: ${offered.join(', ')} (vorhandene Spalten nicht)`);
-    assert.ok(asked.some(a => a.startsWith('info:') && a.includes('2 column(s)')), asked.join(' | '));
+    assert.ok(asked.some(a => a.startsWith('info:') && /2 (column\(s\)|Spalte\(n\))/.test(a)), asked.join(' | '));
     const text = (await vscode.workspace.openTextDocument(alUri)).getText();
     assert.match(text, /column\(Description2_Line; "Description 2"\) \{ \}\s*column\(ShipmentDate_Line; "Shipment Date"\) \{ \}/);
   } finally {
@@ -377,7 +377,7 @@ test('Spalte umbenennen: AL und Layout in einem Schritt', async api => {
   try {
     // refused: an existing column name
     await assert.rejects(withAnswers({ input: ['UnitPrice_Line'] },
-      () => vscode.commands.executeCommand('bcReportBuilder.renameColumn', { column: 'Quantity_Line' }) as Promise<unknown>), /already exists/);
+      () => vscode.commands.executeCommand('bcReportBuilder.renameColumn', { column: 'Quantity_Line' }) as Promise<unknown>), /already exists|gibt es bereits/);
     // from the AL editor: cursor on the column name
     const editor = await vscode.window.showTextDocument(al);
     const at = al.positionAt(al.getText().indexOf('Quantity_Line') + 3);
@@ -392,6 +392,29 @@ test('Spalte umbenennen: AL und Layout in einem Schritt', async api => {
     await restore(doc.uri, layoutText);
     await restore(alUri, alText);
   }
+});
+
+test('Geteilter Editor: Befehle wirken im fokussierten Designer, auch nachdem der andere geschlossen wurde', async api => {
+  const { uri, probe: first } = await open(api, 'Umsatzbericht.rdl');
+  const key = uri.toString();
+  type State = { mode: string };
+  const mode = (p: EditorProbe) => ([...p.received].reverse().find(m => m.type === 'state')?.state as State | undefined)?.mode;
+  await vscode.commands.executeCommand('workbench.action.splitEditorRight');
+  const second = await until('zweiter Designer', () => { const p = api.probes.get(key); return p !== first ? p : undefined; });
+  await until('zweiter Designer bereit', () => second.received.find(m => m.type === 'state'));
+  // back to the first one: an editor title command with the file's URI acts there, not in the newer designer
+  await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+  await vscode.commands.executeCommand('bcReportBuilder.togglePreview', uri);
+  await until('Vorschau im fokussierten Designer', () => mode(first) === 'preview');
+  assert.notEqual(mode(second), 'preview');
+  // closing the second designer must not unregister the first one
+  await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  await until('zweiter Designer geschlossen', () => api.probes.get(key) !== second);
+  await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+  await vscode.commands.executeCommand('bcReportBuilder.togglePreview', uri);
+  await until('Entwurf im verbliebenen Designer', () => mode(first) === 'design');
+  assert.deepEqual(errorsOf(first), []);
 });
 
 test('PDF-Export: alle Seiten der Vorschau in Seitengröße des Berichts', async api => {
@@ -450,7 +473,7 @@ test('Tabellenbefehle aus VS Code wirken in der Webview: Spalte, Zeile, Gruppenf
   const [c0, r0, g0] = [columns(), rows(), groups()];
   // select the quantity cell of the line table (as a CodeLens click does)
   await vscode.commands.executeCommand('bcReportBuilder.revealInLayout', uri, 'Quantity_Line');
-  await until('Zelle gewählt', () => [...probe.received].reverse().find(m => m.type === 'state' && /Table cell/.test((m.state as { status: string }).status)));
+  await until('Zelle gewählt', () => [...probe.received].reverse().find(m => m.type === 'state' && /Table cell|Tabellenzelle/.test((m.state as { status: string }).status)));
   const run = async (cmd: string, check: () => boolean, what: string) => {
     await vscode.commands.executeCommand(`bcReportBuilder.${cmd}`, uri);
     await until(what, check);
@@ -746,11 +769,17 @@ test('UI: Direkter Texteditor erlaubt Zwischenablage und übernimmt mit Ctrl-Ent
   await domAction(api, uri, probe, '.inline-editor', 'input', 'UI & Überprüfung');
   await domAction(api, uri, probe, '.inline-editor', 'keydown', 'Control+Enter');
   await until('Direkttext gespeichert', () => doc.getText().includes('<Value>UI &amp; Überprüfung</Value>'));
+  // keyboard users stay on the design surface (Tab/Enter/F2 keep working)
+  assert.equal((await domAction(api, uri, probe, '.designer')).focused, true, 'Fokus nach Ctrl+Enter');
   const saved = doc.getText();
   await domAction(api, uri, probe, '.item[data-name="Titel"]', 'doubleClick');
   await domAction(api, uri, probe, '.inline-editor', 'input', 'Verwerfen');
   await domAction(api, uri, probe, '.inline-editor', 'keydown', 'Escape');
   assert.equal(doc.getText(), saved);
+  assert.equal((await domAction(api, uri, probe, '.designer')).focused, true, 'Fokus nach Escape');
+  // Shift+F10 / context menu key on the surface: handled (the menu of the selected item opens instead)
+  assert.equal((await domAction(api, uri, probe, '.designer', 'keydown', 'Shift+F10')).defaultPrevented, true);
+  assert.equal((await domAction(api, uri, probe, '.designer', 'keydown', 'ContextMenu')).defaultPrevented, true);
   assert.deepEqual(errorsOf(probe), []);
 });
 

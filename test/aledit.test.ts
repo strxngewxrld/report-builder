@@ -6,7 +6,31 @@ import { parseAl, parseAlTables } from '../src/al/parser';
 import { applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName } from '../src/al/edit';
 import { fieldsOfTable, tablesFromApp } from '../src/al/symbols';
 
-const sample = readFileSync('samples/src/Verkaufsrechnung.Report.al', 'utf8');
+const sample = readFileSync('samples/src/Verkaufsrechnung.Report.al', 'utf8').replace(/\r\n/g, '\n');
+
+for (const newline of ['\n', '\r\n']) {
+  test(`AL insertions preserve ${newline === '\n' ? 'LF' : 'CRLF'} line endings`, () => {
+    let source = sample.replace(/\n/g, newline);
+    const check = () => assert.equal(source.replace(/\r\n/g, '\n').replace(/\n/g, newline), source);
+    source = applyInsert(source, insertLabel(source, parseAl(source)[0], 'FirstLbl', 'Änderung'));
+    check();
+    source = applyInsert(source, insertLabel(source, parseAl(source)[0], 'SecondLbl', 'Zwei'));
+    check();
+    source = applyInsert(source, insertColumns(source, findDataItem(parseAl(source)[0].dataItems, 'Header')!,
+      [{ name: 'DueDate_Header', source: '"Due Date"' }]));
+    check();
+    assert.equal(parseAl(source)[0].labels.length, 2);
+    source = `reportextension 50101 Ext extends Base${newline}{${newline}    dataset${newline}    {${newline}        add(Header) { }${newline}    }${newline}}`;
+    source = applyInsert(source, insertAddBlock(source, parseAl(source)[0], 'Line', [{ name: 'Test', source: 'Description' }])!);
+    check();
+    assert.equal(parseAl(source)[0].additions.length, 2);
+    source = applyInsert(source, insertLabel(source, parseAl(source)[0], 'InlineLbl', 'Text'));
+    source = source.replace(`        InlineLbl = 'Text';${newline}    }`, "        InlineLbl = 'Text'; }");
+    source = applyInsert(source, insertLabel(source, parseAl(source)[0], 'NextLbl', 'Next'));
+    check();
+    assert.equal(parseAl(source)[0].labels.length, 2);
+  });
+}
 
 test('Namen nach Base-App-Konvention', () => {
   assert.equal(labelName('Rechnungsnr.'), 'RechnungsnrLbl');
@@ -16,10 +40,17 @@ test('Namen nach Base-App-Konvention', () => {
   assert.equal(columnName('No.', 'Header', ['No_Header']), 'No_Header2');
 });
 
-test('Label anlegen: neuer labels-Block nach dem Dataset, danach in den Block', () => {
+test('Label anlegen: neuer labels-Block nach dataset/requestpage/rendering (AL0926), danach in den Block', () => {
   const [rep] = parseAl(sample);
   const once = applyInsert(sample, insertLabel(sample, rep, 'QuantityLbl', 'Menge'));
   assert.match(once, /    }\n\n    labels\n    {\n        QuantityLbl = 'Menge';\n    }\n/);
+  // the AL compiler (BC 29) rejects labels before rendering: "expected section order is: dataset, requestpage, rendering, labels"
+  assert.ok(once.indexOf('labels') > once.indexOf('rendering') && once.indexOf('labels') < once.indexOf('    var'), once);
+  const withRequestPage = 'report 50101 R\n{\n    dataset\n    {\n    }\n\n    requestpage\n    {\n        layout { }\n    }\n}\n';
+  const [rp] = parseAl(withRequestPage);
+  const rpOut = applyInsert(withRequestPage, insertLabel(withRequestPage, rp, 'ALbl', 'A'));
+  assert.ok(rpOut.indexOf('labels') > rpOut.indexOf('requestpage'), rpOut);
+  assert.deepEqual(parseAl(rpOut)[0].labels.map(l => l.name), ['ALbl']);
   const [again] = parseAl(once);
   assert.deepEqual(again.labels.map(l => [l.name, l.text]), [['QuantityLbl', 'Menge']]);
   const twice = applyInsert(once, insertLabel(once, again, 'PriceLbl', "VK-Preis's"));
@@ -136,6 +167,30 @@ test('Report im Web-Client: URL aus launch.json (Cloud und Docker/On-Prem)', asy
   assert.equal(reportUrl(configs[0], 50100), 'https://businesscentral.dynamics.com/contoso.com/Test/?report=50100');
   assert.equal(reportUrl(configs[1], 50100), 'http://bcserver/BC/?report=50100');
   assert.equal(reportUrl({ server: 'https://bc.contoso.local', serverInstance: 'BC240', tenant: 'firma' }, 1306), 'https://bc.contoso.local/BC240/?report=1306&tenant=firma');
+});
+
+test('Report im Web-Client on-prem: Web-Client-Adresse aus den Metadaten des Servers (BC von der DVD: Port 8080)', async () => {
+  const { metadataUrl, reportUrl, webEndpointOf } = await import('../src/al/launch');
+  const dvd = { server: 'http://localhost', serverInstance: 'BC290', port: 7049, authentication: 'Windows', tenant: 'default', environmentType: 'OnPrem' };
+  assert.equal(metadataUrl(dvd), 'http://localhost:7049/BC290/dev/metadata');
+  assert.equal(metadataUrl({ server: 'http://bcserver/', serverInstance: 'BC' }), 'http://bcserver:7049/BC/dev/metadata', 'Standardport 7049');
+  assert.equal(metadataUrl({ server: 'https://bc:7149', serverInstance: 'BC', tenant: 'firma' }), 'https://bc:7149/BC/dev/metadata?tenant=firma');
+  assert.equal(metadataUrl({ ...dvd, usePublicURLFromServer: false }), undefined);
+  assert.equal(metadataUrl({ environmentType: 'Sandbox', environmentName: 'Test' }), undefined);
+  // launch.json comes with the workspace: quotes cannot survive into the URL, other schemes are refused
+  const hostile = metadataUrl({ server: "http://evil.example/’;calc;’'", serverInstance: 'BC' })!;
+  assert.doesNotMatch(hostile, /[’']/);
+  assert.equal(new URL(hostile).hostname, 'evil.example');
+  assert.equal(metadataUrl({ server: 'file:///C:/x', serverInstance: 'BC' }), undefined);
+  assert.equal(metadataUrl({ server: 'not a url', serverInstance: 'BC' }), undefined);
+  // response of BC 29 (GET /BC290/dev/metadata)
+  const endpoint = webEndpointOf('{"runtimeVersion":"18.0","webApiVersion":"7.0","debuggerVersion":"7.0","webEndpoint":"http://localhost:8080/BC290/","extensionAllowedTargetLevel":"Internal"}');
+  assert.equal(endpoint, 'http://localhost:8080/BC290/');
+  assert.equal(reportUrl(dvd, 50100, endpoint), 'http://localhost:8080/BC290/?report=50100');
+  assert.equal(reportUrl({ ...dvd, tenant: 'firma' }, 50100, 'https://bc.contoso.local/BC290'), 'https://bc.contoso.local/BC290/?report=50100&tenant=firma');
+  assert.equal(reportUrl(dvd, 50100), 'http://localhost/BC290/?report=50100', 'ohne Antwort des Servers wie bisher');
+  assert.equal(webEndpointOf('<html>'), undefined);
+  assert.equal(webEndpointOf('{"webEndpoint":""}'), undefined);
 });
 
 test('Label mit Optionen für Übersetzer; Parser liest sie wieder', () => {

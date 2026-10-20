@@ -40,7 +40,7 @@ test('outline details: visibility, grouping, filters, sorting, values', () => {
   const index = indexOutline(buildOutline(bc, dom));
   const get = (key: string) => Object.fromEntries(index.get(key)!.node.details);
 
-  assert.equal(index.get('item:SetData_Header')!.node.hidden, 'true');
+  assert.equal(index.get('item:SetData_Header')!.node.hidden, '=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)');
   assert.equal(index.get('item:PaidInfo')!.node.hidden, '=Not Fields!Paid.Value');
   assert.equal(get('item:PageHdr_Company').Value, '=Code.GetData(1,1)');
   assert.equal(get('item:Table_Document').Dataset, 'DataSet_Result');

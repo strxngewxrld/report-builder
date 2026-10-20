@@ -38,6 +38,9 @@ export interface AlReport {
   span?: AlSpan;
   labelsSpan?: AlSpan;
   datasetSpan?: AlSpan;
+  /** requestpage and rendering blocks: AL wants the sections in the order dataset, requestpage, rendering, labels. */
+  requestPageSpan?: AlSpan;
+  renderingSpan?: AlSpan;
 }
 
 /** A table or table extension with its fields (to offer fields of a data item's table as new columns). */
@@ -158,7 +161,10 @@ class AlParser {
       } else if (this.is(i, 'labels') && this.is(next, '{')) {
         r.labels = this.labels(next);
         r.labelsSpan = this.span(next);
+      } else if (this.is(i, 'requestpage') && this.is(next, '{')) {
+        r.requestPageSpan = this.span(next);
       } else if (this.is(i, 'rendering') && this.is(next, '{')) {
+        r.renderingSpan = this.span(next);
         r.layouts.push(...this.rendering(next));
       } else if (/^(rdlclayout|wordlayout|excellayout)$/i.test(this.toks[i].v) && this.is(next, '=') && this.toks[i + 2]?.t === 'str') {
         const type = this.toks[i].v.toLowerCase().replace('layout', '');

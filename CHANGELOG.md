@@ -68,6 +68,52 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 - Die Diagrammlegende schnitt kurze Kategorienamen ab („J…“ statt „Jan“)
 - Leere Elemente, die das Layout als `<X></X>` schreibt (z. B. `<Visibility></Visibility>`), werden nicht mehr als
   `<X />` gespeichert – alle 379 Base-App-Layouts bleiben auch bei kompletter Neuerzeugung zeichengleich
+- Vorschau mit generierten Business-Central-Daten: Die Positionszeilen blieben leer, weil nur die Spalten der ersten
+  (Kopf-)Zeile übernommen wurden; dasselbe galt für Beispieldaten, deren erste Zeile Spalten auslässt
+- Vorschau: Ein gerade mit *Als AL-Label anlegen* erzeugtes Label zeigt bis zum nächsten AL-Build seinen Text statt `#Error`
+- AL-Labels, -Spalten und `add()`-Blöcke übernehmen das Zeilenende der AL-Datei (CRLF unter Windows)
+- Tastatur: Nach dem direkten Texteditor (Ctrl+Enter/Escape), einem Kontextmenü oder einem daraus geöffneten Dialog bleibt
+  der Fokus auf der Designfläche; Shift+F10 und die Kontextmenütaste öffnen das Menü des ausgewählten Elements
+  (vorher kein Menü, unter macOS gar keine Reaktion)
+- Per Drag-and-drop oder Klick eingefügte Elemente ragen nicht mehr über den rechten Rand von Textkörper bzw.
+  Listen-Rechteck hinaus (der Textkörper wurde breiter, gedruckt entstanden Leerseiten)
+- Designer: Textfelder verwenden die Zeilenhöhe der Schrift wie Vorschau und PDF (vorher 1,2-fach; Unterlängen und
+  Unterstriche wurden in niedrigen Feldern früher abgeschnitten als in der Ausgabe)
+- Geteilter Editor bzw. schnelles Schließen und Wiederöffnen: Befehle aus Titelleiste und CodeLens gingen an den zuletzt
+  geöffneten statt an den fokussierten Designer, und das Schließen eines Designers konnte den anderen derselben Datei
+  abmelden (Befehle wirkten dann nicht mehr)
+- Excel-Export: Zahlen behalten das Format des Textfelds (N0, N2, F, P, D und eigene Muster wie `#,##0.00`) statt eines
+  einheitlichen `#,##0.##` (Excel zeigte 167,1 statt 167,10 und 530, mit Komma); Datumswerte werden echte Excel-Daten im
+  Datumsformat statt Text (Excel markierte sie als „Textdatum“)
+- `THIRD_PARTY_NOTICES.md` wird mit LF erzeugt – unter Windows (`core.autocrlf`) veränderte jeder Build die Datei, und
+  `npm run publish:github` brach deshalb nach dem Paketbau ab
+- *Report in BC ausführen* (on-prem): Die URL wurde aus `server` der launch.json ohne Webclient-Port gebildet
+  (`http://localhost/BC290/?report=…` → HTTP 500, der Webclient einer BC-Installation von der DVD läuft auf Port 8080).
+  Die Adresse kommt jetzt wie bei der AL-Erweiterung (`usePublicURLFromServer`) aus den Metadaten des
+  Developer-Endpunkts (`webEndpoint` = `PublicWebBaseUrl`), mit Windows-Anmeldung; ohne Antwort wie bisher.
+  Die Server-Adresse aus der launch.json des Arbeitsbereichs wird dabei nur als normalisierte http(s)-URL und als
+  Daten an PowerShell übergeben, nie als Teil des Befehls
+- *Als AL-Label anlegen* in einem Report ohne `labels`-Block legte ihn direkt hinter `dataset` an, vor `requestpage`/
+  `rendering` – der AL-Compiler (BC 29) lehnt das ab (AL0926 „expected section order is: dataset, requestpage,
+  rendering, labels“). Der Block steht jetzt hinter dem letzten dieser Abschnitte
+- Vorschaudaten aus Business Central 29 (*Senden an › Microsoft Excel-Dokument (nur Daten)*) ergaben 0 Zeilen:
+  BC schreibt die Arbeitsmappe mit Namespace-Präfix (`<x:row>`, `<x:c>`), das der Leser nicht kannte
+- Vorschau mit generierten Daten für Layouts, die der AL-Compiler geschrieben hat (ohne `rd:TypeName`): Firmenname,
+  Beschreibung, Belegnummer und Datum erschienen als Zahlen, weil `=Fields!X.Value</Value>` als Vergleich `<` galt.
+  Spalten mit `…Format`-Begleitspalte gelten jetzt als Dezimalzahlen, `NoOf…` als Zahlen
+- Vorschau wie der Berichtsviewer von Business Central: Der Wert eines ausgeblendeten Textfelds wird nur ausgewertet,
+  wenn ein Ausdruck ihn über `ReportItems` liest. `=Code.SetData(…)` als Wert eines ausgeblendeten Textfelds füllte
+  bisher den Seitenkopf in der Vorschau, in BC blieb er leer. Das Beispiel `Verkaufsrechnung.rdlc` ruft `SetData` jetzt
+  wie die Base App im `Hidden`-Ausdruck auf (in BC 29 gegengeprüft)
+- Deutsche Base-App-Layouts: Feldnamen mit Umlauten (`Fields!…auswählen_Caption`) ergaben in der Vorschau `#Error` und
+  in der Prüfung „Feld existiert nicht“; `Code.PageNo` für eine `Shared`-Variable galt als „nicht definiert“;
+  `Microsoft.VisualBasic.Strings.Len(…)` (Mahnung) und `.Replace`/`.StartsWith`/`.EndsWith`/`.IndexOf` an Texten
+  werden ausgewertet
+- Standardformate `d`, `g` und `G` mit vierstelligem Jahr und ohne Komma vor der Uhrzeit wie in .NET/Business Central
+  (`24.01.2028` statt `24.01.28`) – in Vorschau, PDF und Word-Export
+- Word-Export: Seitenumbrüche des Berichts (z. B. ein Beleg je Seite) bleiben erhalten, und Word öffnet die Datei nicht
+  mehr im Kompatibilitätsmodus
+- Excel-Export: Das Währungsformat `C` behält das Währungssymbol (`4.380,50 €` statt `4.380,50`)
 
 ## [0.1.0] – 2026-10-17
 

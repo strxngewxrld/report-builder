@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as RPointerEvent, DragEvent as RDragEvent, MouseEvent as RMouseEvent } from 'react';
 import { DRAG_MIME, DragPayload, currentDrag, useCommand, useEditor } from '../editor';
 import { embeddedImages, imageUrl } from '../images';
@@ -167,7 +167,7 @@ export function Designer() {
       (dx, dy, ev) => setDrag({ kind: 'frame', section: kind, draw: !!tool, box: normalize(snap(x, ev), snap(y, ev), snap(x + dx, ev), snap(y + dy, ev)) }),
       (dx, dy, ev, moved) => {
         if (tool) {
-          let box = moved ? normalize(snap(x, ev), snap(y, ev), snap(x + dx, ev), snap(y + dy, ev)) : { left: snap(x), top: snap(y), ...DEFAULT_SIZE[tool] };
+          let box = moved ? normalize(snap(x, ev), snap(y, ev), snap(x + dx, ev), snap(y + dy, ev)) : fit({ left: snap(x), top: snap(y), ...DEFAULT_SIZE[tool] }, report.width);
           if (tool === 'line' && moved) {
             // Lines snap to horizontal/vertical when drawn roughly that way.
             if (Math.abs(dy) < Math.abs(dx) / 4) box = { ...box, height: 0 };
@@ -302,6 +302,12 @@ export function Designer() {
     e.dataTransfer.dropEffect = 'copy';
   };
 
+  /** A dropped item's box kept inside its container: a frame past the right edge would widen the body (blank pages). */
+  const fit = <B extends { left: number; width: number }>(box: B, width: number): B => {
+    const w = Math.min(box.width, width);
+    return { ...box, width: w, left: Math.max(0, Math.min(box.left, width - w)) };
+  };
+
   const onSectionDrop = (e: RDragEvent<HTMLDivElement>, kind: SectionKind) => {
     const p = payloadOf(e);
     if (!p) return;
@@ -327,7 +333,7 @@ export function Designer() {
         return;
       }
       if (p.kind === 'image') {
-        const img = createItem(r, 'image', { ...at, width: 1.5, height: 0.75 }) as ImageItem;
+        const img = createItem(r, 'image', fit({ ...at, width: 1.5, height: 0.75 }, r.width)) as ImageItem;
         Object.assign(img, { source: 'Embedded', value: p.name, sizing: 'FitProportional' });
         items.push(img);
         created = img.name;
@@ -336,7 +342,7 @@ export function Designer() {
       const value = p.kind === 'field' ? `=First(Fields!${p.field}.Value, "${p.dataSet}")`
         : p.kind === 'parameter' ? `=Parameters!${p.name}.Value`
         : `=Globals!${p.name}`;
-      const tb = makeTextbox(r, value, undefined, { ...at, width: 1.5, height: 0.25 });
+      const tb = makeTextbox(r, value, undefined, fit({ ...at, width: 1.5, height: 0.25 }, r.width));
       if (p.kind === 'field') applyFieldFormat(r, tb, p.dataSet, p.field);
       items.push(tb);
       created = tb.name;
@@ -357,10 +363,12 @@ export function Designer() {
       let created = '';
       ed.commit(r => {
         const tt = locate(r, t.name)!.item as TableItem;
-        const cellRect = cellAt(tt.rows[row], col)!.cell;
+        const entry = cellAt(tt.rows[row], col)!;
+        const cellRect = entry.cell;
         if (cellRect.type !== 'rectangle') return false;
         const value = p.kind === 'field' ? `=Fields!${p.field}.Value` : p.kind === 'parameter' ? `=Parameters!${p.name}.Value` : `=Globals!${p.name}`;
-        const tb = makeTextbox(r, value, undefined, { ...at, width: 1.5, height: 0.25 });
+        const cellWidth = tt.columns.slice(entry.col, entry.col + entry.span).reduce((a, b) => a + b, 0);
+        const tb = makeTextbox(r, value, undefined, fit({ ...at, width: 1.5, height: 0.25 }, cellWidth));
         if (p.kind === 'field') applyFieldFormat(r, tb, tt.dataSetName || p.dataSet, p.field);
         cellRect.items.push(tb);
         created = tb.name;
@@ -399,6 +407,23 @@ export function Designer() {
    * Right click: selects the item (unless it is part of the selection) and lets the event through to VS Code, which
    * shows the native context menu. The commands then act on the selection.
    */
+  // The native menu takes the focus out of the webview and leaves it on <body>: give it back to the design surface
+  // when the webview is focused again, so the keyboard keeps working after Escape.
+  useEffect(() => {
+    let restore: HTMLElement | null = null;
+    const onMenu = () => {
+      const el = document.activeElement as HTMLElement | null;
+      restore = el?.closest('.designer') ? el : null;
+    };
+    const onFocus = () => {
+      if (restore?.isConnected && (!document.activeElement || document.activeElement === document.body)) restore.focus({ preventScroll: true });
+      restore = null;
+    };
+    window.addEventListener('contextmenu', onMenu, true);
+    window.addEventListener('focus', onFocus);
+    return () => { window.removeEventListener('contextmenu', onMenu, true); window.removeEventListener('focus', onFocus); };
+  }, []);
+
   const onContext = (e: RMouseEvent, item: ReportItem | null) => {
     const native = e.nativeEvent as MouseEvent & { handled?: boolean };
     if (native.handled) return;
@@ -533,7 +558,19 @@ export function Designer() {
   return (
     <div className={`designer ${ed.tool ? 'tool-active' : ''}`} {...vsContext({ preventDefaultContextMenuItems: true, selectionCount: ed.selection.length })}
       tabIndex={0} role="application" aria-roledescription={l10n.t('design surface')} aria-describedby="designer-help"
-      aria-label={l10n.t('Design surface of the report')}>
+      aria-label={l10n.t('Design surface of the report')}
+      onKeyDown={e => {
+        // Shift+F10 / context menu key: the browser targets the focused surface, which has no menu of its own (and macOS
+        // does not map Shift+F10 at all) – open the menu of the selected item instead, else that of the body
+        if (e.target !== e.currentTarget || !(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+        e.preventDefault();
+        const name = ed.selection[ed.selection.length - 1];
+        const target = (name && e.currentTarget.querySelector<HTMLElement>(`[data-name="${CSS.escape(name)}"]`)) || e.currentTarget.querySelector<HTMLElement>('.section-body');
+        if (!target) return;
+        target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        const r = target.getBoundingClientRect();
+        target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + Math.min(r.width / 2, 16), clientY: r.top + Math.min(r.height / 2, 16) }));
+      }}>
       <div id="designer-help" className="sr-only">
         {l10n.t('Tab and Shift+Tab select the next or previous item, the arrow keys move, Alt+arrow keys resize, with Shift in small steps. Enter or F2 edits the text, Delete deletes, Escape clears the selection. Shift+F10 opens the context menu.')}
       </div>
@@ -751,10 +788,19 @@ function TextContent({ tb, r }: { tb: TextboxItem; r: RenderProps }) {
         defaultValue={tb.value}
         onFocus={e => e.currentTarget.select()}
         onPointerDown={e => e.stopPropagation()}
-        onBlur={e => done(e.currentTarget.value)}
+        onBlur={e => { if (!e.currentTarget.dataset.cancelled) done(e.currentTarget.value); }}
         onKeyDown={e => {
-          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); }
+          // closing from the keyboard: focus back to the design surface, so Tab/Enter/F2/arrows keep working
+          const surface = e.currentTarget.closest<HTMLElement>('.designer');
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            // moving the focus blurs the editor before it unmounts: that blur must not commit
+            e.currentTarget.dataset.cancelled = 'true';
+            done(null);
+            surface?.focus({ preventScroll: true });
+          }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); surface?.focus({ preventScroll: true }); }
         }}
       />
     );

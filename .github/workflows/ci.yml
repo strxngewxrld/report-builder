@@ -15,7 +15,11 @@ permissions:
 jobs:
   test:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,20 +30,34 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - name: Integrationstests (VS Code unter xvfb)
+        if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:vscode
         env:
           BC_RB_TIMEOUT_SCALE: '3'
       - name: Lokalisierung Deutsch (Bundle bis in die Webview)
+        if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:vscode
         env:
           BC_RB_TIMEOUT_SCALE: '3'
           BC_RB_TEST_LANGUAGE: de
           BC_RB_ONLY: Lokalisierung
+      - name: Integrationstests (VS Code unter Windows)
+        if: runner.os == 'Windows'
+        run: npm run test:vscode
+        env:
+          BC_RB_TIMEOUT_SCALE: '3'
+      - name: Deutsche Webview unter Windows
+        if: runner.os == 'Windows'
+        run: npm run test:vscode
+        env:
+          BC_RB_TIMEOUT_SCALE: '3'
+          BC_RB_TEST_LANGUAGE: de
+          BC_RB_ONLY: 'Lokalisierung|UI:'
       - name: VSIX bauen und prüfen
         run: npm run package
       - uses: actions/upload-artifact@v4
         with:
-          name: bc-report-builder
+          name: bc-report-builder-${{ runner.os }}
           path: artifacts/*.vsix
           if-no-files-found: error
 

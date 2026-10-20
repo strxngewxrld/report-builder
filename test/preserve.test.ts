@@ -82,7 +82,7 @@ test('textboxes with several differently formatted runs stay untouched', () => {
 
 test('visibility, ZIndex and other unmodelled item children survive regeneration', () => {
   const out = edit(bc, r => { (locate(r, 'SetData_Header') ?? locate(r, 'PageHdr_Company'))!.item.left += 0; });
-  assert.ok(out.includes('<Hidden>true</Hidden>'));
+  assert.ok(out.includes('<Hidden>=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)</Hidden>'));
   const xml = bc.replace('<rd:DefaultName>PageNo</rd:DefaultName>', '<rd:DefaultName>PageNo</rd:DefaultName><ZIndex>2</ZIndex><Visibility><Hidden>=Globals!PageNumber = 1</Hidden></Visibility><DataElementOutput>NoOutput</DataElementOutput>');
   assert.notEqual(xml, bc);
   const out2 = edit(xml, r => { (locate(r, 'PageNo')!.item as TextboxItem).value = '="S. " & Globals!PageNumber'; });
@@ -163,7 +163,8 @@ test('Rich-Text-Textfeld: Textteile lesen, einzeln ändern, hinzufügen, entfern
 });
 
 test('empty elements written as <X></X> keep that form', () => {
-  const xml = bc.replace(/^(\s*)(<rd:DefaultName>PageNo<\/rd:DefaultName>)/m, '$1$2\n$1<Visibility></Visibility>');
+  const xml = bc.replace(/^([ \t]*)(<rd:DefaultName>PageNo<\/rd:DefaultName>)/m,
+    `$1$2${bc.includes('\r\n') ? '\r\n' : '\n'}$1<Visibility></Visibility>`);
   assert.ok(xml !== bc);
   assert.equal(serializeRdl(parseRdl(xml, dom), dom), xml);
   const out = edit(xml, r => { (locate(r, 'PageHdr_Company')!.item as TextboxItem).value = '=1'; });

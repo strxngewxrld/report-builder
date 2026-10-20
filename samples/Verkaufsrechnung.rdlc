@@ -212,7 +212,7 @@
                                 <Paragraph>
                                   <TextRuns>
                                     <TextRun>
-                                      <Value>=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)</Value>
+                                      <Value>=Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value</Value>
                                       <Style />
                                     </TextRun>
                                   </TextRuns>
@@ -225,7 +225,7 @@
                               <Height>0.45cm</Height>
                               <Width>4cm</Width>
                               <Visibility>
-                                <Hidden>true</Hidden>
+                                <Hidden>=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)</Hidden>
                               </Visibility>
                               <Style>
                                 <Border>

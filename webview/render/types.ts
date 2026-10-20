@@ -43,6 +43,8 @@ export interface RBox extends RBase {
   kind: 'box';
   /** Textbox content; absent for rectangles. */
   paragraphs?: RPara[];
+  /** Style/Format of a textbox with a single value (evaluated), e.g. "N2" – keeps number formats in exports. */
+  format?: string;
   children?: RNode[];
   canGrow: boolean;
   vAlign: 'top' | 'middle' | 'bottom';

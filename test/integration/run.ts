@@ -15,6 +15,9 @@ const candidates = [
   '/Applications/Visual Studio Code.app/Contents/MacOS/Electron',
   '/usr/share/code/code',
   `${process.env.LOCALAPPDATA}\\Programs\\Microsoft VS Code\\Code.exe`,
+  ...[process.env.ProgramFiles, process.env['ProgramFiles(x86)']]
+    .filter((p): p is string => !!p)
+    .map(p => join(p, 'Microsoft VS Code', 'Code.exe')),
 ].filter((p): p is string => !!p && existsSync(p));
 
 async function main() {

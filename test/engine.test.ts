@@ -55,12 +55,22 @@ test('grouped Business Central document: one instance per document, nested lines
   assert.deepEqual(find(table, 'DocumentNo').flatMap(texts), ['103001', '103002']);
 });
 
-test('visibility: hidden items are evaluated but hidden; conditional visibility per instance', () => {
+test('visibility: hidden values only when read (ReportItems), as in Business Central; conditional visibility per instance', () => {
   const r = renderReport(bc, { dom, mode: 'preview', data: { DataSet_Result: rows } });
   const table = r.body.nodes[0];
+  // Base App pattern: Code.SetData in the Hidden expression (returns True)
   const setData = find(table, 'SetData_Header') as RBox[];
   assert.ok(setData.every(n => n.hidden));
-  assert.deepEqual(setData.map(n => n.values?.[0][1]), [true, true]);
+  assert.deepEqual(setData.map(n => n.values?.[0][1]), [null, null], 'nothing reads the value');
+  const read = renderReport(bc.replace('<Value>="Seite " &amp; Globals!PageNumber</Value>', '<Value>=ReportItems!SetData_Header.Value</Value>'), { dom, mode: 'preview', data: { DataSet_Result: rows } });
+  assert.deepEqual((find(read.body.nodes[0], 'SetData_Header') as RBox[]).map(n => n.values?.[0][1]), ['CRONUS AG±103001', 'CRONUS AG±103002']);
+  // "=Code.SetData(…)" as the value of a textbox with Hidden=true: BC 29 never evaluates it, the page header stays empty
+  const valueOnly = bc.replace('<Value>=Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value</Value>', '<Value>=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)</Value>')
+    .replace('<Hidden>=Code.SetData(Fields!CompanyName.Value + Chr(177) + Fields!No_SalesInvHdr.Value, 1)</Hidden>', '<Hidden>true</Hidden>');
+  assert.notEqual(valueOnly, bc);
+  const empty = renderReport(valueOnly, { dom, mode: 'preview', data: { DataSet_Result: rows } });
+  const page = { number: 1, total: 2, overallNumber: 1, overallTotal: 2, version: Number.MAX_SAFE_INTEGER, reportItems: new Map() };
+  assert.deepEqual(empty.renderSection('header', page)!.nodes.flatMap(texts), ['', '', 'Seite 1']);
   // "Bereits bezahlt" only for the paid document
   assert.deepEqual((find(table, 'PaidInfo') as RBox[]).map(n => n.hidden), [true, false]);
 });
@@ -123,4 +133,23 @@ test('group End breaks include the last instance and conditional disabling is ev
   assert.ok(!table.rows[3].breakAfter, 'the paid group disables its page break');
   const allEnabled = renderReport(xml.replace('<Disabled>=Fields!Paid.Value</Disabled>', ''), { dom, mode: 'preview', data: { DataSet_Result: rows } });
   assert.equal((allEnabled.body.nodes[0] as RTable).rows[3].breakAfter, true, 'End applies after the final group too');
+});
+
+test('generated preview data for a layout written by the AL compiler (no rd:TypeName): texts stay texts', async () => {
+  const { mockRows, numericFieldsFromLayout } = await import('../webview/sampleData');
+  const { parseRdl } = await import('../webview/rdl');
+  // alc removes the type names; "=Fields!CompanyName.Value</Value>" must not count as a comparison
+  const compiled = bc.replace(/\s*<rd:TypeName>[^<]*<\/rd:TypeName>/g, '');
+  const numeric = numericFieldsFromLayout(compiled);
+  for (const f of ['CompanyName', 'No_SalesInvHdr', 'DocDate_SalesInvHdr', 'Description_Line']) assert.ok(!numeric.has(f), `${f} ist kein Zahlenfeld`);
+  assert.ok(numeric.has('LineAmount_Line'), 'Sum(Fields!LineAmount_Line.Value)');
+  assert.ok(numericFieldsFromLayout('<Value>=IIf(Fields!Qty.Value &gt; 0, 1, 2)</Value><Value>=2 * Fields!Price.Value</Value>').has('Qty'));
+  assert.ok(numericFieldsFromLayout('<Value>=2 * Fields!Price.Value</Value>').has('Price'));
+  const [row] = mockRows(parseRdl(compiled, dom).dataSets[0], 1, numeric);
+  assert.equal(typeof row.CompanyName, 'string');
+  assert.equal(typeof row.Description_Line, 'string');
+  // "<Column>Format" next to a column: a decimal in Business Central, also when the layout only shows it in IIf(…)
+  const [netChange] = mockRows({ name: 'D', fields: [{ name: 'NetChange', dataField: 'NetChange', typeName: '' }, { name: 'NetChangeFormat', dataField: 'NetChangeFormat', typeName: '' }] } as never, 1);
+  assert.equal(typeof netChange.NetChange, 'number');
+  assert.equal(typeof netChange.NetChangeFormat, 'string');
 });

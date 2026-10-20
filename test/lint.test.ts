@@ -34,6 +34,18 @@ test('unknown references with positions and items', () => {
   assert.equal(issues[2].item, 'PageHdr_DocNo');
 });
 
+test('no false positives on German Base App layouts: umlauts in field names, Code.SharedVariable', () => {
+  const de = layout
+    .replace('<Field Name="Description_Line">', '<Field Name="Auswählen_Caption">')
+    .replace('=Fields!Description_Line.Value', '=Fields!Auswählen_Caption.Value')
+    .replace('<Code>', '<Code>Public Shared PageNo As Integer\n')
+    .replace('=Code.GetData(2,1)', '=Code.PageNo');
+  assert.deepEqual(lintLayout(de, null), []);
+  const typo = lintLayout(de.replace('=Fields!Auswählen_Caption.Value', '=Fields!Auswählen_Captoin.Value'), null);
+  assert.equal(typo.length, 1);
+  assert.match(typo[0].message, /"Auswählen_Captoin"/);
+});
+
 test('AL ahead of or behind the layout', () => {
   // the layout uses the new column before the project was built
   const usesNew = layout.replace('=Fields!Description_Line.Value', '=Fields!YourReference.Value');

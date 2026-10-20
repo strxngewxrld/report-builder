@@ -78,8 +78,11 @@ type FromWebview =
  */
 export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   static readonly viewType = 'bcReportBuilder.designer';
-  /** Open designers by document URI. */
-  private static sessions = new Map<string, DesignerSession>();
+  /**
+   * Open designers by document URI, the most recently focused last (a split editor shows one document twice). A closed
+   * designer's dispose can arrive after the same file was opened again: it removes only its own session.
+   */
+  private static sessions = new Map<string, DesignerSession[]>();
   private static activeSession: DesignerSession | undefined;
   /** Installed fonts for the PDF export, indexed on first use. */
   private static fonts = new FontIndex();
@@ -89,12 +92,12 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
 
   /** The designer in the active editor tab, if any. */
   static get active() { return ReportEditorProvider.activeSession; }
-  static sessionFor(uri: vscode.Uri) { return ReportEditorProvider.sessions.get(uri.toString()); }
+  static sessionFor(uri: vscode.Uri) { return ReportEditorProvider.sessions.get(uri.toString())?.at(-1); }
 
   /** Pushes changed settings to all open designers. */
   static broadcastConfig() {
     const config = readConfig();
-    for (const s of ReportEditorProvider.sessions.values()) s.post({ type: 'config', config });
+    for (const list of ReportEditorProvider.sessions.values()) for (const s of list) s.post({ type: 'config', config });
   }
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly service: LayoutService) {}
@@ -123,10 +126,17 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
         await vscode.window.showTextDocument(vscode.Uri.parse(bc.alUri), { selection: new vscode.Range(pos, pos), viewColumn: vscode.ViewColumn.Beside });
       },
     };
-    ReportEditorProvider.sessions.set(document.uri.toString(), session);
+    const key = document.uri.toString();
+    const register = (keep: boolean) => {
+      const others = (ReportEditorProvider.sessions.get(key) ?? []).filter(s => s !== session);
+      if (keep) ReportEditorProvider.sessions.set(key, [...others, session]);
+      else if (others.length) ReportEditorProvider.sessions.set(key, others);
+      else ReportEditorProvider.sessions.delete(key);
+    };
+    register(true);
     const updateActive = () => {
       const S = ReportEditorProvider;
-      if (panel.active) S.activeSession = session;
+      if (panel.active) { S.activeSession = session; register(true); }
       else if (S.activeSession === session) S.activeSession = undefined;
       else return;
       S.changed.fire(S.activeSession);
@@ -263,7 +273,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     watcher.onDidCreate(sendSampleData);
     watcher.onDidDelete(sendSampleData);
     panel.onDidDispose(() => {
-      ReportEditorProvider.sessions.delete(document.uri.toString());
+      register(false);
       if (ReportEditorProvider.activeSession === session) {
         ReportEditorProvider.activeSession = undefined;
         ReportEditorProvider.changed.fire(undefined);

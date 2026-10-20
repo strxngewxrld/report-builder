@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { checkXml, describeLayout, formatProblems, itemLines, previewText, validateLayout } from '../src/tools/inspect';
 import { arrangeItems, chartOf, editChart, editTable, insertItems, setPageLayout } from '../src/tools/edit';
+import { parseAl } from '../src/al/parser';
+import { buildBcContext } from '../src/al/context';
+import { applyInsert, insertLabel } from '../src/al/edit';
+import { bindRows } from '../webview/sampleData';
 
 const sales = readFileSync('samples/Umsatzbericht.rdl', 'utf8');
 const sample = JSON.parse(readFileSync('samples/Umsatzbericht.data.json', 'utf8'));
@@ -33,7 +37,7 @@ test('validation: clean samples, then XML errors, duplicates, blank pages, field
   assert.deepEqual(validateLayout(invoice), []);
   assert.deepEqual(checkXml(sales), []);
   // a closing tag dropped while editing: xmldom repairs it silently, the check names the lines
-  const broken = sales.replace('      </Body>\n', '');
+  const broken = sales.replace(/      <\/Body>\r?\n/, '');
   assert.notEqual(broken, sales);
   assert.match(formatProblems(validateLayout(broken)), /error L\d+ \(xml\): <\/ReportSection> does not match <Body> opened in line \d+/);
   assert.match(checkXml('<a><b>x < y</b></a>')[0].message, /Malformed tag/);
@@ -54,6 +58,25 @@ test('preview as text: sample rows, totals, formats, page footer', () => {
   assert.match(p, /Seite: "Seite 1 von 1"/);
   // Business Central: generated rows, nested document tables
   assert.match(previewText(invoice, { maxRows: 5 }), /DataSet_Result: 8 generated rows[\s\S]*Table_Lines \(table, 3 rows\)/);
+});
+
+test('preview with the AL data items: line columns missing on the header row still reach the line table', () => {
+  const rep = parseAl(readFileSync('samples/src/Verkaufsrechnung.Report.al', 'utf8'))[0];
+  const fields = [...invoice.matchAll(/<Field Name="([^"]+)"/g)].map(m => m[1]);
+  const bc = buildBcContext(rep, undefined, { fields, parameters: [] }, 'file:///r.al', 'r.al');
+  const p = previewText(invoice, { bc, locale: 'de-DE' });
+  assert.match(p, /Table_Lines \(table, 5 rows\):\s*\|[^\n]*\|\s*\| Line 1 \| \d+ \|[^\n]*\|\s*\| Line 2 \|/);
+  assert.doesNotMatch(p, /\| Gesamt \|  \|  \| 0,00 \|/);
+  // a label just created in AL (not yet compiled into the layout's parameters): its text, not #Error
+  let al = readFileSync('samples/src/Verkaufsrechnung.Report.al', 'utf8');
+  al = applyInsert(al, insertLabel(al, parseAl(al)[0], 'TotalLbl', 'Gesamtbetrag'));
+  const withLabel = buildBcContext(parseAl(al)[0], undefined, { fields, parameters: [] }, 'file:///r.al', 'r.al');
+  const labelled = previewText(invoice.replace('<Value>Gesamt</Value>', '<Value>=Parameters!TotalLbl.Value</Value>'), { bc: withLabel, locale: 'de-DE' });
+  assert.match(labelled, /\| Gesamtbetrag \|/);
+  assert.doesNotMatch(labelled, /#Error/);
+  // the same for sample rows: columns only from later rows
+  assert.deepEqual(bindRows({ name: 'D', fields: [{ name: 'A', dataField: 'A', typeName: '' }, { name: 'B', dataField: 'B', typeName: '' }] } as never,
+    [{ A: 1 }, { A: 2, B: 'x' }]), [{ A: 1, B: null }, { A: 2, B: 'x' }]);
 });
 
 test('editTable: group, column from a field, cell, sort – structure stays consistent', () => {

@@ -8,6 +8,7 @@ export interface TextInsert { offset: number; text: string }
 const lineStart = (src: string, offset: number) => src.lastIndexOf('\n', offset - 1) + 1;
 const indentOf = (src: string, offset: number) => /^[ \t]*/.exec(src.slice(lineStart(src, offset)))![0];
 const unit = (src: string) => (/\n\t/.test(src) && !/\n {4}\S/.test(src) ? '\t' : '    ');
+const eol = (src: string) => /\r\n/.test(src) ? '\r\n' : '\n';
 
 /** AL identifier, quoted when needed ("No." → "No.", Description → Description). */
 export const alIdentifier = (name: string) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : `"${name.replace(/"/g, '')}"`);
@@ -40,8 +41,8 @@ function beforeClose(src: string, span: AlSpan, line: string): TextInsert {
   const closeIndent = indentOf(src, span.close);
   const at = lineStart(src, span.close);
   // closing brace on the same line as other code ("{ }"): break the line
-  if (src.slice(at, span.close).trim()) return { offset: span.close, text: `\n${closeIndent}${unit(src)}${line}\n${closeIndent}` };
-  return { offset: at, text: `${closeIndent}${unit(src)}${line}\n` };
+  if (src.slice(at, span.close).trim()) return { offset: span.close, text: `${eol(src)}${closeIndent}${unit(src)}${line}${eol(src)}${closeIndent}` };
+  return { offset: at, text: `${closeIndent}${unit(src)}${line}${eol(src)}` };
 }
 
 export interface LabelOptions { comment?: string; maxLength?: number; locked?: boolean }
@@ -56,17 +57,22 @@ export function labelEntry(name: string, text: string, o: LabelOptions = {}): st
   ].filter(Boolean).join(', ') + ';';
 }
 
-/** Adds a label to the report's labels block, creating the block after the dataset when there is none. */
+/**
+ * Adds a label to the report's labels block. Without one, the block is created after the dataset, request page and
+ * rendering sections – the AL compiler expects this order (AL0926 "expected section order is: dataset, requestpage,
+ * rendering, labels").
+ */
 export function insertLabel(src: string, report: AlReport, name: string, text: string, options: LabelOptions = {}): TextInsert {
   const entry = labelEntry(name, text, options);
   if (report.labelsSpan) return beforeClose(src, report.labelsSpan, entry);
   const span = report.span!;
   const inner = indentOf(src, span.close) + unit(src);
-  const block = `${inner}labels\n${inner}{\n${inner}${unit(src)}${entry}\n${inner}}\n`;
-  if (report.datasetSpan) {
-    // after the dataset's closing brace
-    const end = src.indexOf('\n', report.datasetSpan.close);
-    return { offset: end < 0 ? src.length : end + 1, text: `\n${block}` };
+  const block = [`${inner}labels`, `${inner}{`, `${inner}${unit(src)}${entry}`, `${inner}}`, ''].join(eol(src));
+  const before = [report.datasetSpan, report.requestPageSpan, report.renderingSpan].filter((s): s is AlSpan => !!s);
+  if (before.length) {
+    // after the closing brace of the last of these sections
+    const end = src.indexOf('\n', Math.max(...before.map(s => s.close)));
+    return { offset: end < 0 ? src.length : end + 1, text: `${eol(src)}${block}` };
   }
   return { offset: lineStart(src, span.close), text: block };
 }
@@ -77,7 +83,7 @@ export function insertColumns(src: string, target: { columnInsert?: number; span
   const indent = target.span && at <= target.span.open + 1
     ? indentOf(src, target.span.open) + unit(src)
     : indentOf(src, Math.max(0, at - 1));
-  return { offset: at, text: columns.map(c => `\n${indent}column(${alIdentifier(c.name)}; ${c.source}) { }`).join('') };
+  return { offset: at, text: columns.map(c => `${eol(src)}${indent}column(${alIdentifier(c.name)}; ${c.source}) { }`).join('') };
 }
 
 /** A new `add(DataItem) { columns }` block in a report extension's dataset. */
@@ -86,7 +92,7 @@ export function insertAddBlock(src: string, report: AlReport, dataItem: string, 
   const inner = indentOf(src, report.datasetSpan.close) + unit(src);
   const lines = [`add(${alIdentifier(dataItem)})`, '{', ...columns.map(c => `${unit(src)}column(${alIdentifier(c.name)}; ${c.source}) { }`), '}'];
   const at = lineStart(src, report.datasetSpan.close);
-  return { offset: at, text: lines.map(l => `${inner}${l}\n`).join('') };
+  return { offset: at, text: lines.map(l => `${inner}${l}${eol(src)}`).join('') };
 }
 
 /** The data item of a report by name (case-insensitive), searched depth first. */

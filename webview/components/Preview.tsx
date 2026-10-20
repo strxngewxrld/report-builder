@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { bcMockRows, previewParameters } from '../bc';
+import { alOnlyParameters, bcMockRows, previewParameters } from '../bc';
 import { useCommand, useEditor } from '../editor';
 import type { Row } from '../expr';
 import { Parameter } from '../model';
@@ -135,9 +135,9 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
 
   const result = useMemo(() => renderReport(xml, {
     dom: browserDom, mode: 'preview', data, reportName: fileName.replace(/\.rdlc?$/i, ''),
-    parameters: Object.fromEntries(report.parameters.map(p => [p.name, convertParam(p, applied[p.name] ?? '')])),
+    parameters: { ...alOnlyParameters(report, bc), ...Object.fromEntries(report.parameters.map(p => [p.name, convertParam(p, applied[p.name] ?? '')])) },
     toggled, userSort,
-  }), [xml, data, applied, fileName, report.parameters, toggled, userSort]);
+  }), [xml, data, applied, fileName, report.parameters, bc, toggled, userSort]);
   const nodes = useMemo(() => indexNodes(result.body.nodes), [result]);
 
   // measure the continuous body, then break it into pages

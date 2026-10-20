@@ -17,7 +17,13 @@ export function useDialogFocus() {
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     el.addEventListener('keydown', trap);
-    return () => { el.removeEventListener('keydown', trap); previous.current?.focus(); };
+    return () => {
+      el.removeEventListener('keydown', trap);
+      // opened from a native menu or a VS Code command, nothing in the webview had the focus: back to the design surface
+      const back = previous.current && previous.current !== document.body && previous.current.isConnected
+        ? previous.current : document.querySelector<HTMLElement>('.designer');
+      back?.focus({ preventScroll: true });
+    };
   }, []);
   return ref;
 }

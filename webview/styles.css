@@ -350,7 +350,8 @@ button.link:hover { background: none; text-decoration: underline; }
 .item { position: absolute; overflow: visible; }
 .item.textbox { overflow: hidden; outline: 1px dotted #b5b5b5; outline-offset: -1px; cursor: default; }
 .item.textbox.cell { outline: none; }
-.item.textbox .text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.2; }
+/* the font's own line height, as in the preview (which measures text for page breaks) */
+.item.textbox .text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: normal; }
 .item.textbox .text.expr { color: inherit; }
 .item.textbox.cell .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item.rectangle, .item.image { outline: 1px dotted #b5b5b5; outline-offset: -1px; }
