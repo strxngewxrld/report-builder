@@ -114,6 +114,16 @@ test('Business Central standard functions', () => {
   assert.equal(ev('=Code.HideOnce()'), false);
 });
 
+test('Code.Variable reads a Shared variable (German Base App: VATViesDeclarationTaxDE, VendorPaymentsList)', () => {
+  const code = new CodeModule('Public Shared PageNo As Integer = 1\nPublic Function NextPage()\n  PageNo = PageNo + 1\n  Return PageNo\nEnd Function');
+  const ev = (e: string) => evaluate(e, ctx(code));
+  assert.equal(ev('=Code.PageNo'), 1);
+  assert.equal(ev('=Code.NextPage()'), 2);
+  assert.equal(ev('=IIF(Code.PageNo = 0, 0, Code.PageNo)'), 2);
+  assert.deepEqual(code.variableNames, ['pageno']);
+  assert.throws(() => ev('=Code.Missing'), /not defined/);
+});
+
 test('SetData/GetData with Chr(177)-separated values', () => {
   const code = new CodeModule(BC_CODE);
   const ev = (e: string) => evaluate(e, ctx(code));

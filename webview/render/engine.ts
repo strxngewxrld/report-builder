@@ -91,6 +91,8 @@ class Engine {
   private design: boolean;
   /** Names of all report items (ReportItems! to an item not evaluated yet gives Nothing instead of an error). */
   private itemNames = new Set<string>();
+  /** Items some expression reads with ReportItems – their value is needed even while they are hidden. */
+  private referenced = new Set<string>();
 
   constructor(xml: string, private opts: RenderOptions) {
     const doc = opts.dom.parse(xml.replace(/^﻿/, ''));
@@ -116,6 +118,7 @@ class Engine {
       }
     }
     for (const t of xml.matchAll(/<ToggleItem>([^<]+)<\/ToggleItem>/g)) this.toggleSources.add(t[1].trim());
+    for (const m of xml.matchAll(/ReportItems\s*(?:!\s*(\w+)|\(\s*(?:"|&quot;)([^"&]+)(?:"|&quot;)\s*\))/g)) this.referenced.add(m[1] ?? m[2]);
     // stable instance ids: the position of a row in its dataset (independent of what is expanded)
     for (const [ds, rows] of Object.entries(opts.data ?? {})) rows.forEach((r, i) => { if (r && typeof r === 'object') this.rowIds.set(r, `${ds}:${i}`); });
     this.base = {
@@ -324,15 +327,21 @@ class Engine {
   private textbox(el: Element, ctx: EvalContext, base: Omit<RBox, 'kind' | 'css' | 'canGrow' | 'vAlign'>): RBox {
     const name = base.name;
     const values: unknown[] = [];
+    const formats: (string | undefined)[] = [];
+    // Like Business Central's report viewer: the value of a hidden textbox is only evaluated when an expression reads
+    // it (ReportItems). "=Code.SetData(…)" as the value of a hidden textbox has no effect there – the page header stays
+    // empty; the Base App calls SetData in the Hidden expression instead.
+    const skip = !this.design && base.hidden && !this.referenced.has(name);
     const paragraphs: RPara[] = elements(child(el, 'Paragraphs'), 'Paragraph').map(p => {
       const runs = elements(child(p, 'TextRuns'), 'TextRun').map(r => {
         const valueEl = child(r, 'Value');
         const raw = valueEl?.textContent ?? '';
         // EvaluationMode="Constant": text starting with "=" is literal
-        const value = valueEl?.getAttribute('EvaluationMode') === 'Constant' ? raw : this.eval(raw, ctx, name);
+        const value = skip ? null : valueEl?.getAttribute('EvaluationMode') === 'Constant' ? raw : this.eval(raw, ctx, name);
         values.push(value);
         const style = child(r, 'Style');
         const format = this.design ? undefined : this.styleValue(text(style, 'Format'), ctx, name);
+        formats.push(format || undefined);
         const shown = this.design ? toStr(value) : formatValue(value, format ?? '', ctx.locale);
         return { text: shown, css: this.styleCss(style, ctx, name), value };
       });
@@ -353,6 +362,7 @@ class Engine {
       vAlign: va === 'middle' ? 'middle' : va === 'bottom' ? 'bottom' : 'top',
       values: [[name, value]], seq: this.code?.version ?? 0,
     };
+    if (values.length === 1 && formats[0]) node.format = formats[0];
     if (!this.design && this.toggleSources.has(name)) {
       const key = this.toggleKey(name, ctx);
       const initial = this.evalBool(child(el, 'ToggleImage', 'InitialState'), ctx, l10n.t('{0} (toggle image)', name));

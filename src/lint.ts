@@ -73,7 +73,7 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
   if (decl.code) {
     try {
       const mod = new CodeModule(decl.code.text);
-      functions = new Set(mod.functionNames.map(f => f.toLowerCase()));
+      functions = new Set([...mod.functionNames.map(f => f.toLowerCase()), ...mod.variableNames]);
       for (const e of mod.errors) issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: l10n.t('Code block: {0}', e) });
     } catch (e) {
       issues.push({ offset: decl.code.start, length: 6, severity: 'warning', code: 'code', message: l10n.t('The code block cannot be read: {0}', (e as Error).message) });
@@ -83,7 +83,7 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
   const add = (m: RegExpMatchArray, nameStart: number, name: string, severity: Severity, code: string, message: string) =>
     issues.push({ offset: m.index! + nameStart, length: name.length, severity, code, message });
 
-  for (const m of text.matchAll(/\bFields!(\w+)/gi)) {
+  for (const m of text.matchAll(/\bFields!([\p{L}\p{N}_]+)/giu)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
     const at = m[0].length - name.length;
@@ -103,7 +103,7 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
       : al ? l10n.t('Field "{0}" exists neither in the dataset nor in the AL report "{1}".', name, al.reportName) : l10n.t('Field "{0}" does not exist in the dataset.', name));
   }
 
-  for (const m of text.matchAll(/\bParameters!(\w+)/gi)) {
+  for (const m of text.matchAll(/\bParameters!([\p{L}\p{N}_]+)/giu)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
     const at = m[0].length - name.length;
@@ -121,14 +121,14 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
     add(m, at, name, 'error', 'unknown-parameter', other ? l10n.t('Parameter "{0}" does not exist – probably "{1}" is meant.', name, other) : l10n.t('Parameter "{0}" does not exist.', name));
   }
 
-  for (const m of text.matchAll(/\bCode\.(\w+)/g)) {
+  for (const m of text.matchAll(/\bCode\.([\p{L}\p{N}_]+)/gu)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
     if (!functions) add(m, 5, name, 'error', 'no-code', l10n.t('Code.{0}: the report has no code block.', name));
     else if (!functions.has(name.toLowerCase())) add(m, 5, name, 'error', 'unknown-code', l10n.t('Code.{0} is not defined in the code block.', name));
   }
 
-  for (const m of text.matchAll(/\bReportItems!(\w+)/g)) {
+  for (const m of text.matchAll(/\bReportItems!([\p{L}\p{N}_]+)/gu)) {
     if (inCode(m.index!)) continue;
     const name = m[1];
     if (!items.has(name)) add(m, 12, name, 'error', 'unknown-item', l10n.t('Report item "{0}" does not exist.', name));
@@ -143,7 +143,7 @@ export function lintLayout(text: string, al: AlExpectation | null): LintIssue[] 
       const value = decode(v[1]).trim();
       const at = bodyAt + v.index! + v[0].indexOf('>') + 1;
       // decimal columns come with "<Column>Format" (currency/precision at run time)
-      const field = /^=\s*(?:(?:Sum|First|Last|Min|Max|Avg)\()?Fields!(\w+)\.Value(?:\s*(?:,\s*"[^"]*")?\))?$/i.exec(value)?.[1];
+      const field = /^=\s*(?:(?:Sum|First|Last|Min|Max|Avg)\()?Fields!([\p{L}\p{N}_]+)\.Value(?:\s*(?:,\s*"[^"]*")?\))?$/iu.exec(value)?.[1];
       if (field && !hasFormat && fields.has(`${field}Format`)) {
         issues.push({ offset: at, length: v[1].length, severity: 'info', code: 'bc-format',
           message: l10n.t('"{0}" shows "{1}" without a number format. Business Central provides "{1}Format" for it (currency/decimals) – set Format to =Fields!{1}Format.Value.', tb[1], field) });
@@ -175,7 +175,7 @@ export function lintAlUsage(rep: AlReport, layoutTexts: string[]): { line: numbe
   if (!layoutTexts.length) return [];
   const used = new Set<string>();
   for (const t of layoutTexts) {
-    for (const m of t.matchAll(/\b(?:Fields|Parameters)!(\w+)/g)) used.add(m[1]);
+    for (const m of t.matchAll(/\b(?:Fields|Parameters)!([\p{L}\p{N}_]+)/gu)) used.add(m[1]);
   }
   const out: { line: number; character: number; length: number; message: string }[] = [];
   for (const c of allColumns(mergedDataItems(rep))) {

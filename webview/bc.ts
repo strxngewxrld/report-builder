@@ -83,6 +83,18 @@ export function previewParameters(r: Report, bc: BcContext | null): Record<strin
   return Object.fromEntries(r.parameters.map(p => [p.name, fromAl.get(p.name) ?? (p.defaultValue || (isBcLayout(r, bc) ? p.prompt || p.name : ''))]));
 }
 
+/**
+ * Labels and captions declared in AL but not yet in the layout's parameters (e.g. just created with "Create as AL
+ * Label"; the AL compiler adds them on the next build): their texts, so the preview shows what the report will show.
+ */
+export function alOnlyParameters(r: Report, bc: BcContext | null): Record<string, string> {
+  const inLayout = new Set(r.parameters.map(p => p.name.toLowerCase()));
+  return Object.fromEntries([
+    ...(bc?.labels ?? []).map(l => [l.name, l.text] as [string, string]),
+    ...(bc?.captions ?? []).map(c => [c.name, c.text] as [string, string]),
+  ].filter(([name]) => !inLayout.has(name.toLowerCase())));
+}
+
 const NUMERIC = /(amount|amt|qty|quantity|price|cost|balance|total|number|count|pct|percent|lineno|line_no|entryno|entry_no|discount|vat|rate|weight|volume)/i;
 
 function value(f: { name: string; typeName: string }, record: number, item: string, numeric?: Set<string>): unknown {

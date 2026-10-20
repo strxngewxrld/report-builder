@@ -4,7 +4,7 @@ import type { Row } from './expr';
 const WORDS = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa'];
 
 /** Field names that are numeric in Business Central datasets (which often carry no type information). */
-const NUMERIC_NAME = /(amount|amt|qty|quantity|price|cost|balance|total|number|count|pct|percent|lineno|line_no|entryno|entry_no|_no_$|discount|vat|rate|weight|volume)/i;
+const NUMERIC_NAME = /(amount|amt|qty|quantity|price|cost|balance|total|number|count|pct|percent|lineno|line_no|entryno|entry_no|_no_$|discount|vat|rate|weight|volume|noof)/i;
 
 /**
  * Fields the layout uses as numbers (aggregates, Code.Blank…, conversions, arithmetic) – for generated data when the
@@ -14,7 +14,8 @@ export function numericFieldsFromLayout(xml: string): Set<string> {
   const out = new Set<string>();
   const fn = /\b(?:Sum|Avg|Min|Max|RunningValue|StDev|Var|BlankZero|BlankPos|BlankNeg|BlankZeroAndPos|BlankNegAndZero|CalcPct|CDec|CDbl|CInt|CLng|CSng|FormatNumber|FormatCurrency|FormatPercent)\s*\(\s*Fields!(\w+)/gi;
   for (const m of xml.matchAll(fn)) out.add(m[1]);
-  for (const m of xml.matchAll(/Fields!(\w+)\.Value\s*[-*\/<>]|[-*\/<>]\s*Fields!(\w+)\.Value/g)) out.add(m[1] ?? m[2]);
+  // in the layout XML a comparison is written &lt; / &gt; – a literal "<" is the next tag ("=Fields!Name.Value</Value>")
+  for (const m of xml.matchAll(/Fields!(\w+)\.Value\s*(?:[-*\/]|&lt;|&gt;)|(?:[-*\/]|&lt;|&gt;)\s*Fields!(\w+)\.Value/g)) out.add(m[1] ?? m[2]);
   return out;
 }
 
@@ -34,7 +35,10 @@ function mockValue(f: Field, i: number, numeric?: Set<string>): unknown {
 
 /** Generated rows for a dataset without sample data, so the preview shows something meaningful. */
 export function mockRows(ds: DataSet, count = 8, numeric?: Set<string>): Row[] {
-  return Array.from({ length: count }, (_, i) => Object.fromEntries(ds.fields.map(f => [f.name, mockValue(f, i, numeric)])));
+  // Business Central writes "<Column>Format" next to every decimal column
+  const names = new Set(ds.fields.map(f => f.name));
+  const decimals = new Set([...numeric ?? [], ...ds.fields.filter(f => names.has(`${f.name}Format`)).map(f => f.name)]);
+  return Array.from({ length: count }, (_, i) => Object.fromEntries(ds.fields.map(f => [f.name, mockValue(f, i, decimals)])));
 }
 
 /** Maps sample rows (keyed by column name) to field names via DataField, and turns ISO date strings into Dates. */
@@ -42,7 +46,8 @@ export function mockRows(ds: DataSet, count = 8, numeric?: Set<string>): Row[] {
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
 
 export function bindRows(ds: DataSet, rows: Record<string, unknown>[]): Row[] {
-  const keys = rows[0] ? Object.keys(rows[0]) : [];
+  // all rows' columns: in Business Central data a header row lacks its lines' columns
+  const keys = [...new Set(rows.flatMap(r => Object.keys(r)))];
   const byNorm = new Map(keys.map(k => [norm(k), k]));
   const column = (f: DataSet['fields'][number]) =>
     [f.dataField, f.name].find(k => k && keys.includes(k)) ?? byNorm.get(norm(f.dataField || f.name)) ?? byNorm.get(norm(f.name));

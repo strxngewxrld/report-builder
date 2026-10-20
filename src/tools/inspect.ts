@@ -3,7 +3,7 @@
 // Pure: works on the XML text with @xmldom/xmldom, no VS Code API.
 
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { BcContext, bcMockRows, previewParameters } from '../../webview/bc';
+import { BcContext, alOnlyParameters, bcMockRows, previewParameters } from '../../webview/bc';
 import { Row, validateExpression } from '../../webview/expr';
 import { hiddenOf } from '../../webview/layoutTools';
 import { embeddedImages } from '../../webview/images';
@@ -334,7 +334,7 @@ function render(text: string, r: Report, opts: PreviewOptions) {
   const defaults = previewParameters(r, opts.bc ?? null);
   const result = renderReport(text, {
     dom: nodeDom, mode: 'preview', data, reportName: opts.reportName, locale: opts.locale,
-    parameters: Object.fromEntries(r.parameters.map(p => [p.name, convertParam(p, opts.parameters?.[p.name] ?? defaults[p.name] ?? '')])),
+    parameters: { ...alOnlyParameters(r, opts.bc ?? null), ...Object.fromEntries(r.parameters.map(p => [p.name, convertParam(p, opts.parameters?.[p.name] ?? defaults[p.name] ?? '')])) },
   });
   return { result, data, generated };
 }

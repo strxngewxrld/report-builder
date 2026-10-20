@@ -46,7 +46,8 @@ const isDateFormat = (code: string) => /[dmyhs]/i.test(code.replace(/"[^"]*"|\[[
 
 export function parseXlsx(buf: Uint8Array): Record<string, unknown>[] {
   const files = unzip(buf);
-  const text = (name: string) => { const f = files.get(name); return f ? new TextDecoder().decode(f) : ''; };
+  // element prefixes removed: Business Central 29 writes "<x:row><x:c …><x:v>" (namespace prefix x), Excel "<row><c><v>"
+  const text = (name: string) => { const f = files.get(name); return f ? new TextDecoder().decode(f).replace(/<(\/?)[A-Za-z][\w.-]*:/g, '<$1') : ''; };
 
   const shared = [...text('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)]
     .map(m => decodeXml([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(t => t[1]).join('')));

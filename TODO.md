@@ -2,15 +2,13 @@
 
 Was zur vollständigen Anwendung noch fehlt – nach Priorität. Erledigtes steht abgehakt darunter.
 
-Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md) und
+Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md), [Windows-Abnahme](docs/RELEASE-TEST-2026-10-20-WINDOWS.md) und
 [UI-Testmatrix mit verbleibenden Lücken](docs/UI-TESTMATRIX.md). Grüne Tests ersetzen keine vollständige manuelle Abnahme.
 
 ## Erstes Release (1.0.0)
 - [x] Offene Änderungen committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
-- [ ] Nach den lokalen QA-Korrekturen erneut committen/pushen und CI für genau diesen Release-Stand prüfen (aktuell uncommittete Änderungen)
 - [ ] Screenshot `media/preview.png` (Designer mit Gliederung und Berichtsdaten) für README und Release-Seite
 - [x] Lokalen Release-Dry-Run ausführen: `npm run publish:github -- --dry-run` (18.10.2026: Typecheck, 143/143 Tests und VSIX-Prüfung grün; nichts veröffentlicht)
-- [ ] Nach bestandener Abnahme und grüner CI veröffentlichen: `npm run publish:github`
 - [ ] Remote-Fenster (WSL/SSH/Dev Container): Update-Installation prüfen (VSIX liegt im temporären Ordner des Extension-Hosts)
 - [ ] Eingeschränkter Modus: `untrustedWorkspaces.supported: true` überdenken – *Report in BC ausführen* und *Projekt
       erstellen* starten AL-Befehle; ggf. `limited` mit Beschreibung wie bei Sheets
@@ -26,12 +24,16 @@ Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md) und
 - [ ] Native Farbauswahl und weitere Gestaltungs-/Drag-Varianten prüfen (Schriften, Rahmen, Zahlenformate, Raster/Zoom, Container); große/defekte Bilder testen
 - [ ] Kopieren/Einfügen zwischen mehreren geöffneten Berichten nativ prüfen
 - [ ] Mehrdatei-Rückgängig von Hand prüfen: *Als AL-Label anlegen* und *Spalte umbenennen* (VS Code fragt „in allen Dateien?“)
-- [ ] Symbolpakete gegen eine echte Base Application (`.alpackages/*.app`) prüfen – getestet nur mit selbst gebautem Paket
-- [ ] „Report in Business Central ausführen“ gegen echte Umgebungen prüfen (Cloud-Sandbox, Docker, On-Prem)
-- [ ] PDF-Export in Acrobat sowie eingebettete Schriften unter Windows/Linux prüfen (macOS Vorschau bereits geprüft)
+- [x] Symbolpakete gegen eine echte Base Application (`.alpackages/*.app`) prüfen – BC 29 on-prem, *Felder als Spalten
+  hinzufügen* mit „Sales Invoice Line“ (Windows-Abnahme 20.10.)
+- [ ] „Report in Business Central ausführen“ gegen echte Umgebungen prüfen (Cloud-Sandbox, Docker; On-Prem mit
+  Windows-Anmeldung geprüft)
 
 
 ## Erledigt
+- [x] Windows-Abnahme (20.10.2026): 41/41 Integrationstests auf Englisch und mit deutschem VS Code, natives Durchklicken mit
+      echter Maus/Tastatur (AltGr, Zwischenablage, Kontextmenüs, Drag-and-drop, native Dialoge, Pfade mit Umlauten/`&`, CRLF);
+      neun Fehler behoben, Details im Windows-Protokoll
 - [x] Dialog-UI im echten VS-Code-Webview per DOM-Eingaben/Klicks testen: 39/39 Integrationstests, zusätzlich alle 16 neuen UI-Abläufe auf Deutsch; 143/143 Unit-Tests
 - [x] Englischen Designer und geprüfte Dialoge visuell durchsehen; deutsche Oberfläche sowie Hell/Dunkel/hoher Kontrast und kleine Diagrammdialoge prüfen (keine Vollabnahme aller Varianten)
 - [x] Gruppen, Matrix, Diagrammdialog, Rich Text und Bilder über Webview-Tests prüfen; native Kontextmenüs, Listen-Rechteck-Drop, Inline-Text, Tabellenzellen verbinden/teilen sowie Designer-Auswahl/Größe/Ausrichtung per macOS MCP prüfen

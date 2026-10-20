@@ -30,7 +30,8 @@ export async function writeNotices(root) {
     const fallback = FALLBACK[`${name}@${pkg.version}`];
     if (!license && !fallback) throw new Error(`Missing license file for bundled dependency ${name}`);
     text += `\n## ${name} ${pkg.version} (${pkg.license})\n\n`;
-    text += (await readFile(license ? join(dir, license) : join(root, fallback), 'utf8')).trim() + '\n';
+    // LF only: a Windows checkout (core.autocrlf) has CRLF files, the generated file must not differ from the commit
+    text += (await readFile(license ? join(dir, license) : join(root, fallback), 'utf8')).replace(/\r\n?/g, '\n').trim() + '\n';
   }
   await writeFile(join(root, 'THIRD_PARTY_NOTICES.md'), text);
   console.log(`Third-party licenses: ${packages.size} bundled packages`);

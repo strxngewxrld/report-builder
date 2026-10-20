@@ -22,6 +22,19 @@ test('literals and fields', () => {
   assert.equal(ev('="a ""b"""'), 'a "b"');
 });
 
+test('identifiers with umlauts and members from German Base App layouts', () => {
+  const row = { Dreiecksgeschäfte__falls_JA__bitte_2_auswählen_Caption: 'Dreiecksgeschäfte\\falls JA', Code: '' };
+  assert.equal(ev('=Fields!Dreiecksgeschäfte__falls_JA__bitte_2_auswählen_Caption.Value', row), 'Dreiecksgeschäfte\\falls JA');
+  assert.equal(ev('=Fields!Dreiecksgeschäfte__falls_JA__bitte_2_auswählen_Caption.Value.ToString().Replace(chr(92), vbCrLf)', row), 'Dreiecksgeschäfte\nfalls JA');
+  assert.equal(designLabel('=Fields!Größe.Value'), '[Größe]');
+  assert.equal(validateExpression('=Fields!Größe.Value'), null);
+  // Sales/Reminder/Reminder.rdlc
+  assert.equal(ev('=Microsoft.VisualBasic.Strings.Len(Fields!Code.Value) = 0', row), true);
+  assert.equal(ev('=Microsoft.VisualBasic.Strings.Len(Fields!Name.Value)'), 4);
+  assert.equal(ev('="Anna".StartsWith("An") And "Anna".EndsWith("na")'), true);
+  assert.equal(ev('="Anna".IndexOf("n")'), 1);
+});
+
 test('operators and precedence', () => {
   assert.equal(ev('=1 + 2 * 3'), 7);
   assert.equal(ev('=(1 + 2) * 3'), 9);
@@ -77,6 +90,11 @@ test('.NET style formatting', () => {
   assert.equal(formatValue(5, '0.0 kg', 'en-US'), '5.0 kg');
   assert.match(formatValue(9.5, 'C', 'de-DE'), /9,50\s€/);
   assert.equal(formatValue(new Date(2026, 9, 16, 9, 5), 'yyyy-MM-dd HH:mm', 'de-DE'), '2026-10-16 09:05');
+  // standard date formats as .NET/Business Central: four-digit year, no comma before the time
+  assert.equal(formatValue(new Date(2028, 0, 24), 'd', 'de-DE'), '24.01.2028');
+  assert.equal(formatValue(new Date(2028, 0, 24), 'd', 'en-US'), '1/24/2028');
+  assert.equal(formatValue(new Date(2028, 0, 24, 14, 30), 'g', 'de-DE'), '24.01.2028 14:30');
+  assert.equal(formatValue(new Date(2028, 0, 24, 14, 30, 5), 'G', 'de-DE'), '24.01.2028 14:30:05');
   assert.equal(formatValue(null, 'N2'), '');
   assert.equal(formatValue('', 'C', 'de-DE'), '');
   assert.equal(formatValue('', 'N0', 'de-DE'), '');

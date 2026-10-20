@@ -58,3 +58,17 @@ test('rows by header: shared/inline strings, numbers, dates, booleans, gaps', ()
     { No_Customer: '20000', Name_Customer: null, Balance: -7, Due_Date: true },
   ]);
 });
+
+test('Business Central 29 "Excel (nur Daten)": elements with namespace prefix x:', () => {
+  const ns = 'xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const bc = zip({
+    'xl/workbook.xml': `<?xml version="1.0" encoding="utf-8"?><x:workbook ${ns}><x:sheets><x:sheet name="Data" sheetId="1"/><x:sheet name="CaptionData" sheetId="2"/></x:sheets></x:workbook>`,
+    'xl/styles.xml': `<x:styleSheet ${ns}><x:numFmts><x:numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></x:numFmts><x:cellXfs count="2"><x:xf numFmtId="0"/><x:xf numFmtId="164"/></x:cellXfs></x:styleSheet>`,
+    'xl/worksheets/sheet1.xml': `<x:worksheet ${ns}><x:sheetData>
+      <x:row r="1"><x:c r="A1" t="inlineStr"><x:is><x:t xml:space="preserve">No_SalesInvHdr</x:t></x:is></x:c><x:c r="B1" t="inlineStr"><x:is><x:t>DocDate_SalesInvHdr</x:t></x:is></x:c><x:c r="C1" t="inlineStr"><x:is><x:t>Description_Line</x:t></x:is></x:c><x:c r="D1" t="inlineStr"><x:is><x:t>LineAmount_Line</x:t></x:is></x:c></x:row>
+      <x:row r="2"><x:c r="A2" t="inlineStr"><x:is><x:t>103001</x:t></x:is></x:c><x:c r="B2" s="1"><x:v>46776</x:v></x:c><x:c r="C2" t="inlineStr"><x:is><x:t>Möbelmontage, Januar</x:t></x:is></x:c><x:c r="D2"><x:v>2075</x:v></x:c></x:row>
+    </x:sheetData></x:worksheet>`,
+    'xl/worksheets/sheet2.xml': `<x:worksheet ${ns}><x:sheetData><x:row r="1"><x:c r="A1" t="inlineStr"><x:is><x:t>Caption</x:t></x:is></x:c></x:row></x:sheetData></x:worksheet>`,
+  });
+  assert.deepEqual(parseXlsx(bc), [{ No_SalesInvHdr: '103001', DocDate_SalesInvHdr: '2028-01-24', Description_Line: 'Möbelmontage, Januar', LineAmount_Line: 2075 }]);
+});

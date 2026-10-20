@@ -39,6 +39,9 @@ const SYSTEM = Symbol('System');
 const STRING_NS = Symbol('String');
 const MATH_NS = Symbol('Math');
 const ARRAY_NS = Symbol('Array');
+/** Microsoft.VisualBasic.Strings.Len(…) and friends: the fully qualified names of the VB functions (Base App reminder). */
+const MICROSOFT_NS = Symbol('Microsoft');
+const VB_NS = Symbol('Microsoft.VisualBasic');
 
 /** The array of dimension `d` (1-based, as UBound's second argument): the first element's sub-array for d > 1. */
 function arrayDim(a: unknown, d: unknown): unknown[] {
@@ -100,8 +103,9 @@ function tokenize(src: string): Tok[] {
       if (end < 0) throw new Error(l10n.t('Unclosed date literal'));
       out.push({ t: 'date', v: new Date(src.slice(i + 1, end)) });
       i = end + 1;
-    } else if (/[A-Za-z_]/.test(c)) {
-      const m = /^[A-Za-z_]\w*/.exec(src.slice(i))!;
+    } else if (/[\p{L}_]/u.test(c)) {
+      // identifiers may contain letters of any script (German Base App columns like Fields!…auswählen_Caption)
+      const m = /^[\p{L}_][\p{L}\p{N}_]*/u.exec(src.slice(i))!;
       out.push({ t: 'id', v: m[0] });
       i += m[0].length;
     } else {
@@ -449,6 +453,16 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
     if (lname === 'array') return ARRAY_NS;
     throw new Error(l10n.t('{0} is not supported', `System.${name}`));
   }
+  if (obj === MICROSOFT_NS) {
+    if (lname === 'visualbasic') return VB_NS;
+    throw new Error(l10n.t('{0} is not supported', `Microsoft.${name}`));
+  }
+  if (obj === VB_NS) {
+    // modules (Strings, Interaction, Conversion, DateAndTime, Information) are only qualifiers
+    if (!args.length && ['strings', 'interaction', 'conversion', 'dateandtime', 'information', 'constants'].includes(lname)) return VB_NS;
+    if (lname in FUNCTIONS) return FUNCTIONS[lname](args, ctx);
+    throw new Error(l10n.t('{0} is not supported', `Microsoft.VisualBasic.${name}`));
+  }
   if (obj === STRING_NS) {
     switch (lname) {
       case 'isnullorempty': return isNothing(args[0]) || toStr(args[0]) === '';
@@ -507,6 +521,10 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
     case 'length': return toStr(obj).length;
     case 'substring': return toStr(obj).substr(toNum(args[0]), isNothing(args[1]) ? undefined : toNum(args[1]));
     case 'contains': return toStr(obj).includes(toStr(args[0]));
+    case 'replace': return toStr(args[0]) === '' ? toStr(obj) : toStr(obj).split(toStr(args[0])).join(toStr(args[1]));
+    case 'startswith': return toStr(obj).startsWith(toStr(args[0]));
+    case 'endswith': return toStr(obj).endsWith(toStr(args[0]));
+    case 'indexof': return toStr(obj).indexOf(toStr(args[0]));
     case 'year': return toDate(obj)?.getFullYear() ?? null;
     case 'month': return (toDate(obj)?.getMonth() ?? -2) + 1 || null;
     case 'day': return toDate(obj)?.getDate() ?? null;
@@ -531,6 +549,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       if (n.name === 'string') return STRING_NS;
       if (n.name === 'math') return MATH_NS;
       if (n.name === 'array') return ARRAY_NS;
+      if (n.name === 'microsoft') return MICROSOFT_NS;
       if (n.name in FUNCTIONS && ['now', 'today'].includes(n.name)) return FUNCTIONS[n.name]([], ctx);
       throw new Error(l10n.t("Unknown identifier '{0}'", n.name));
     }
@@ -647,11 +666,11 @@ export function validateExpression(value: string): string | null {
 export function designLabel(value: string): string {
   if (!value.startsWith('=')) return value;
   const src = value.slice(1).trim();
-  let m = /^Fields!(\w+)\.Value$/i.exec(src);
+  let m = /^Fields!([\p{L}\p{N}_]+)\.Value$/iu.exec(src);
   if (m) return `[${m[1]}]`;
-  m = /^(\w+)\(Fields!(\w+)\.Value\)$/i.exec(src);
+  m = /^(\w+)\(Fields!([\p{L}\p{N}_]+)\.Value\)$/iu.exec(src);
   if (m) return `[${m[1]}(${m[2]})]`;
-  m = /^Parameters!(\w+)\.Value$/i.exec(src);
+  m = /^Parameters!([\p{L}\p{N}_]+)\.Value$/iu.exec(src);
   if (m) return `[@${m[1]}]`;
   m = /^Globals!(\w+)$/i.exec(src);
   if (m) return `[&${m[1]}]`;
@@ -723,7 +742,12 @@ function formatDate(d: Date, fmt: string, locale?: string): string {
     g: { dateStyle: 'short', timeStyle: 'short' }, G: { dateStyle: 'short', timeStyle: 'medium' },
     f: { dateStyle: 'full', timeStyle: 'short' }, F: { dateStyle: 'full', timeStyle: 'medium' },
   };
-  if (standard[fmt]) return d.toLocaleString(locale, standard[fmt]);
+  if (standard[fmt]) {
+    if (!/^[dgG]$/.test(fmt)) return d.toLocaleString(locale, standard[fmt]);
+    // .NET short dates have a four-digit year and no comma before the time: "15.01.2026 14:30", "1/15/2026" (Intl: "15.01.26, 14:30")
+    return new Intl.DateTimeFormat(locale, standard[fmt]).formatToParts(d)
+      .map(p => (p.type === 'year' ? String(d.getFullYear()) : p.type === 'literal' && /^,\s+$/.test(p.value) ? ' ' : p.value)).join('');
+  }
   const pad = (v: number, n = 2) => String(v).padStart(n, '0');
   const name = (opts: Intl.DateTimeFormatOptions) => d.toLocaleString(locale, opts);
   return fmt.replace(/yyyy|yy|MMMM|MMM|MM|M|dddd|ddd|dd|d|HH|H|hh|h|mm|ss|tt|'[^']*'/g, tok => {
