@@ -280,6 +280,8 @@ Mit `XSD=<Pfad zu ReportDefinition.xsd 2010>` wird zusätzlich gegen das Schema 
 
 ## Entwicklung
 
+Für Entwicklung und Paketierung Node.js 24 verwenden (wie in der CI).
+
 ```sh
 npm install
 npm run build          # out/extension.js und out/webview.js (esbuild)
