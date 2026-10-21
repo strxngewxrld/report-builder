@@ -1,5 +1,7 @@
 # macOS-Nachprüfung am 21.10.2026
 
+[English](RELEASE-TEST-2026-10-21-MACOS.md) | Deutsch
+
 ## Ergebnis und Freigabe
 
 Für die geprüften macOS-Abläufe wurde kein Produktfehler bestätigt. Die Windows-/Copilot-Korrekturen

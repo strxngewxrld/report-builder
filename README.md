@@ -1,363 +1,360 @@
 # Business Central Report Builder
 
-Visueller Designer für RDLC-Layouts von Business-Central-Berichten (`.rdlc`, auch `.rdl`) in VS Code, angelehnt an den
-Microsoft Report Builder, mit der **Dokumentgliederung**, die es sonst nur im Berichts-Designer von Visual Studio gibt,
-und mit dem **AL-Report als Datenquelle**.
+English | [Deutsch](README.de.md)
 
-![Designer mit Gliederung sowie Berichtsdaten und Vorschau im geteilten Editor](media/preview.png)
+A visual designer for Business Central report layouts (`.rdlc` and `.rdl`) in VS Code, inspired by Microsoft
+Report Builder. It combines a searchable **document outline**, familiar layout tools and the **AL report as the
+source of the dataset**.
+
+![Designer with outline, report data and preview in a split editor](media/preview.png)
+
+## Documentation
+
+The [complete documentation index](docs/README.md) includes bilingual test reports, the UI test matrix and changelog.
+
+Start with **Business Central Report Builder: Getting Started** in the Command Palette. The native walkthrough
+opens an editable example with preview data and introduces design, preview, AL datasets and export. Its guides
+are included in the VSIX and work offline. English is the default; German guides are available as well.
+
+| Guide | English | Deutsch |
+| --- | --- | --- |
+| User guide: installation, design, AL, preview, export and troubleshooting | [User guide](docs/USER-GUIDE.md) | [Anwenderhandbuch](docs/ANWENDERHANDBUCH.md) |
+| Moving from standalone Microsoft Report Builder to VS Code | [Migration guide](docs/MIGRATION.md) | [Umstiegsanleitung](docs/UMSTIEG-REPORT-BUILDER.md) |
+| AI tools: all 14 tools, inputs, examples and verification | [AI tools](docs/AI-TOOLS.md) | [KI-Werkzeuge](docs/AI-TOOLS.de.md) |
 
 ## Installation
 
-Die Extension wird als VSIX über die [GitHub Releases](https://github.com/strxngewxrld/report-builder/releases) verteilt:
-Die Datei `bc-report-builder-<version>.vsix` des neuesten Releases herunterladen und in VS Code **Extensions: Install from
-VSIX…** ausführen, oder:
+Download `bc-report-builder-<version>.vsix` from [GitHub Releases](https://github.com/strxngewxrld/report-builder/releases).
+In VS Code, run **Extensions: Install from VSIX…**, or use:
 
 ```sh
 code --install-extension bc-report-builder-1.0.0.vsix
 ```
 
-Voraussetzung ist VS Code 1.95 oder neuer. Das Paket enthält alle Laufzeitabhängigkeiten.
+Requires VS Code 1.95 or newer. The package contains all runtime dependencies.
+Design and preview are available in Restricted Mode. Building projects, downloading symbols and running reports
+in Business Central require a trusted workspace.
 
-Im eingeschränkten Modus sind Entwurf und Vorschau verfügbar. Für Projekt-Build, Symbol-Download und das Ausführen
-von Berichten in Business Central muss dem Arbeitsbereich vertraut werden.
-
-**Updates**: Beim Start prüft die Extension, ob in den GitHub Releases eine neuere Version liegt, und bietet dann
-*Installieren* (lädt die VSIX, prüft die SHA-256-Prüfsumme von GitHub und installiert sie), *Release öffnen* oder *Diese
-Version überspringen* an. Dabei wird nur die öffentliche GitHub-API abgefragt; es werden keine Daten gesendet. Abschalten
-lässt sich das mit `bcReportBuilder.checkForUpdates`.
+**Updates:** At startup, the extension checks GitHub Releases and offers **Install**, **Open Release** or
+**Skip This Version**. Installation downloads the VSIX and checks its SHA-256 checksum against GitHub's metadata.
+The check queries the public GitHub API; it does not upload report data. Disable it with `bcReportBuilder.checkForUpdates`.
 
 ## Business Central
 
-### AL-Report als Datenquelle
-Das Dataset eines BC-Layouts erzeugt der AL-Compiler aus dem Report-Objekt. Der Designer findet den AL-Report, der das
-Layout verwendet (`rendering › layout › LayoutFile` oder `RDLCLayout`, auch in Report-Extensions), und zeigt unter
-*Berichtsdaten* statt SSRS-Datenquellen:
+### The AL report as the data source
 
-- **Datenelemente und Spalten** als Baum – auf die Fläche oder in Zellen ziehen, Doppelklick öffnet die Definition im AL-Code
-- **Labels und Beschriftungen** (`labels`, `IncludeCaption` → `<Spalte>Caption`) als Parameter
-- **„Build nötig“** bei Spalten/Labels, die das Layout-Dataset noch nicht enthält (Projekt erstellen, dann aktualisiert der Compiler das Layout)
+The AL compiler generates a BC layout's dataset from the report object. The designer finds the report referencing
+the layout through `rendering › layout › LayoutFile` or `RDLCLayout`, including report extensions. **Report Data** shows:
 
-Datenquellen-, Dataset- und Parameter-Dialoge sind für BC-Layouts ausgeblendet.
+- **Data items and columns** as a tree: drag them onto the canvas or into cells; double-click to open the AL definition.
+- **Labels and captions** (`labels`, `IncludeCaption` → `<Column>Caption`) as parameters.
+- A **Build** marker for columns or labels not yet present in the layout dataset. Build the project to let the compiler update it.
 
-### AL-Report aus dem Designer bearbeiten
-Was Report Builder und Visual Studio nicht können, weil sie den AL-Report nicht kennen:
+Data source, dataset and parameter dialogs are hidden for BC layouts.
 
-- **Felder als Spalten hinzufügen…** (Datenelement in *Berichtsdaten*, Kontextmenü oder ＋): Auswahl aus den Feldern der Tabelle –
-  aus Tabellen und Tabellenerweiterungen im Workspace und aus den Symbolpaketen (`.alpackages/*.app`, z. B. Base Application).
-  Die Spalten werden nach Base-App-Konvention benannt (`UnitPrice_Line`) und in das Datenelement bzw. in Report-Extensions in
-  `add(…)` eingefügt.
-- **Als AL-Label anlegen…** (Kontextmenü eines Textfelds mit festem Text): legt das Label im `labels`-Block an (bei Bedarf neu)
-  und setzt das Textfeld auf `=Parameters!<Label>.Value` – übersetzbar wie in der Base App.
-- **Projekt erstellen** (`AL: Package`) direkt aus dem Designer, wenn das Layout-Dataset veraltet ist
-- **Report in Business Central ausführen** (Editor-Titelleiste): öffnet den Report im Web-Client der Umgebung aus `.vscode/launch.json`
-  (Cloud, Docker, On-Prem), optional nach dem Veröffentlichen
-- **CodeLens im AL-Code**: an jeder Spalte und jedem Label „n× im Layout“ – Klick öffnet den Designer und wählt das Textfeld; am Report
-  „Layout im Designer öffnen“
-- **Kontextmenü in *Berichtsdaten***: *Zur Definition wechseln*, *Ausdruck kopieren* (`=Fields!…Value`)
-- **Spalte umbenennen (AL und Layouts)…** (im AL-Editor auf dem Spaltennamen oder in *Berichtsdaten*): ändert die Spalte im
-  AL-Report und in allen RDLC-Layouts des Reports und seiner Report-Extensions – Feldverweise, `<Spalte>Format`,
-  `<Spalte>Caption`, die Dataset-Deklaration und gleichnamige Textfelder; ein Rückgängig macht alles rückgängig
-- **Labels für Übersetzer**: beim Anlegen optional `Comment`, `MaxLength` und `Locked`; Hinweis auf die XLIFF-Dateien
-  (`TranslationFile` in `app.json`, Sprachdateien unter `Translations/`). Label und Textfeld ändern sich in einem Schritt –
-  ein Rückgängig nimmt beides zurück
-- **Layouts des Reports** in *Berichtsdaten*: alle Layouts des Reports und seiner Report-Extensions; RDLC-Layouts öffnen im
-  Designer, Word- und Excel-Layouts in Word bzw. Excel (der Designer bearbeitet sie nicht), fehlende Dateien sind markiert
+### Edit AL from the designer
 
-### BC-Konventionen beim Gestalten
-- Felder mit `<Spalte>Format` (Dezimalspalten) bekommen beim Ziehen `Format = =Fields!<Spalte>Format.Value` und werden rechtsbündig
-- Kopfzellen bekommen die übersetzte Beschriftung `=Parameters!<Spalte>Caption.Value` (IncludeCaption) statt eines festen Texts
-- Datenelemente lassen sich als Tabelle auf die Fläche ziehen; `…Format`-Hilfsfelder werden dabei ausgelassen
+- **Add Fields as Columns…** on a data item lets you select table fields from the workspace and symbol packages
+  (`.alpackages/*.app`, such as Base Application). Columns follow Base App naming conventions (`UnitPrice_Line`)
+  and are inserted into the data item, or into an `add(…)` block for report extensions.
+- **Create AL Label…** on a textbox with literal text creates an entry in the report's `labels` block and changes
+  the textbox to `=Parameters!<Label>.Value`.
+- **Build Project (AL: Package)** regenerates an outdated layout dataset.
+- **Run Report in Business Central** opens the report in the web client configured in `.vscode/launch.json`
+  (cloud, Docker or on-premises), optionally after publishing.
+- **CodeLens** on AL columns and labels shows their usage count in layouts. Click to select the textbox;
+  the report itself has an action to open its layout.
+- **Go to Definition** and **Copy Expression** are available in Report Data.
+- **Rename Column (AL and Layouts)…** updates AL and all RDLC layouts of the report and its extensions, including
+  field references, `<Column>Format`, `<Column>Caption`, dataset declarations and same-named textboxes, in one undoable edit.
+- Labels support `Comment`, `MaxLength` and `Locked`. Translations use XLIFF files in `Translations/` with
+  `TranslationFile` enabled in `app.json`. Label creation and the textbox change share one undo step.
+- **Report Layouts** lists layouts from the report and its extensions. RDLC opens in the designer; Word and Excel
+  layouts open in their respective applications. Missing files are marked.
 
-### Prüfung (Problembereich)
-Für alle Layouts im Workspace, bei jeder Änderung:
+### BC conventions when designing
 
-| Meldung | Schwere |
-|---|---|
-| `Fields!`, `Parameters!`, `Code.`, `ReportItems!` verweist auf etwas, das es nicht gibt (mit Hinweis bei falscher Groß-/Kleinschreibung) | Fehler |
-| Spalte/Label ist im AL-Report, aber noch nicht im Layout-Dataset | Warnung |
-| Feld/Parameter ist im Layout, aber nicht mehr im AL-Report (fällt beim nächsten Build weg) | Warnung |
-| Layout-Dataset insgesamt veraltet | Hinweis |
-| AL-Spalte bzw. Label wird in keinem RDLC-Layout verwendet (im AL-Editor ausgegraut; nur wenn alle Layouts des Reports RDLC sind) | Hinweis |
-| Dezimalfeld ohne Zahlenformat, obwohl BC `<Spalte>Format` liefert | Information |
-| Fester Text in einem BC-Layout (wird nicht übersetzt – als Label anlegen) | Information |
+- Dragging a decimal field with a `<Column>Format` companion sets `Format = =Fields!<Column>Format.Value` and right alignment.
+- Table headers use `=Parameters!<Column>Caption.Value` when `IncludeCaption` provides a translated caption.
+- Dragging a data item onto the canvas creates a table, leaving out `…Format` helper fields.
 
-Die Funde erscheinen auch in der Dokumentgliederung am betroffenen Element.
+### Validation in the Problems panel
 
-### Vorschau
-Die Vorschau wertet das RDL wie der Berichtsserver aus – auch die gruppierten Tablix-Bereiche typischer BC-Layouts:
-Gruppen und Details, verschachtelte Tablixe, Filter, Sortierung, Kopfzellen, `ColSpan`, Sichtbarkeit (auch je Gruppe),
-Rahmen je Seite, Textläufe mit eigener Formatierung, Datenbank- und eingebettete Bilder.
+Validation runs for workspace layouts whenever they change. Findings also appear on the affected outline item.
 
-- **Seitenumbruch** nach Seitengröße und Rändern, Gruppenumbrüche (`PageBreak`), `KeepTogether`, wiederholte Kopfzeilen (`RepeatOnNewPage`), `ResetPageNumber`
-- **Seitenkopf/-fuß je Seite**: Seitenzahlen, `ReportItems!` der Seite, `First/Last(ReportItems!…)`
-- **Messgeräte** (rund und linear) mit Skala, Bereichen und Zeiger
-- **`<Code>`-Block** wird interpretiert (VB-Teilmenge, auch `For`/`For Each`/`While`/`Do`-Schleifen, `Select Case`, `Try`/`Catch`/`Finally`, `With` und Arrays): `BlankZero`…, `SetData`/`GetData` (der Seitenkopf sieht den Stand seiner Seite), `IsNewPage`/`GetGroupPageNumber`, `SetRowColor`, `CalcPct` und eigene Funktionen
-- Ausdrücke: Aggregate inkl. Bereich und `RunningValue`, `Previous`, `RowNumber`, `IIf`/`Switch`/`Choose`, Text-, Datums- und Formatfunktionen, `Convert.*`, `System.String.*`, `Math.*`, .NET-Formatcodes
-- **Daten**: *Berichtsdaten › Vorschaudaten laden* liest **Excel** (z. B. aus BC: Report ausführen › *Senden an › Microsoft Excel-Dokument (nur Daten)*), CSV oder JSON; gespeichert als `<Layout>.data.json`. Ohne Daten erzeugt die Vorschau Beispielzeilen entlang der AL-Datenelemente (Kopf- und Zeilendatensätze wie im echten BC-Dataset).
-- **PDF-Export** direkt aus der Vorschau (Text, Rahmen, Hintergründe als Vektoren; Bilder und Diagramme eingebettet; die
-  installierten TrueType-/OpenType-Schriften des Berichts als Teilmenge eingebettet, mit allen Unicode-Zeichen der Schrift);
-  **Drucken** öffnet die paginierte Vorschau im Browser; Export als HTML, Excel und Word
+| Finding | Severity |
+| --- | --- |
+| Unknown `Fields!`, `Parameters!`, `Code.` or `ReportItems!` reference, including case mismatch hints | Error |
+| AL column/label is not yet in the layout dataset | Warning |
+| Layout field/parameter no longer exists in AL and will disappear on the next build | Warning |
+| Layout dataset is outdated overall | Hint |
+| Unused AL column/label across all layouts, when all report layouts are RDLC | Hint |
+| Decimal field lacks a number format although BC provides `<Column>Format` | Information |
+| Literal text in a BC layout that should be a translatable label | Information |
 
-### Tabellen, Gruppen, Listen und Matrizen
-Alle Tablix-Bereiche der 379 Base-App-Layouts sind im Designer bearbeitbar – auch die BC-typische Belegliste (gruppierte
-Tablix, je Beleg ein Rechteck mit Kopfdaten und der verschachtelten Zeilentabelle):
+### Preview
 
-- **Gruppen**: *Übergeordnete/Untergeordnete Gruppe hinzufügen*, Gruppenkopf/-fuß, Gruppe löschen (mit oder ohne Zeilen),
-  Gruppeneigenschaften (Gruppierung, Sortierung, Filter, Seitenumbruch mit „Seitenzahl je Gruppe neu“, Ausblenden, Umschalten)
-- Bereich **Gruppierung** unter der Entwurfsfläche (Zeilen- und Spaltengruppen wie in Report Builder), Gruppenklammern an den Zeilen
-- **Zeilen** innerhalb/außerhalb der Gruppe einfügen, löschen; Zeileneigenschaften *Auf jeder Seite wiederholen*,
-  *Bei Gruppe halten*, *Ausblenden*, *Umschalten durch*
-- **Zellen verbinden/teilen**; Spalten einfügen/löschen berücksichtigt verbundene Zellen
-- **Listen**: Felder auf das Rechteck einer Listenzelle ziehen legt dort ein Textfeld an; Elemente darin sind verschiebbar
-- **Matrix einfügen** (Zeilen-/Spaltengruppe, Wert, Gesamtzeile/-spalte); Kopfzellen und Ecke sind normale Textfelder
-- **Diagramm einfügen** und *Diagrammeigenschaften*: Typ (Säulen, auch gestapelt und 100 %, Balken, Linie, geglättete Linie,
-  Fläche, gestapelte Fläche, Punkte, Kreis, Ring, Trichter, Pyramide, Bereich, Bereichssäulen/-balken, Polar, Netz), Kategorie,
-  Reihen mit eigenem Typ (Kombidiagramm) und zweiter Werteachse, Farbe der Datenpunkte (auch als Ausdruck je Punkt),
-  Markierungen, berechnete Reihen (gleitende Durchschnitte, Mittelwert, Median – gestrichelt), Achsen (Titel, Zahlenformat,
-  Minimum/Maximum), Datenbeschriftungen, Titel, Legende, Palette; bestehende Diagramme werden gezielt gepatcht, alles andere
-  bleibt wortgleich
-- **Spaltengruppen** zu Tabellen und Matrizen hinzufügen (*Gruppe hinzufügen › Spaltengruppe*) – auch zu Tabellen mit
-  Spaltenköpfen und um bestehende Spaltengruppen herum (neue Kopfebene, die Ecke wächst mit) – und löschen (nur Gruppe oder
-  mit Spalten); Spalteneigenschaften *Ausblenden* und *Umschalten durch*
-- **Textteile**: Textfelder mit mehreren formatierten Teilen (z. B. „Seite **1**“) – jeder Teil mit Text/Ausdruck und Formatierung;
-  *Textteile › Aufteilen* zerlegt ein Textfeld (`="Seite " & Globals!PageNumber` → zwei Teile), *In einfaches Textfeld* fasst sie
-  wieder zusammen
-- **Aktionen** an Textfeldern und Bildern: *Gehe zu URL*, *Gehe zu Lesezeichen*, *Gehe zu Bericht* (Drillthrough mit Parametern)
-  und das Lesezeichen des Elements; in der Vorschau öffnen Links extern (nur http/https/mailto) und Lesezeichen-Links springen
-- **Eingebettete Bilder** (z. B. Firmenlogo) unter *Berichtsdaten › Bilder*: einbetten (PNG, JPEG, GIF, BMP, SVG), umbenennen
-  (Bildelemente werden angepasst), löschen, auf die Fläche ziehen; im Designer sichtbar
+The local preview evaluates grouped Tablix structures used by BC reports: groups and details, nested tables,
+filters, sorting, headers, `ColSpan`, conditional visibility, individual borders, formatted text runs and
+database/embedded images.
 
-### Quellerhaltendes Speichern
-Damit Layouts in Git kleine, nachvollziehbare Diffs ergeben: Unveränderte Elemente werden wortgleich geschrieben;
-bearbeitete behalten alle nicht modellierten Inhalte (`Visibility`, `ZIndex`, Seitenrahmen …), die Stil-Ebene jeder
-Eigenschaft, die Elementreihenfolge, Attribute wie `EvaluationMode` und die Maßeinheit (`pt`/`in`/`cm`).
-Schema-Version, `MustUnderstand`, `rd:ReportUnitType` (auch `Invalid`), Zeilenenden und BOM bleiben erhalten.
+- **Pagination:** page size and margins, group `PageBreak`, `KeepTogether`, repeated headers (`RepeatOnNewPage`)
+  and `ResetPageNumber`.
+- **Per-page headers and footers:** page numbers, page-specific `ReportItems!`, `First/Last(ReportItems!…)`.
+- **Gauges:** radial and linear, including scales, ranges and pointers.
+- **Report code:** a VB subset with `For`, `For Each`, `While`, `Do`, `Select Case`, `Try/Catch/Finally`, `With`
+  and arrays; BC helpers such as `BlankZero`, `SetData/GetData`, `IsNewPage/GetGroupPageNumber`, `SetRowColor`
+  and `CalcPct`. Page headers see their own page's code state.
+- **Expressions:** scoped aggregates, `RunningValue`, `Previous`, `RowNumber`, `IIf/Switch/Choose`, text/date/format
+  functions, `Convert.*`, `System.String.*`, `Math.*` and .NET format codes.
+- **Data:** load Excel, CSV or JSON via **Report Data › Load Preview Data**. For BC, export a report using
+  **Send to › Microsoft Excel Document (data only)**. Imported data is stored in `<Layout>.data.json`.
+  Without a data file, generated rows follow the AL data-item hierarchy.
+- **Output:** direct PDF export with vector text, borders and backgrounds, embedded images/charts and subsets of
+  installed TrueType/OpenType fonts. Print opens the paginated preview in a browser. HTML, Excel and Word export are available.
 
-## Ausdrücke, Verwendungen und Layout-Bausteine
+### Tables, groups, lists and matrices
 
-Die **Lupe** im Designer öffnet *Ausdrücke und Verwendungen…*: Suchen/Ersetzen im gesamten Layout, einschließlich
-Stilen, Gruppen und unverändert gespeicherten Elementen. Vorher/Nachher-Vorschau, einzelne Treffer oder alle ersetzen;
-eine Sammelersetzung ist ein Rückgängig-Schritt. Im Modus *Feld- und Labelverwendungen* zeigt die Auswahl eines Felds
-oder AL-Labels seine Verwendungen mit Elementname, Eigenschaft und Pfad; *Im Layout anzeigen* springt zum Element.
-Feste Texte und AL-Quelltext werden nicht verändert.
+The designer handles the Tablix regions in the 379 tested Base App layouts, including BC document lists with
+one rectangle per document and a nested line table.
 
-Über das **Bibliothek-Symbol** lassen sich ausgewählte Elemente als Baustein speichern und in anderen Reports einsetzen,
-z. B. Firmenkopf, Adressblock oder Fußzeile. Die Bibliothek bleibt im VS-Code-Profil erhalten; Export/Import als RDLC-Datei
-ermöglicht die Weitergabe. Beim Einfügen sind Abschnitt und Position wählbar. Namen und interne Verweise werden angepasst;
-benötigte eingebettete Bilder und verwendeter Berichtscode werden übernommen. Abweichender Code oder gleichnamige Bilder
-mit anderem Inhalt werden nicht überschrieben. Fehlende Felder, Labels oder Datasets werden vorab angezeigt und müssen
-im Zielreport ergänzt oder die Ausdrücke angepasst werden. Datenquellen und AL-Datasets werden nicht übertragen.
+- Add parent/child groups, group headers/footers, grouping expressions, sorting, filters, page breaks, page-number
+  resets, visibility and toggles. Delete a group with or without its rows.
+- The **Grouping** pane beneath the canvas shows row and column groups; row brackets identify group boundaries.
+- Insert rows inside or outside a group. Row properties include **Repeat on Every Page**, **Keep with Group**,
+  **Hide** and **Toggled by**.
+- Merge/split cells; column insertion and deletion account for merged cells.
+- Drag fields into list-cell rectangles; items inside can be moved independently.
+- Insert matrices with row/column groups, value and totals. Headers and corner cells are normal textboxes.
+- Insert/edit charts: column, stacked/100% column, bar, line, smooth line, area, stacked area, scatter, pie,
+  doughnut, funnel, pyramid, range, range column/bar, polar and radar. Supports combinations, secondary axes,
+  point colors/expressions, markers, moving-average/mean/median calculated series, axis titles/formats/ranges,
+  data labels, title, legend and palette. Existing chart XML is patched selectively.
+- Add column groups to tables/matrices, including additional header levels around existing groups. Delete just
+  the group or the group and its columns; configure column visibility and toggle textboxes.
+- Split textboxes into separately formatted text runs, or combine runs into a simple textbox.
+- Configure URL, bookmark and drillthrough actions on textboxes/images. The preview opens external http/https/mailto
+  links and supports bookmark navigation.
+- Manage embedded PNG, JPEG, GIF, BMP and SVG images in Report Data: embed, rename with reference updates,
+  delete and drag onto the canvas.
 
-Die Vorschau berücksichtigt Umbrüche vor/nach Rechtecken und Datenbereichen sowie bedingte Gruppen-Umbrüche
-(`Disabled`, `ResetPageNumber` als Ausdruck); „Am Ende“ gilt auch für die letzte Gruppeninstanz. Seiten werden nach dem
-Laden der verwendeten Schriften neu vermessen.
+### Source-preserving saves
 
-Die drei Funktionen sind auch über die Befehlspalette verfügbar. Ein manueller Abnahmeplan unter `docs/ABNAHME.md`
-beschreibt die Abläufe und erwarteten Ergebnisse.
+Unchanged elements are written verbatim for small Git diffs. Edited elements retain unmodeled content
+(`Visibility`, `ZIndex`, page borders and more), property style levels, item order, attributes such as
+`EvaluationMode` and original units (`pt`, `in`, `cm`). Schema version, `MustUnderstand`, `rd:ReportUnitType`
+(including `Invalid`), line endings and BOM are preserved.
 
-## Dokumentgliederung
-Registerkarte links: Seitenkopf / Text / Seitenfuß → Berichtselemente → Zeilen-/Spaltengruppen → Zellinhalte, beliebig
-tief. ⊘ ausgeblendet, ◐ bedingt ausgeblendet; Gruppen mit Gruppierung, Filter, Sortierung, Seitenumbruch; Suche über
-Namen und Ausdrücke; Auswahl synchron mit der Entwurfsfläche; Pfeiltasten wie in einem Baum.
+## Expressions, usages and reusable blocks
 
-## In VS Code integriert
-Der Designer verhält sich wie ein eingebauter Editor:
+The **magnifier** opens **Expressions and Usages…** to search/replace expressions across the layout, including
+styles, groups and preserved elements. Review before/after results and replace individual matches or all matches
+in one undo step. **Field and Label Usages** shows item name, property and path; **Show in Layout** selects a use.
+Literal text and AL source are not changed by expression replacement.
 
-- **Editor-Titelleiste**: *Einfügen* (Untermenü), *Vorschau anzeigen* / *Entwurf anzeigen*, *Drucken*, *Als XML öffnen*; im „…“-Menü
-  *Ansicht* (Gliederung, Berichtsdaten, Eigenschaften, Lineal, Raster, Am Raster ausrichten – mit Häkchen), Zoom, Berichtseigenschaften,
-  Seitenkopf/-fuß, Vorschaudaten laden, AL-Report öffnen. Im XML-Editor eines Layouts führt *Im Designer öffnen* zurück.
-- **Native Kontextmenüs** auf der Entwurfsfläche (Text/Ausdruck bearbeiten, Untermenü *Tabelle*, Zwischenablage, Anordnen, Einfügen, Seitenkopf/-fuß),
-  in der Gliederung (wie auf der Fläche) und in den Berichtsdaten (*Zur Definition wechseln* im AL-Code, *Ausdruck kopieren*,
-  *Bearbeiten…*, *Löschen*, *Vorschaudaten laden*)
-- **Statusleiste** (nur solange der Designer aktiv ist): Auswahl bzw. Einfügewerkzeug, Seite *x von y* in der Vorschau,
-  Maßeinheit (Klick: ändern), Zoom (Klick: Auswahl), AL-Report (Klick: öffnen). Probleme zeigt VS Code selbst an.
-- **Tastatur**: F5 Entwurf/Vorschau, ⌘⌥= / ⌘⌥- / ⌘⌥0 (Strg+Alt unter Windows/Linux) Zoom, Strg/⌘ + Mausrad zoomt; alle Befehle auch in der Befehlspalette
-- **Einstellungen** (`bcReportBuilder.designer.*`): Raster, Am Raster ausrichten, Lineal, Standard-Zoom
-- **Explorer**: *Neues Berichtslayout…* im Kontextmenü von Ordnern und unter *Datei › Neue Datei…*; *Im Designer öffnen* / *Als XML öffnen* bei Layouts
-- Oberfläche aus Codicons und den Farben des aktiven Farbdesigns (hell, dunkel, hoher Kontrast): Symbolleiste, Bereiche mit
-  ziehbaren Trennern, Bäume mit Einrückungslinien, Filterfeld, Dialoge, Bildlaufleisten
+Use the **library** icon to save selected items as a reusable block, such as a company header or address area.
+The library belongs to the VS Code profile. Export/import RDLC blocks to share them. Insertion lets you choose
+section and position; names and internal references are adjusted, and required embedded images/report code are
+carried over. Conflicting code or images with different content are not overwritten. Missing fields, labels and
+datasets are reported before insertion and must be supplied in the target report. Data sources and AL datasets
+are not transferred.
 
-## KI-Unterstützung (GitHub Copilot)
-Die Extension stellt Werkzeuge für den Agentenmodus von Copilot (und jeden anderen Chat, der `vscode.lm`-Tools nutzt)
-bereit. Damit kann die KI Berichte vollständig bauen – mit der Logik des Designers statt durch Raten im XML. Im Chat lassen
-sie sich auch direkt ansprechen, z. B. `#reportLayout` oder `#previewReport`.
+Preview honors breaks before/after rectangles and data regions, including conditional `Disabled` and
+`ResetPageNumber` expressions. An end break applies to the last group instance too. Pages are measured again
+once report fonts have loaded. Search, usage navigation and block actions are also available in the Command Palette.
 
-Die Aufteilung folgt dem, was im XML leicht bzw. fehleranfällig ist:
+## Document outline
 
-| Direkt im XML (die KI editiert die Datei) | Werkzeug |
-|---|---|
-| Wert/Ausdruck eines Textfelds, `<Style>` (Schrift, Farbe, Format, Ausrichtung, Rahmen), `<Hidden>`, Position einzelner Elemente, `<Code>`-Block | – |
-| Überblick mit Namen und **XML-Zeilennummern** jedes Elements, Seiten-/Breitenprüfung, Datasets | `bcReport_inspectLayout` |
-| Prüfung nach jeder Änderung: XML (auch falsch geschachtelte Tags), Verweise, Namen, Leerseiten, `Fields!` im Seitenkopf, Ausdrücke, Vorschau-Fehler | `bcReport_validateLayout` |
-| Ergebnis als Text: Werte, Tabellen zeilenweise mit Gruppen/Summen, Diagrammreihen | `bcReport_previewReport` |
-| AL-Report: Datenelemente, Spalten (schon im Dataset?), Labels, Vorschaudaten, Felder der Tabellen aus den Symbolen | `bcReport_getReportData` |
-| Neue Elemente mit eindeutigen Namen: Textfeld, Rechteck, Linie, Bild (aus Datei eingebettet), Tabelle aus Feldern mit BC-Konventionen, Matrix, Diagramm | `bcReport_insertItems` |
-| Tablix-Struktur: Spalten, Zeilen, Gruppen (Eltern/Kind, Kopf/Fuß, Sortierung, Filter, Umbruch), Spaltengruppen, Zellen verbinden/teilen | `bcReport_editTable` |
-| Diagramm lesen/ändern (Typ, Reihen, Kategorie, Achsen, Legende) | `bcReport_editChart` |
-| Ausrichten, gleiche Größe, verteilen, zentrieren, Reihenfolge, löschen | `bcReport_arrangeItems` |
-| Seitengröße, Ränder, Textkörper, Seitenkopf/-fuß, Einheit | `bcReport_setPageLayout` |
-| AL-Spalten / AL-Label anlegen, Spalte in AL und allen Layouts umbenennen, Projekt erstellen | `bcReport_addAlColumns`, `bcReport_createAlLabel`, `bcReport_renameColumn`, `bcReport_buildProject` |
-| Ergebnis im Designer zeigen (Element auswählen, Vorschau) | `bcReport_showInDesigner` |
+The left-hand outline shows page header/body/footer, report items, row/column groups and cell contents at any
+nesting depth. Hidden/conditionally hidden markers, grouping, filters, sorting, breaks and diagnostics help locate
+items. Search names and expressions; selection stays synchronized with the canvas. Standard tree keyboard navigation applies.
 
-Alle Layout-Änderungen sind normale Bearbeitungen des Dokuments: Ein offener Designer lädt sie sofort, *Rückgängig* nimmt sie
-zurück, und Layouts ohne ungespeicherte Änderungen werden wieder gespeichert. Werkzeuge, die AL-Code ändern oder den Compiler
-starten, fragen vorher nach. Für realistische Vorschauen kann die KI die Datei `<Layout>.data.json` mit Beispieldaten schreiben.
+## VS Code integration
 
-## Vergleich mit Report Builder und Visual Studio
+- **Editor title:** Insert, Show Preview/Show Design, Print and Open as XML. The overflow menu contains View,
+  zoom, report properties, header/footer, preview-data import and Open AL Report. The XML editor offers Open in Designer.
+- **Native context menus** on the canvas, outline and Report Data expose item/table editing, clipboard,
+  arrangement, insertion, AL navigation and data actions.
+- **Status bar** while a designer is active shows selection/tool, preview page, clickable unit and zoom, and the
+  associated AL report. Diagnostics use VS Code's Problems panel.
+- **Keyboard:** F5 toggles design/preview; Ctrl+Alt+=/-/0 (Cmd+Option on macOS) controls zoom; Ctrl/Cmd+wheel zooms.
+- **Settings:** `bcReportBuilder.designer.*` controls grid, snapping, ruler and default zoom.
+- **Explorer:** New Report Layout… on folders and under File › New File…; Open in Designer/Open as XML on layouts.
+- Codicons, theme colors, resizable panes, tree guides, filter inputs, dialogs and scrollbars follow the current
+  light, dark or high-contrast theme.
 
-| | Report Builder | Visual Studio (RDLC-Designer) | Diese Erweiterung |
-|---|---|---|---|
-| Textfeld, Tabelle, Bild, Linie, Rechteck | ✓ | ✓ | ✓ |
-| Zeilengruppen (über-/untergeordnet), Gruppenkopf/-fuß, Sortierung, Filter, Seitenumbruch | ✓ | ✓ | ✓ |
-| Zeilen innerhalb/außerhalb der Gruppe einfügen, Zellen verbinden/teilen | ✓ | ✓ | ✓ |
-| Listen (Rechteck je Gruppeninstanz, z. B. BC-Belege), verschachtelte Tabellen | ✓ | ✓ | ✓ |
-| Matrix (Spaltengruppen, Kopfzellen, Ecke, Gesamtzeile/-spalte) | ✓ | ✓ | ✓ |
-| Diagramme (Säule, Balken, Linie, Fläche, Punkte, Kreis, Ring; gestapelt, 100 %, Kombi, zweite Achse) | ✓ (mehr Typen) | ✓ (mehr Typen) | ✓ anlegen, bearbeiten, Vorschau |
-| Messgerät | ✓ | ✓ | erhalten, Vorschau |
-| Karte, Unterbericht-Vorschau | ✓ | ✓ | erhalten, Platzhalter |
-| Aktionen (Hyperlink, Lesezeichen, Drillthrough), eingebettete Bilder | ✓ | ✓ | ✓ |
-| Textfelder mit mehreren formatierten Textteilen | ✓ | ✓ | ✓ Textteil-Editor |
-| Ausrichten, gleiche Größe, Abstände, im Container zentrieren | eingeschränkt | ✓ (Format-Menü) | ✓ |
-| Sichtbarkeit, Drilldown (ToggleItem), interaktive Sortierung | ✓ | ✓ | ✓ inkl. Vorschau |
-| Ausdruckseditor mit Vervollständigung | Kategorien | IntelliSense | Vervollständigung inkl. AL-Herkunft der Spalten und Code-Funktionen |
-| `<Code>`-Block | Textfeld | Textfeld | VS-Code-Editor mit VB-Hervorhebung, Prüfung im Problembereich |
-| Dokumentgliederung | – | ✓ | ✓ mit Suche, Ausblenden-Markierung, Problemen |
-| Vorschau | mit Datenquelle | nur mit Datenquelle im Projekt | mit Excel-Export aus BC oder generierten BC-Daten |
-| Export | PDF, Word, Excel, … | PDF, Word, Excel | PDF, Excel, Word, HTML, Drucken |
-| AL-Report als Datenquelle, „Build nötig“ | – | – | ✓ |
-| Spalten/Labels im AL-Report anlegen, Felder aus Symbolen | – | – | ✓ |
-| Spalte in AL und allen Layouts umbenennen | – | – | ✓ |
-| BC-Konventionen (Format-/Caption-Felder), Prüfung gegen AL | – | – | ✓ |
-| AL ↔ Layout navigieren (CodeLens, Definition), Report in BC ausführen | – | – | ✓ |
-| Quellerhaltendes Speichern (kleine Git-Diffs) | – | – | ✓ |
+## AI assistance (GitHub Copilot)
 
-## Weitere Funktionen
-- Entwurfsfläche mit Lineal, Raster und Ausrichten, Seitenkopf/-fuß, Größe von Abschnitten und Breite ziehbar
-- Textfeld, Tabelle (Kopf-/Detail-/Fußzeile, Spalten einfügen/löschen, Breiten ziehen), Bild, Linie, Rechteck
-- Mehrfachauswahl, Verschieben, Größe ändern, Pfeiltasten, Ausschneiden/Kopieren/Einfügen, Inline-Bearbeitung
-- Symbolleiste nur mit Codicons (Einfügen, Schrift, Farben, Ausrichtung und Rahmen, Zahlenformat, Anordnen und Layout-Werkzeuge), Eigenschaften-Bereich
-- Ausdrucks-Editor mit Syntaxprüfung, Live-Ergebnis und Vervollständigung (Strg+Leertaste; automatisch nach `Fields!`, `Parameters!`, `ReportItems!`, `Globals!`, `Code.`) – auch im Eigenschaftenfeld *Wert*
-- Layout-Werkzeuge wie im Format-Menü von Visual Studio: am zuerst gewählten Element ausrichten, gleiche Breite/Höhe/Größe, gleichmäßig verteilen, im Container zentrieren
-- Eigenschaften *Ausblenden* (Ausdruck) und *Umschalten durch* (Drilldown) für alle Elemente, *Interaktiv sortieren* für Textfelder,
-  Seitenkopf/-fuß *auf erster/letzter Seite*
-- Vorschau interaktiv: Drilldown je Gruppeninstanz auf-/zuklappen, Spalten per Klick sortieren; Export nach **Excel** (Zahlen als
-  Zahlen, BC-Belege als Kopftexte plus Positionstabelle) und **Word**
-- Speichern, Rückgängig/Wiederholen und Hot Exit kommen von VS Code; „Als XML öffnen“ öffnet die Datei daneben, Änderungen dort erscheinen sofort
+The extension registers 14 tools for Copilot agent mode and other chats using VS Code's `vscode.lm` tools.
+Reference tools in chat, for example `#reportLayout` or `#previewReport`. Full inputs, examples, workflow guidance
+and limits are documented in the [AI tools guide](docs/AI-TOOLS.md).
 
-## Sprachen
-Die Oberfläche folgt der Anzeigesprache von VS Code: Englisch (Standard) und Deutsch. Befehle, Menüs und Einstellungen kommen
-aus `package.nls.json` / `package.nls.de.json`, alle übrigen Texte (Meldungen, Prüfungen, Designer, Dialoge, Vorschau) aus
-`l10n/bundle.l10n.de.json`; die Extension reicht die Übersetzungen an die Webview weiter. Quelltexte im Code sind englisch
-(`l10n.t('…', …)` aus `webview/l10n.ts`); ein Unit-Test prüft, dass jeder Text übersetzt ist und Platzhalter übereinstimmen.
+| Task | Tool |
+| --- | --- |
+| Inspect names, XML line ranges, datasets and page setup | `bcReport_inspectLayout` |
+| Validate XML, references, width and preview evaluation | `bcReport_validateLayout` |
+| Read evaluated values, grouped table rows and chart values as text | `bcReport_previewReport` |
+| Inspect AL data items, labels, available table fields and preview data | `bcReport_getReportData` |
+| Insert textboxes, rectangles, lines, images, tables, matrices or charts | `bcReport_insertItems` |
+| Change table rows/columns/groups, spans and cells | `bcReport_editTable` |
+| Read or change charts | `bcReport_editChart` |
+| Position, align, size, distribute, reorder or delete items | `bcReport_arrangeItems` |
+| Set page size, margins, body, header/footer and unit | `bcReport_setPageLayout` |
+| Add AL columns or translatable labels | `bcReport_addAlColumns`, `bcReport_createAlLabel` |
+| Rename a column in AL and related layouts | `bcReport_renameColumn` |
+| Save and run the AL compiler | `bcReport_buildProject` |
+| Show the result, selection or paginated preview | `bcReport_showInDesigner` |
 
-## Barrierefreiheit
-- Entwurfsfläche per Tastatur: Tab/Umschalt+Tab wählen das nächste/vorherige Element (Seitenkopf, Text, Seitenfuß; oben nach
-  unten), Pfeiltasten verschieben, Alt+Pfeiltasten ändern die Größe (mit Umschalt fein), Eingabe oder F2 bearbeitet den Text,
-  Entf löscht, Umschalt+F10 öffnet das Kontextmenü
-- Screenreader: Elemente sind beschriftet (Typ, Name, Text); Auswahl, Position und Größe werden angesagt
-- Hochkontrast-Designs: alle Elemente umrandet, die Auswahl mit dem aktiven Kontrastrahmen des Designs
+Simple textbox values, styles, visibility, individual positions and report code can be edited directly in XML.
+Use tools for structural edits. Layout changes participate in normal undo and refresh open designers. Previously
+clean layouts are saved again; dirty documents retain their working-copy state. Tools changing AL or starting
+the compiler request confirmation. Realistic preview data can be written to `<Layout>.data.json`.
+
+## Comparison with Report Builder and Visual Studio
+
+| Capability | Microsoft Report Builder | Visual Studio RDLC designer | This extension |
+| --- | --- | --- | --- |
+| Textbox, table, image, line, rectangle | Yes | Yes | Yes |
+| Parent/child row groups, headers/footers, sorting, filters, breaks | Yes | Yes | Yes |
+| Rows inside/outside groups; merge/split cells | Yes | Yes | Yes |
+| Document lists, nested tables, matrices and column groups | Yes | Yes | Yes |
+| Charts, combinations, secondary axes | More chart types | More chart types | Create, edit and preview supported types |
+| Gauges | Yes | Yes | Preserve and preview |
+| Maps and subreport preview | Yes | Yes | Preserve; show placeholders |
+| Hyperlinks, bookmarks, drillthrough, embedded images | Yes | Yes | Yes |
+| Separately formatted text runs | Yes | Yes | Text-run editor |
+| Align, match sizes, distribute, center in container | Limited | Format menu | Yes |
+| Visibility, drilldown, interactive sorting | Yes | Yes | Includes preview |
+| Expression completion | Categories | IntelliSense | Includes AL column origin and code functions |
+| Report Code block | Text field | Text field | VB editor and diagnostics |
+| Document outline | No | Yes | Search, hidden markers and problems |
+| Preview data | Data source | Project data source | Excel/CSV/JSON or generated BC rows |
+| Export | PDF, Word, Excel, etc. | PDF, Word, Excel | PDF, Excel, Word, HTML, print |
+| AL data source and build markers | No | No | Yes |
+| Add AL columns/labels; fields from symbols | No | No | Yes |
+| Rename columns across AL/layouts | No | No | Yes |
+| BC formats/captions and AL validation | No | No | Yes |
+| Navigate AL/layout, CodeLens, run in BC | No | No | Yes |
+| Source-preserving saves | No | No | Yes |
+
+## Additional features
+
+The canvas provides rulers, grid/snapping, draggable section dimensions and body width, multiselection,
+move/resize, clipboard and inline editing. The properties pane and icon toolbar expose fonts, colors, borders,
+alignment, number formats and arrangement. Expression completion is also available in the Value property.
+Visibility expressions, toggle textboxes and interactive sort are editable, as are header/footer printing on the
+first/last page. Save, undo/redo and Hot Exit use VS Code's document lifecycle. Opening XML beside the designer
+keeps both views synchronized.
+
+## Languages
+
+The UI follows VS Code's display language: English by default, with German translations. Manifest messages use
+`package.nls.json`/`package.nls.de.json`; shared extension/webview messages use `webview/l10n.ts` and
+`l10n/bundle.l10n.de.json`. Tests check translation coverage and placeholders. Documentation opens in German for
+a German UI and in English for all other UI languages; each guide links to the other language.
+
+## Accessibility
+
+- Tab/Shift+Tab selects next/previous canvas items; arrows move, Alt+arrows resize, Shift makes small changes.
+  Enter/F2 edits text, Delete removes and Shift+F10 opens the context menu.
+- Screen readers receive item type, name/text, selection, position and size announcements.
+- High-contrast themes outline items and use the active contrast border for selection.
 
 ## Tests
 
 ```sh
-npm test               # Unit-Tests: RDL-Roundtrip und Quellerhaltung, Vorschau-Engine, Seitenumbruch, Code-Interpreter,
-                       # Ausdrücke, AL-Parser, Prüfung, Excel/CSV
-npm run test:vscode    # Integrationstests im installierten VS Code (isoliertes Profil): Öffnen, Bearbeiten, Rückgängig,
-                       # Speichern, externe Änderungen, AL-Kontext, Problembereich, Sprung zu AL, Vorschau mit Seitenumbruch,
-                       # Befehle/Einstellungen → Designer → Statusleiste, Layouts wechseln, Label anlegen, Spalten hinzufügen,
-                       # Spalte umbenennen (Eingabefelder/Auswahllisten beantwortet), PDF-Export, Tabellenbefehle
-                       # BC_RB_TIMEOUT_SCALE=3 für langsame Rechner/CI;
-                       # BC_RB_TEST_LANGUAGE=de BC_RB_ONLY=Lokalisierung prüft das deutsche Bundle bis in die Webview
-npm run test:corpus    # alle W1-Layouts und AL-Reports der Base App aus github.com/microsoft/BCApps (nur im Speicher)
+npm test               # Unit tests: RDL roundtrips, source preservation, rendering, pagination, VB, expressions, AL, import
+npm run test:vscode    # Real VS Code, isolated profile: document lifecycle, AL, commands, preview, export and walkthrough
+npm run test:corpus    # W1 Base App layouts/reports from github.com/microsoft/BCApps, in memory
 ```
 
-Der Korpus-Test prüft für jedes der 379 Layouts: verlustfreies Speichern (unverändert und komplett neu erzeugt),
-stabile Ausgabe, vollständige Gliederung, Vorschau ohne Absturz (Entwurf und mit generierten Daten) und das Dataset
-gegen den zugehörigen AL-Report. Stand: 379/379 zeichengleich auch bei kompletter Neuerzeugung; 357 von 368 Layouts
-stimmen exakt mit ihrem AL-Report überein – die übrigen 11 sind in Microsofts Repository tatsächlich veraltet und werden
-vom Linter gemeldet; kein einziger Lint-Fehler auf den Microsoft-Layouts.
-Mit `XSD=<Pfad zu ReportDefinition.xsd 2010>` wird zusätzlich gegen das Schema validiert.
+Use `BC_RB_TIMEOUT_SCALE=3` on slow machines/CI. `BC_RB_TEST_LANGUAGE=de` forces German shared messages;
+`BC_RB_LOCALE=de` selects the VS Code locale; `BC_RB_ONLY` filters integration tests by name.
 
-## Entwicklung
+The recorded corpus run checked 379 layouts for source preservation, stable output, complete outlines,
+non-crashing rendering and AL dataset consistency: 379/379 roundtripped character-for-character, including full
+regeneration. Of 368 layouts with AL comparisons, 357 matched exactly; the other 11 were outdated in Microsoft's
+repository and were identified by the linter. No lint errors were reported for the Microsoft layouts.
+Set `XSD=<path to 2010 ReportDefinition.xsd>` for additional schema validation.
 
-Für Entwicklung und Paketierung Node.js 24 verwenden (wie in der CI).
+## Development
+
+Use Node.js 24 for development and packaging, as in CI.
 
 ```sh
 npm install
-npm run build          # out/extension.js und out/webview.js (esbuild)
+npm run build          # out/extension.js and out/webview.js with esbuild
 npm run watch
 npm run typecheck
-npm run package        # artifacts/bc-report-builder-<version>.vsix, anschließend geprüft (scripts/check-package.mjs)
+npm run check:docs     # bilingual links, anchors, JSON examples and tool names
+npm run package        # builds and verifies artifacts/bc-report-builder-<version>.vsix
 ```
 
-F5 in VS Code startet einen Extension Host mit `samples/`: ein AL-Projekt (`app.json`, `src/Verkaufsrechnung.Report.al`)
-mit dem BC-typischen Layout `Verkaufsrechnung.rdlc` und das SSRS-Beispiel `Umsatzbericht.rdl` mit Beispieldaten.
+F5 launches an Extension Development Host with `samples/`: an AL project (`app.json`,
+`src/Verkaufsrechnung.Report.al`), its BC-style `Verkaufsrechnung.rdlc` and an SSRS example `Umsatzbericht.rdl` with data.
 
-### Paket und Veröffentlichung
+### Packaging and publishing
 
-`npm run package` baut die Produktionsbundles, schreibt `THIRD_PARTY_NOTICES.md` (Lizenzen der gebündelten Pakete aus den
-Source Maps) und erzeugt die VSIX. Die Positivliste in `.vscodeignore` nimmt nur Manifest, Übersetzungen, README,
-CHANGELOG, Lizenzen, Icon und die Bundles in `out/` auf. Danach prüft `scripts/check-package.mjs` das fertige Paket:
-genau diese Dateien, Manifest und Übersetzungen, Icon, CHANGELOG-Abschnitt der Version, und dass das gepackte Bundle ohne
-`node_modules` lädt und bei der Aktivierung (gegen eine nachgebildete VS-Code-API) alle Befehle und den Editor registriert.
-Die CI lädt die VSIX als Artefakt hoch und veröffentlicht nichts.
+`npm run package` builds production bundles, generates `THIRD_PARTY_NOTICES.md` from bundled dependencies in source
+maps, then creates the VSIX. The `.vscodeignore` allowlist includes the manifest, translations, bilingual guides,
+screenshots, examples, README files, changelog, licenses, icon and runtime bundles. `scripts/check-package.mjs`
+checks exact contents, translations, walkthrough resources/buttons, version changelog entry, icon and bundle activation
+without `node_modules`, including command/editor/tool registration. CI uploads the artifact without publishing it.
 
-Veröffentlicht wird als GitHub Release mit der VSIX als Asset – genau das findet die Update-Prüfung der Extension:
+Publishing creates a GitHub Release with the VSIX asset used by the extension's updater:
 
 ```sh
-# Version anheben, CHANGELOG.md um „## [x.y.z] - Datum“ ergänzen, committen und pushen
+# Bump version, add a dated CHANGELOG.md section, commit and push
 npm version patch --no-git-tag-version
-# lokal prüfen: Typprüfung, Tests, VSIX, Release-Plan – kein GitHub-Aufruf
+# Validate types, tests, VSIX and release plan without calling GitHub
 npm run publish:github -- --dry-run
-# veröffentlichen (optional --draft); legt den Tag v<version> auf GitHub an
+# Publish (optionally --draft); creates the v<version> tag on GitHub
 npm run publish:github
 ```
 
-`tools/publish-github.mjs` braucht die [GitHub CLI](https://cli.github.com/) (`gh auth login` oder `GH_TOKEN`/`GITHUB_TOKEN`
-mit `Contents: write`), ein sauberes Arbeitsverzeichnis und einen gepushten Release-Commit. Es führt Typprüfung, `npm test`
-und `npm run package` aus, legt den fehlenden Tag `v<version>` exakt auf dem gebauten Commit an (vorhandene Tags müssen
-auf denselben Commit zeigen und werden nie verschoben) und erzeugt den Release mit `gh release create --verify-tag`; die
-Release Notes stammen aus dem passenden Abschnitt von `CHANGELOG.md`. Vorhandene Releases und Assets werden nicht
-überschrieben. Der Probelauf schreibt `artifacts/v<version>-release-plan.json` (Ziel, Commit, SHA-256, Befehle) und
-`artifacts/v<version>-release-notes.md`; in VS Code als Task **Report Builder: Publishing-Probelauf**. Die
-Integrationstests (`npm run test:vscode`) laufen in der CI – vor einem Release sollte sie für den Commit grün sein.
+`tools/publish-github.mjs` requires the [GitHub CLI](https://cli.github.com/) (`gh auth login`, or `GH_TOKEN`/
+`GITHUB_TOKEN` with Contents: write), a clean working tree and a pushed release commit. It runs typecheck, tests
+and packaging, creates the missing tag on the exact built commit, and calls `gh release create --verify-tag`.
+Existing tags must point to that commit and are never moved; releases/assets are never overwritten. Notes come
+from the matching changelog section. Dry-run files are `artifacts/v<version>-release-plan.json` and
+`artifacts/v<version>-release-notes.md`; a VS Code publishing dry-run task is also available. Integration tests
+run in CI and should pass for the release commit.
 
-## Aufbau
+## Project structure
 
-| Pfad | Inhalt |
-|---|---|
-| `src/extension.ts`, `src/reportEditorProvider.ts` | Aktivierung, Befehle, Statusleiste und Kontextschlüssel, Custom Editor (Dokument ↔ Webview, Daten-Import, Drucken) |
-| `src/al/parser.ts`, `src/al/context.ts`, `src/al/workspace.ts` | AL-Parser (Reports, Tabellen), Kontext eines Layouts, Index der AL-Reports und Tabellen im Workspace |
-| `src/al/edit.ts`, `src/al/symbols.ts`, `src/al/launch.ts` | AL-Textänderungen (Labels, Spalten), Tabellen aus Symbolpaketen, Web-Client-URL aus launch.json |
-| `src/bcCommands.ts`, `src/codeBlock.ts` | BC-Befehle, CodeLens, `<Code>`-Block als VB-Dokument |
-| `src/lint.ts`, `src/layoutService.ts` | Prüfung und Problembereich |
-| `src/xlsx.ts`, `src/csv.ts` | Excel-/CSV-Import |
-| `src/updateCheck.ts` | Update-Prüfung gegen GitHub Releases, Download und Prüfsumme der VSIX |
-| `scripts/`, `tools/publish-github.mjs` | Paketierung, Paketprüfung, Lizenzhinweise; Veröffentlichung als GitHub Release |
-| `src/tools/` | Sprachmodell-Werkzeuge: Überblick, Prüfung, Text-Vorschau (`inspect.ts`), Strukturänderungen (`edit.ts`), Registrierung (`index.ts`) |
-| `src/layoutEdit.ts` | Layout-Änderungen im Host (Label-Wert, Spalte umbenennen) für gemeinsame Bearbeitungsschritte mit AL |
-| `webview/rdl.ts` | RDL-Parser und quellerhaltender Serializer |
-| `webview/render/` | Vorschau-Engine (RDL → Darstellungsbaum), Seitenumbruch, React-Darstellung, Diagramme, Messgeräte, PDF-Export |
-| `webview/charts.ts`, `webview/images.ts`, `webview/richtext.ts` | Diagramme anlegen/patchen, eingebettete Bilder, Textteile |
-| `webview/expr.ts`, `webview/vb.ts` | Ausdrücke, Interpreter für den `<Code>`-Block |
-| `webview/outline.ts`, `webview/nested.ts` | Dokumentgliederung, Bearbeiten in unverändert gespeicherten Bereichen |
-| `webview/bc.ts` | BC-Kontext, Vorschau-Parameter und -Daten |
-| `webview/l10n.ts`, `l10n/`, `package.nls*.json` | Lokalisierung (gemeinsam für Extension und Webview), deutsche Übersetzungen |
-| `webview/components/` | Symbolleiste, Designer, Berichtsdaten, Gliederung, Eigenschaften, Dialoge, Vorschau |
+| Path | Purpose |
+| --- | --- |
+| `src/extension.ts`, `src/reportEditorProvider.ts` | Activation, commands, status/context, document/webview bridge, import and print |
+| `src/gettingStarted.ts` | Native walkthrough, example copies and localized offline guides |
+| `src/al/parser.ts`, `src/al/context.ts`, `src/al/workspace.ts` | AL parsing, layout context and workspace report/table index |
+| `src/al/edit.ts`, `src/al/symbols.ts`, `src/al/launch.ts` | AL edits, symbol packages and web-client URLs |
+| `src/bcCommands.ts`, `src/codeBlock.ts` | BC commands, CodeLens and VB report-code documents |
+| `src/lint.ts`, `src/layoutService.ts` | Validation and Problems panel integration |
+| `src/xlsx.ts`, `src/csv.ts` | Data import |
+| `src/updateCheck.ts` | GitHub release check, VSIX download and checksum |
+| `scripts/`, `tools/publish-github.mjs` | Packaging, verification, licenses and releases |
+| `src/tools/` | AI tools: inspection/validation/text preview, structural edits and registration |
+| `src/layoutEdit.ts` | Host layout edits shared with AL operations |
+| `webview/rdl.ts` | RDL parser and source-preserving serializer |
+| `webview/render/` | Render tree, pagination, React views, charts, gauges and PDF |
+| `webview/charts.ts`, `webview/images.ts`, `webview/richtext.ts` | Chart patches, embedded images and text runs |
+| `webview/expr.ts`, `webview/vb.ts` | Expression and report-code interpreters |
+| `webview/outline.ts`, `webview/nested.ts` | Outline and editing within preserved regions |
+| `webview/bc.ts` | BC context, preview parameters and data |
+| `webview/l10n.ts`, `l10n/`, `package.nls*.json` | Localization |
+| `webview/components/` | Toolbar, canvas, report data, outline, properties, dialogs and preview |
 
-## Grenzen
-- Diagramme: 3D, Börsen-/Kerzen-/Boxplot-Diagramme, weitere Formeln berechneter Reihen (Bollinger-Bänder, MACD, …) und
-  Formatierung über Farbe und Markierung hinaus bleiben wie im Layout und sind nur im XML änderbar; eine lineare Trendlinie
-  kennt RDL nicht
-- Karten erscheinen als Platzhalter und bleiben unverändert erhalten; Unterberichte werden nicht ausgeführt (beides kommt in
-  Business-Central-RDLC-Layouts nicht vor)
-- Zellen im Tabellenkörper lassen sich nur waagerecht verbinden – wie in Report Builder, denn RDL kennt `RowSpan` nur in der Ecke
-- Export nach Excel/Word überträgt Texte, Tabellen (Zahlen als Zahlen) und Diagrammwerte – kein pixelgenaues Abbild; der
-  PDF-Export nimmt ohne installierte Schriftdatei (oder bei Lizenz „keine Einbettung“) die PDF-Standardschriften (nur
-  WinAnsi-Zeichen)
-- Neue Spalten und Labels erscheinen erst nach dem Erstellen des Projekts im Layout-Dataset (wie bei der Arbeit in Visual Studio)
-- Die Vorschau ist eine Annäherung an den Berichtsserver, nicht pixelgenau; Abfragen gegen echte Datenquellen werden nicht ausgeführt
-- Der `<Code>`-Interpreter kennt eine VB-Teilmenge: Klassen, `Using`, `New` für .NET-Objekte (außer `Exception`) und `On Error`
-  (wird ignoriert) fehlen – betroffene Funktionen melden das in der Vorschau
-- Word- und Excel-Layouts werden nicht bearbeitet (sie öffnen sich aus *Berichtsdaten › Layouts des Reports* in Word bzw. Excel)
-- Die Oberfläche gibt es auf Englisch und Deutsch
+## Limitations
+
+- Unsupported chart features (3D, stock/candlestick/boxplot, additional calculated formulas such as Bollinger/MACD,
+  and formatting beyond supported colors/markers) are preserved and require XML editing. RDL has no linear trendline.
+- Maps remain placeholders; subreports are not executed locally.
+- Body cells merge horizontally only; RDL supports `RowSpan` only in the corner.
+- Excel/Word export transfers text, tables and chart values rather than a pixel-perfect rendering. PDF falls back
+  to standard fonts with WinAnsi coverage when suitable local fonts are unavailable or embedding is prohibited.
+- New AL columns/labels enter the layout dataset after a successful project build.
+- Preview approximates the report server and performs no live data-source queries.
+- The VB interpreter does not support classes, `Using` or `New` for .NET objects other than `Exception`;
+  `On Error` is ignored. Affected functions report preview problems.
+- Word/Excel layouts are opened in their applications and cannot be edited here.
+- UI and end-user documentation are available in English and German.

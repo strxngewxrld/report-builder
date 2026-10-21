@@ -1,10 +1,12 @@
 # Weitere Absicherung am 21.10.2026
 
+[English](RELEASE-TEST-2026-10-21-ABSICHERN.md) | Deutsch
+
 ## Lokale Abnahmefälle
 
 Die offenen Sammelpunkte aus TODO.md wurden in konkrete lokale Prüfungen und verbleibende externe Voraussetzungen
 aufgeteilt. Die geprüften Fälle müssen nicht noch einmal von Hand wiederholt werden. Die Ergebnisse ergänzen die
-[Windows-Abnahme](RELEASE-TEST-2026-10-20-FIXES.md) und die [Acrobat-Abnahme](RELEASE-TEST-2026-10-21-ACROBAT.md).
+[Windows-Abnahme](RELEASE-TEST-2026-10-20-FIXES.de.md) und die [Acrobat-Abnahme](RELEASE-TEST-2026-10-21-ACROBAT.de.md).
 
 ### Filter, Drilldown und interaktive Sortierung
 

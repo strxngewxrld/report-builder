@@ -1,5 +1,7 @@
 # Lokaler Release-Test am 18.10.2026
 
+[English](RELEASE-TEST-2026-10-18.md) | Deutsch
+
 ## Umgebung und Umfang
 
 macOS 15.7.5, VS Code 1.142.0, Node.js 24.22.0. Tests im echten Extension Development Host
@@ -94,7 +96,7 @@ Keine Releases veröffentlicht, keine Commits angelegt.
 ## Vertiefung nach der ersten Prüfung
 
 Die erste Runde deckte nicht alle lokal möglichen Funktionen ab. Die detaillierte
-[UI-Testmatrix](UI-TESTMATRIX.md) erfasst die zweite Runde mit einzelnen Abläufen und Testarten.
+[UI-Testmatrix](UI-TESTMATRIX.de.md) erfasst die zweite Runde mit einzelnen Abläufen und Testarten.
 16 weitere Integrationstests ergänzen den Bestand auf 39. Der Gesamtlauf ist mit 39/39 grün,
 darunter das Einfügen und Rendern aller 19 Diagrammtypen. Der Import-Vorschautest benötigte
 im ersten Gesamtlauf einen zweiten Versuch, weil das erste Bereitschaftssignal vor dem

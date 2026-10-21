@@ -1,5 +1,7 @@
 # Copilot-Abnahme unter Windows (21.10.2026)
 
+[English](RELEASE-TEST-2026-10-21-COPILOT.md) | Deutsch
+
 ## Umgebung und Umfang
 
 VS Code 1.142.0, GitHub Copilot 0.70.0, Agentenmodus mit Auto-Modellauswahl

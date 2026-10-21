@@ -1,6 +1,8 @@
 # Windows-Abnahme am 20.10.2026
 
-Ergänzt den [macOS-Lauf vom 18.10.](RELEASE-TEST-2026-10-18.md) um Windows. Die Desktop-Bedienung erfolgte mit echten
+[English](RELEASE-TEST-2026-10-20-WINDOWS.md) | Deutsch
+
+Ergänzt den [macOS-Lauf vom 18.10.](RELEASE-TEST-2026-10-18.de.md) um Windows. Die Desktop-Bedienung erfolgte mit echten
 Maus- und Tastatureingaben (Win32 `SendInput`) und Bildschirmfotos. Kontrolliert wurde über den DOM der Webview, über
 den Chromium-Debugport einer separaten Instanz. Alle Tests liefen in isolierten Profilen mit Kopien von `samples/`.
 
@@ -141,7 +143,7 @@ Regressionstests für alle Punkte (Unit), danach Typecheck, 160/160 Unit-Tests, 
   systemweite Einstellungen der RDP-Sitzung und wurden nicht verändert.
 - BC online (SaaS) und Docker-Container für *Report in BC ausführen*; on-prem mit `NavUserPassword` (nur Windows-Anmeldung
   geprüft).
-- Die übrigen offenen Punkte aus [TODO](../TODO.md) und [UI-Testmatrix](UI-TESTMATRIX.md).
+- Die übrigen offenen Punkte aus `TODO.md` (historischer Verweis; im Checkout nicht vorhanden) und [UI-Testmatrix](UI-TESTMATRIX.de.md).
 
 Protokolle: `artifacts/qa-windows/` (Git-ignoriert).
 
