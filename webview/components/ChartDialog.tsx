@@ -90,7 +90,19 @@ export function ChartDialog({ d, close, Modal, Field }: {
     <Modal title={existing ? l10n.t('Chart Properties – {0}', existing.name) : l10n.t('Insert Chart')} onOk={ok} onCancel={close} error={error} wide okLabel={existing ? 'OK' : l10n.t('Insert')}>
       <div className="chart-kinds" role="radiogroup" aria-label={l10n.t('Chart type')}>
         {chartKinds().map(([k, label, icon]) => (
-          <button key={k} role="radio" aria-checked={spec.kind === k} className={`chart-kind ${spec.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k as ChartKind })}>
+          <button key={k} role="radio" aria-checked={spec.kind === k} tabIndex={spec.kind === k ? 0 : -1}
+            className={`chart-kind ${spec.kind === k ? 'on' : ''}`} onClick={() => set({ kind: k as ChartKind })}
+            onKeyDown={e => {
+              const kinds = chartKinds();
+              const index = kinds.findIndex(([kind]) => kind === k);
+              const next = e.key === 'Home' ? 0 : e.key === 'End' ? kinds.length - 1
+                : ['ArrowRight', 'ArrowDown'].includes(e.key) ? (index + 1) % kinds.length
+                  : ['ArrowLeft', 'ArrowUp'].includes(e.key) ? (index + kinds.length - 1) % kinds.length : -1;
+              if (next < 0) return;
+              e.preventDefault(); e.stopPropagation();
+              set({ kind: kinds[next][0] as ChartKind });
+              e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+            }}>
             <Codicon name={icon} /><span>{label}</span>
           </button>
         ))}

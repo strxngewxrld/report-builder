@@ -4,6 +4,7 @@
 // direct XML edits by the model – the tool descriptions say so.
 
 import * as vscode from 'vscode';
+import { requireWorkspaceTrust } from '../workspaceTrust';
 import { l10n } from '../../webview/l10n';
 import { ChartSpec } from '../../webview/charts';
 import { BcContext } from '../../webview/bc';
@@ -99,9 +100,9 @@ class Tools {
   }
 
   /** Runs a layout edit and reports what changed, plus the problems the edit left. */
-  private async edit(file: string | undefined, fn: (text: string) => EditResult | Promise<EditResult>, after?: (text: string) => string) {
+  private async edit(file: string | undefined, fn: (text: string, uri: vscode.Uri) => EditResult | Promise<EditResult>, after?: (text: string) => string) {
     const { uri, text, path } = await this.context(file);
-    const res = await fn(text);
+    const res = await fn(text, uri);
     const changed = await writeLayout(uri, text, res.text);
     const problems = validateLayout(res.text, { al: await this.al(uri), sample: await readSample(uri), bc: await this.bc(uri, res.text) });
     const errors = problems.filter(p => p.severity === 'error');
@@ -127,7 +128,7 @@ class Tools {
     const { uri, text } = await this.context(o.file);
     return result(previewText(text, {
       sample: await readSample(uri), bc: await this.bc(uri, text), parameters: o.parameters, maxRows: o.maxRows,
-      reportName: name(uri).replace(/\.rdlc?$/i, ''), locale: vscode.env.language,
+      reportName: name(uri).replace(/\.rdlc?$/i, ''),
     }));
   };
 
@@ -178,12 +179,18 @@ class Tools {
     return result(out.join('\n'));
   };
 
-  insert = (o: FileInput & { items: NewItem[] }) => this.edit(o.file, async text => {
+  insert = (o: FileInput & { items: NewItem[] }) => this.edit(o.file, async (text, uri) => {
     if (!Array.isArray(o.items) || !o.items.length) throw new Error('"items" must list at least one item.');
+    const hasImages = o.items.some(it => it.type === 'image' && (it as NewItem & { imageFile?: string }).imageFile);
+    if (hasImages) await vscode.commands.executeCommand('vscode.openWith', uri, ReportEditorProvider.viewType);
+    const validator = hasImages ? ReportEditorProvider.sessionFor(uri) : undefined;
+    if (hasImages && !validator) throw new Error('The image validation editor could not be opened.');
     const items = await Promise.all(o.items.map(async it => {
       const file = (it as NewItem & { imageFile?: string }).imageFile;
       if (it.type !== 'image' || !file) return it;
-      return { ...it, embed: await readImage(file) };
+      const embed = await readImage(file);
+      await validator!.validateImage(embed);
+      return { ...it, embed };
     }));
     return insertItems(text, items);
   }, text => {
@@ -280,9 +287,15 @@ Use them as =Fields!<Name>.Value (decimal fields also get <Name>Format; for a tr
   };
 
   build = async () => {
+    requireWorkspaceTrust();
     const commands = await vscode.commands.getCommands(true);
     if (!commands.includes('al.package')) throw new Error('Building needs Microsoft\'s AL Language extension (command al.package).');
-    await vscode.commands.executeCommand('workbench.action.files.saveAll');
+    // WorkspaceEdit can leave AL documents dirty without opening an editor tab. Save these explicitly;
+    // the workbench's Save All action can miss such tool-created working copies.
+    for (const doc of vscode.workspace.textDocuments) {
+      if (doc.isDirty && !doc.isUntitled && !await doc.save()) throw new Error(`Could not save ${doc.uri.fsPath}; the AL build was not started.`);
+    }
+    if (!await vscode.workspace.saveAll(false)) throw new Error('Files could not be saved; the AL build was not started.');
     await vscode.commands.executeCommand('al.package');
     return result('AL: Package ran (all files were saved first). The compiler updates the datasets of the RDLC layouts. Check the Problems panel / bcReport_validateLayout for build errors and stale datasets.');
   };

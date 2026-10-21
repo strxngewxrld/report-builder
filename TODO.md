@@ -2,28 +2,54 @@
 
 Was zur vollständigen Anwendung noch fehlt – nach Priorität. Erledigtes steht abgehakt darunter.
 
-Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md), [Windows-Abnahme](docs/RELEASE-TEST-2026-10-20-WINDOWS.md) und
+Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md), [Windows-Abnahme](docs/RELEASE-TEST-2026-10-20-WINDOWS.md),
+[Nachprüfung offener Punkte](docs/RELEASE-TEST-2026-10-20-RESTPUNKTE.md),
+[Korrekturen und erweiterte Abnahme](docs/RELEASE-TEST-2026-10-20-FIXES.md),
+[Acrobat-Abnahme per Windows MCP](docs/RELEASE-TEST-2026-10-21-ACROBAT.md),
+[weitere Absicherung mit NVDA](docs/RELEASE-TEST-2026-10-21-ABSICHERN.md) und
 [UI-Testmatrix mit verbleibenden Lücken](docs/UI-TESTMATRIX.md). Grüne Tests ersetzen keine vollständige manuelle Abnahme.
 
 ## Erstes Release (1.0.0)
-- [x] Offene Änderungen committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
-- [ ] Screenshot `media/preview.png` (Designer mit Gliederung und Berichtsdaten) für README und Release-Seite
+- [ ] Aktuellen Freigabestand committen und pushen; CI (Unit-, Integrations-, Lokalisierungstest, VSIX-Prüfung) muss für den Commit grün sein
+      (neue Findings-Korrekturen und Abnahmetests sind lokal geprüft; Push und CI-Freigabe stehen noch aus)
+- [x] Screenshot `media/preview.png` (Designer mit Gliederung und Berichtsdaten) erstellt und im README eingebunden;
+      auch für die Release-Seite verwendbar
 - [x] Lokalen Release-Dry-Run ausführen: `npm run publish:github -- --dry-run` (18.10.2026: Typecheck, 143/143 Tests und VSIX-Prüfung grün; nichts veröffentlicht)
-- [ ] Remote-Fenster (WSL/SSH/Dev Container): Update-Installation prüfen (VSIX liegt im temporären Ordner des Extension-Hosts)
-- [ ] Eingeschränkter Modus: `untrustedWorkspaces.supported: true` überdenken – *Report in BC ausführen* und *Projekt
-      erstellen* starten AL-Befehle; ggf. `limited` mit Beschreibung wie bei Sheets
+- [x] Remote-Fenster (WSL/SSH/Dev Container): Update-Installation prüfen (VSIX liegt im temporären Ordner des Extension-Hosts)
+- [x] Eingeschränkter Modus: `limited` mit Beschreibung, explizite Vertrauensprüfung vor AL-Befehlen und
+      BC-Metadatenabruf; echter Restricted-Mode-Test grün (`npm run test:vscode:untrusted`), Entwurf/Vorschau verfügbar
 
-## Absichern (vor einer Veröffentlichung) – braucht Hand und echte Umgebungen
-- [ ] KI-Werkzeuge mit Copilot im Agentenmodus an echten Aufgaben abnehmen (neuer Bericht aus AL-Report, Gruppen/Summen,
+## Absichern (vor einer Veröffentlichung)
+- [x] KI-Werkzeuge mit Copilot im Agentenmodus an echten Aufgaben abnehmen (neuer Bericht aus AL-Report, Gruppen/Summen,
       Diagramm, Labels, Build); prüfen, ob das Modell XML- und Werkzeugweg wie beschrieben wählt, und die
       `modelDescription`s danach nachschärfen
-- [ ] Restliche manuelle Fälle aus `docs/ABNAHME.md` abnehmen (insbesondere Baustein-Ersetzen bestätigen/abbrechen, Konfliktpfade und kombinierte Vorschau-Umbrüche)
-- [ ] Noch offene Dialog-/Navigationsvarianten prüfen: verschachtelte Spaltengruppen, berechnete Diagrammreihen und Punktfarben,
-      Bookmark/Drillthrough samt Navigation sowie komplexe Filter-/Drilldown-Kombinationen; Details in `docs/UI-TESTMATRIX.md`
-- [ ] Reine Tastaturbedienung sämtlicher Dialogvarianten mit VoiceOver prüfen; NVDA unter Windows separat abnehmen
-- [ ] Native Farbauswahl und weitere Gestaltungs-/Drag-Varianten prüfen (Schriften, Rahmen, Zahlenformate, Raster/Zoom, Container); große/defekte Bilder testen
-- [ ] Kopieren/Einfügen zwischen mehreren geöffneten Berichten nativ prüfen
-- [ ] Mehrdatei-Rückgängig von Hand prüfen: *Als AL-Label anlegen* und *Spalte umbenennen* (VS Code fragt „in allen Dateien?“)
+      (Rechnungsanlage mit echtem Copilot und AL-Build sowie Anpassung eines bestehenden Reports bestanden;
+      Speicher-/Projektwurzel-/Sprachbefunde behoben, Summen und beide Vorschauseiten unabhängig geprüft.
+      162/162 Unit-Tests, 58/58 Integrationstests je Sprache; [Copilot-Protokoll](docs/RELEASE-TEST-2026-10-21-COPILOT.md).
+      Repräsentative Aufgaben mit Copilot Auto; keine Abnahme aller Modelle oder beliebiger XML-Konstruktionen.)
+- [ ] Verbleibende plattform-/betrachterspezifische Abnahme aus `docs/ABNAHME.md`; lokale Windows-Fälle einschließlich
+      Acrobat, Baustein-Konflikten und kombinierter Vorschau-Umbrüche automatisiert/nativ geprüft;
+      die konkrete Windows-Checkliste ist vollständig abgehakt, Screenreader und weitere Plattformen bleiben offen
+- [x] Repräsentative komplexe Filter-/Drilldown-Kombination prüfen: Zahlenfilter + Like + Top-N in zwei Belegen,
+      getrenntes Auf-/Zuklappen, interaktive Sortierung und erhaltene Belegzustände; Enter/Leertaste geprüft.
+      Verschachtelte Spaltengruppen, berechnete Reihen/Punktfarben, Bookmark-Seitensprung und Drillthrough-Parameter zuvor geprüft.
+- [ ] Tatsächliche Drillthrough-Servernavigation in einer passenden Reporting-Server-Umgebung prüfen.
+      Die lokale Vorschau zeigt absichtlich Ziel und ausgewertete Parameter als Hinweis; sie führt keinen Zielreport aus.
+- [x] NVDA unter Windows für Diagrammdialog, Validierungsansage, Ausdruckssuche/Trefferansage und Fokus-Rückkehr
+      nativ prüfen. Gefundene Tastaturprobleme bei Diagrammtypen und Vorschau-Schaltern behoben; portable NVDA-Kopie,
+      separate Testprofile und protokollierte Ansagen, siehe Absicherungsprotokoll.
+- [ ] Reine Tastaturbedienung sämtlicher Dialogvarianten mit VoiceOver prüfen; vollständiger NVDA-Durchgang über
+      alle Varianten bleibt zusätzlich offen. Die geprüften NVDA-Fälle sind keine vollständige Screenreader-Abnahme.
+- [x] Weitere repräsentative Gestaltungs-/Drag-Varianten prüfen: vier Ziehrichtungen bei 50/100/200 %, Raster an/aus,
+      Alt ohne Raster und verschachtelter Container; Georgia/Fett/Kursiv/gestrichelter Rahmen sowie N2/C2/P1 in deutscher Vorschau.
+      Native RGB-Farbauswahl, gültige PNG, großes SVG und Ablehnung defekter/abgeschnittener Bilder zuvor geprüft.
+- [x] Kopieren/Einfügen zwischen mehreren geöffneten Berichten behoben und nativ im installierten VSIX nachgeprüft;
+      Bilder/Code/interne Verweise, Konfliktabbruch und gemeinsames Undo zusätzlich integrationsgetestet
+- [x] Mehrdatei-Rückgängig von Hand prüfen: *Als AL-Label anlegen* und *Spalte umbenennen* unter Windows nativ
+      bytegenau rückgängig gemacht; Spalten-Undo am 21.10. auch aus dem AL-Editor mit zuvor geschlossenen Designern geprüft.
+      VS Code zeigt die Mehrdatei-Rückfrage nur unter bestimmten Bedingungen; in diesen Abläufen erschien keine.
+      Bestätigen/Abbrechen einer tatsächlich angezeigten Rückfrage ist damit nicht geprüft, aber kein erforderlicher
+      zusätzlicher Handgriff für die hier abgenommenen Abläufe.
 - [x] Symbolpakete gegen eine echte Base Application (`.alpackages/*.app`) prüfen – BC 29 on-prem, *Felder als Spalten
   hinzufügen* mit „Sales Invoice Line“ (Windows-Abnahme 20.10.)
 - [ ] „Report in Business Central ausführen“ gegen echte Umgebungen prüfen (Cloud-Sandbox, Docker; On-Prem mit
@@ -31,6 +57,20 @@ Testnachweise: [Release-Testprotokoll](docs/RELEASE-TEST-2026-10-18.md), [Window
 
 
 ## Erledigt
+- [x] Weitere Absicherung am 21.10.: drei Tastaturbefunde behoben, native NVDA-Ansagen geprüft,
+      zusätzliche Filter-/Drilldown-/Sortier- und Gestaltungs-/Drag-Kombinationen abgenommen; Typecheck,
+      161/161 Unit-Tests, 55/55 Integrationstests je Sprache und finales VSIX grün. Nachweise im Absicherungsprotokoll.
+- [x] Acrobat-Abnahme mit Windows MCP: Schrift-Einbettung, Umlaute/Sonderzeichen, Logo und zwei A4-Seiten geprüft;
+      Schriftfamilien-Aliase im PDF-Export korrigiert (Segoe UI Light), Regressionstests und installiertes VSIX geprüft.
+      Typecheck, 161/161 Unit-Tests und 52/52 Integrationstests je Sprache grün; Details im Acrobat-Protokoll.
+- [x] Findings-Korrekturen mit erweiterter Abnahme: Ausdruckssuche (Stile/Gruppen, Einzel-/Sammelersetzung, Undo/Redo),
+      Bausteinbibliothek mit Logo und Profilwechsel, Konflikte, fehlende Abhängigkeiten, neue Kopfbereiche und Undo,
+      kombinierte Gruppen-/Containerumbrüche, lange Texte/Schriften und sofortiger PDF-Export. Nachweise im Fix-Protokoll.
+- [x] PDF-Export beim Wechsel der Vorschaudaten: alte Messwerte verwerfen und Export bis zur neuen Vermessung vormerken;
+      neuer Regressionstest mit 120 Datenzeilen und PDF-/Vorschau-Seitenvergleich
+- [x] Nachprüfung 20.10.: native Baustein-Ersetzen-Rückfrage (Abbrechen/Bestätigen), RGB-Farbauswahl und gemeinsames
+      AL-Label-Undo aus Designer/AL-Editor; neue Webview-Tests für sechs berechnete Diagrammreihen, Punktfarben,
+      Bookmark-Auflösung und Drillthrough-Hinweis. Keine vollständige Abnahme aller Navigations-/Undo-Varianten.
 - [x] Windows-Abnahme (20.10.2026): 41/41 Integrationstests auf Englisch und mit deutschem VS Code, natives Durchklicken mit
       echter Maus/Tastatur (AltGr, Zwischenablage, Kontextmenüs, Drag-and-drop, native Dialoge, Pfade mit Umlauten/`&`, CRLF);
       neun Fehler behoben, Details im Windows-Protokoll

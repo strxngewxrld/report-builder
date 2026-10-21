@@ -117,6 +117,35 @@ test('Weitere Diagrammtypen: 100 %-Säulen, gestapelte Fläche, Punkte', () => {
   }
 });
 
+test('Diagramme übernehmen die Berichtssprache für Achsen, Datenbeschriftungen und Tooltips', async () => {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { createElement } = await import('react');
+  const { ChartView } = await import('../webview/render/ChartView');
+  for (const language of ['de-DE', 'en-US']) {
+    for (const kind of ['Column', 'Radar', 'Pie'] as const) {
+      const definition: ChartSpec = {
+        ...spec, kind, dataLabels: true,
+        series: [spec.series[0], { ...spec.series[0], name: 'Zweite', secondary: kind === 'Column' }],
+        valueAxis: { ...emptyAxis(), format: 'C2' },
+        secondaryAxis: { ...emptyAxis(), format: 'N2' },
+      };
+      const xml = serializeRdl(withChart(chartXml(definition, { top: 0, left: 0, width: 6, height: 4 })), dom)
+        .replace('</Report>', `<Language>${language}</Language></Report>`);
+      const chart = renderReport(xml, { dom, mode: 'preview', data: { Sales: [{ Region: 'Nord', Amount: 1234.5 }] } }).body.nodes[0] as RChart;
+      const svg = renderToStaticMarkup(createElement(ChartView, { chart, S: 96, style: {} }));
+      assert.equal(chart.locale, language);
+      if (kind === 'Column') {
+        assert.ok(svg.includes(language === 'de-DE' ? '1.234,50' : '1,234.50'), `${language}: formatted labels`);
+        assert.ok(svg.includes(language === 'de-DE' ? '€' : '$'), `${language}: currency`);
+        assert.ok(!svg.includes(language === 'de-DE' ? '$' : '€'), `${language}: no other currency`);
+      } else {
+        assert.ok(svg.includes(language === 'de-DE' ? '1.234,5' : '1,234.5'), `${kind}: localized plain values`);
+      }
+      if (kind === 'Radar') assert.ok(svg.includes(language === 'de-DE' ? '€' : '$'), 'polar axis currency');
+    }
+  }
+});
+
 test('SVG-Darstellung: alle Typen, Achsentitel, zweite Achse, Beschriftungen', async () => {
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { createElement } = await import('react');

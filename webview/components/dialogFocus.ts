@@ -7,7 +7,7 @@ export function useDialogFocus() {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const focusable = () => Array.from(el.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')).filter(e => e.offsetParent !== null);
+    const focusable = () => Array.from(el.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]')).filter(e => e.tabIndex >= 0 && e.offsetParent !== null);
     if (!el.contains(document.activeElement)) focusable()[0]?.focus();
     const trap = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;

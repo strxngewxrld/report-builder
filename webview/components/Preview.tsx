@@ -142,7 +142,10 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
 
   // measure the continuous body, then break it into pages
   const measureRef = useRef<HTMLDivElement>(null);
-  const [measured, setMeasured] = useState<ReturnType<typeof measure> | null>(null);
+  const [measurement, setMeasurement] = useState<{ result: typeof result; value: ReturnType<typeof measure> } | null>(null);
+  // A render can arrive before the previous layout effect resets its measurement. Never publish
+  // page counts or start exports with page slices measured for a different report/data snapshot.
+  const measured = measurement?.result === result ? measurement.value : null;
   useLayoutEffect(() => {
     const el = measureRef.current;
     if (!el) return;
@@ -151,10 +154,10 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
     // Flush layout so the FontFaceSet knows which report fonts need loading.
     el.getBoundingClientRect();
     let fontsReady = false;
-    setMeasured(null);
+    setMeasurement(null);
     const update = () => {
       cancelAnimationFrame(frame);
-      if (!disposed && fontsReady) frame = requestAnimationFrame(() => setMeasured(measure(el)));
+      if (!disposed && fontsReady) frame = requestAnimationFrame(() => setMeasurement({ result, value: measure(el) }));
     };
     // Start font loading for the actual report text before measuring page boundaries.
     void document.fonts.ready.then(() => { fontsReady = true; update(); });
@@ -227,8 +230,13 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
 
   // PDF: all pages mounted at zoom 1, drawn into a PDF here, saved by the extension
   const [pdfExport, setPdfExport] = useState(false);
+  const [pdfRequested, setPdfRequested] = useState(false);
   const exportPdf = () => {
-    if (!pages.length || pdfExport) return;
+    if (!pdfExport) setPdfRequested(true);
+  };
+  useEffect(() => {
+    if (!pdfRequested || !pages.length || pdfExport) return;
+    setPdfRequested(false);
     setRenderAll(true);
     setPdfExport(true);
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(async () => {
@@ -248,7 +256,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
         setPdfExport(false);
       }
     }, 300)));
-  };
+  }, [pdfRequested, pages, pdfExport]);
   useCommand('exportPdf', exportPdf);
 
   const exportDocument = (format: 'xlsx' | 'docx') => post({

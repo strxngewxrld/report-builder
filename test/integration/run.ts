@@ -2,10 +2,11 @@
 // Uses an isolated, temporary profile and a temporary copy of samples/; nothing of the user's setup is touched.
 //   npm run test:vscode            (VSCODE_PATH=… to use another VS Code executable)
 
-import { runTests } from '@vscode/test-electron';
-import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { downloadAndUnzipVSCode, runTests } from '@vscode/test-electron';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
 
 // bundled to out/test/integration/run.js
 const root = resolve(__dirname, '../../..');
@@ -27,19 +28,48 @@ async function main() {
   const tmp = mkdtempSync(join(tmpdir(), 'bc-rb-test-'));
   const workspace = join(tmp, 'workspace');
   cpSync(join(root, 'samples'), workspace, { recursive: true });
+  const untrusted = process.env.BC_RB_UNTRUSTED === '1' || process.argv.includes('--untrusted');
+  if (untrusted) {
+    mkdirSync(join(tmp, 'user', 'User'), { recursive: true });
+    writeFileSync(join(tmp, 'user', 'User', 'settings.json'), JSON.stringify({
+      'security.workspace.trust.enabled': true,
+      'security.workspace.trust.startupPrompt': 'never',
+      'workbench.startupEditor': 'none',
+    }));
+  }
   try {
+    // test-electron always adds --disable-workspace-trust. Launch this one case directly so it
+    // exercises VS Code's real restricted mode rather than a mocked workspace.isTrusted getter.
+    if (untrusted) {
+      const executable = candidates[0] ?? await downloadAndUnzipVSCode();
+      await new Promise<void>((resolveRun, rejectRun) => {
+        const child = spawn(executable, [workspace, `--extensionDevelopmentPath=${root}`,
+          `--extensionTestsPath=${join(root, 'out/test/integration/suite.js')}`,
+          '--user-data-dir', join(tmp, 'user'), '--extensions-dir', join(tmp, 'extensions'),
+          '--no-sandbox', '--disable-gpu-sandbox', '--disable-updates',
+          '--disable-extensions', '--skip-welcome', '--skip-release-notes',
+          ...(process.env.BC_RB_LOCALE ? [`--locale=${process.env.BC_RB_LOCALE}`] : [])], {
+          stdio: 'inherit', env: { ...process.env, BC_REPORT_BUILDER_TEST: '1', BC_RB_UNTRUSTED: '1',
+            BC_RB_ONLY: process.env.BC_RB_ONLY || '^Abnahme: Eingeschränkter Modus' },
+        });
+        child.on('error', rejectRun);
+        child.on('exit', code => code === 0 ? resolveRun() : rejectRun(new Error(`Restricted-mode tests exited with ${code}`)));
+      });
+      return;
+    }
     await runTests({
       // without an installed VS Code, test-electron downloads one (~200 MB)
       vscodeExecutablePath: candidates[0],
       extensionDevelopmentPath: root,
       extensionTestsPath: join(root, 'out/test/integration/suite.js'),
       // BC_RB_LOCALE=de runs VS Code in German (translations from l10n/ and package.nls.de.json)
-      launchArgs: [workspace, ...(process.env.BC_RB_LOCALE ? [`--locale=${process.env.BC_RB_LOCALE}`] : []), '--disable-extensions', '--user-data-dir', join(tmp, 'user'), '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust'],
+      launchArgs: [workspace, ...(process.env.BC_RB_LOCALE ? [`--locale=${process.env.BC_RB_LOCALE}`] : []), '--disable-extensions', '--user-data-dir', join(tmp, 'user'), '--skip-welcome', '--skip-release-notes', ...(untrusted ? [] : ['--disable-workspace-trust'])],
       extensionTestsEnv: { BC_REPORT_BUILDER_TEST: '1', BC_RB_TIMEOUT_SCALE: process.env.BC_RB_TIMEOUT_SCALE ?? '', BC_RB_KEEP_PDF: process.env.BC_RB_KEEP_PDF ?? '',
-        BC_RB_TEST_LANGUAGE: process.env.BC_RB_TEST_LANGUAGE ?? '', BC_RB_ONLY: process.env.BC_RB_ONLY ?? '' },
+        BC_RB_TEST_LANGUAGE: process.env.BC_RB_TEST_LANGUAGE ?? '', BC_RB_ONLY: process.env.BC_RB_ONLY ?? (untrusted ? '^Abnahme: Eingeschränkter Modus' : ''), BC_RB_UNTRUSTED: untrusted ? '1' : '' },
     });
   } finally {
-    rmSync(tmp, { recursive: true, force: true });
+    // Electron/antivirus can briefly retain handles after the test window exits on Windows.
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
 

@@ -50,8 +50,6 @@ function markerShape(type: string | undefined, x: number, y: number, r: number, 
   }
 }
 
-const fmt = (v: number) => (Math.abs(v) >= 1000 || !Number.isInteger(v) ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : String(v));
-
 /** "Nice" axis bounds and step (1, 2, 5 × 10^n). */
 function axis(min: number, max: number) {
   if (min === max) { max = min + 1; }
@@ -62,6 +60,8 @@ function axis(min: number, max: number) {
 }
 
 export function ChartView({ chart, S, style }: { chart: RChart; S: number; style: CSSProperties }) {
+  const fmt = (v: number) => (Math.abs(v) >= 1000 || !Number.isInteger(v)
+    ? v.toLocaleString(chart.locale ?? 'en-US', { maximumFractionDigits: 2 }) : String(v));
   const W = chart.width * S, H = chart.height * S;
   const pal = colors(chart.palette);
   const font = { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: 10, fill: '#333' };
@@ -143,7 +143,7 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
         ? <polygon key={`g${v}`} points={chart.categories.map((_, ci) => at(ci, v).join(',')).join(' ')} fill="none" stroke="#e0e0e0" />
         : <circle key={`g${v}`} cx={cx} cy={cy} r={((v - lo) / (hi - lo)) * r} fill="none" stroke="#e0e0e0" />);
       // the outermost ring is not labelled: its label would cover the first category's
-      if (v < hi - nice.step / 2) body.push(<text key={`gl${v}`} x={cx + 2} y={at(0, v)[1] - 2} {...font} fontSize={8} fill="#777">{chart.valueAxis?.format ? formatValue(v, chart.valueAxis.format) : fmt(v)}</text>);
+      if (v < hi - nice.step / 2) body.push(<text key={`gl${v}`} x={cx + 2} y={at(0, v)[1] - 2} {...font} fontSize={8} fill="#777">{chart.valueAxis?.format ? formatValue(v, chart.valueAxis.format, chart.locale) : fmt(v)}</text>);
     }
     chart.categories.forEach((c, ci) => {
       const [x, y] = at(ci, hi);
@@ -190,7 +190,7 @@ export function ChartView({ chart, S, style }: { chart: RChart; S: number; style
       const nice = axis(spec?.min ?? Math.min(...all), spec?.max ?? Math.max(...all));
       const lo = spec?.min ?? nice.lo, hi = spec?.max ?? nice.hi;
       const percent = idx.some(i => chart.series[i].percent);
-      const label = (v: number) => (spec?.format ? formatValue(v, spec.format) : `${fmt(v)}${percent ? ' %' : ''}`);
+      const label = (v: number) => (spec?.format ? formatValue(v, spec.format, chart.locale) : `${fmt(v)}${percent ? ' %' : ''}`);
       return { lo, hi: hi > lo ? hi : lo + 1, step: nice.step, label };
     };
     const primary = scaleOf(false) ?? { lo: 0, hi: 1, step: 1, label: fmt };

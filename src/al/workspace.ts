@@ -61,17 +61,18 @@ export class AlWorkspace implements vscode.Disposable {
     this.files.set(key(uri), { uri, reports: parseAl(text), root: await this.projectRoot(uri), text });
   }
 
-  /** Folder containing app.json above the file (within its workspace folder). */
+  /** Folder containing app.json above the file (bounded by its workspace folder when one is known). */
   private async projectRoot(uri: vscode.Uri): Promise<vscode.Uri> {
     const folder = vscode.workspace.getWorkspaceFolder(uri)?.uri;
     let dir = vscode.Uri.joinPath(uri, '..');
+    const fallback = folder ?? dir;
     for (;;) {
       const cached = this.rootCache.get(key(dir));
       if (cached) return cached;
       const exists = await vscode.workspace.fs.stat(vscode.Uri.joinPath(dir, 'app.json')).then(() => true, () => false);
       if (exists) { this.rootCache.set(key(dir), dir); return dir; }
       const parent = vscode.Uri.joinPath(dir, '..');
-      if (!folder || parent.path === dir.path || !parent.path.startsWith(folder.path)) return folder ?? dir;
+      if (key(parent) === key(dir) || (folder && !key(parent).startsWith(key(folder)))) return fallback;
       dir = parent;
     }
   }

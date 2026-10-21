@@ -11,9 +11,14 @@ const api: VsCodeApi = typeof acquireVsCodeApi === 'function'
 
 export const vscode = api;
 
+/** Portable selection shared by the designers in one extension host. */
+export interface LayoutClipboard { text: string; top: number; left: number }
+
 /** Messages webview → extension (mirrors FromWebview in src/reportEditorProvider.ts). */
 export type ToExtension =
   | { type: 'ready' }
+  | { type: 'clipboard'; value: LayoutClipboard }
+  | { type: 'imageValidated'; id: number; error?: string }
   | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string; focused?: boolean; focusInside?: boolean; defaultPrevented?: boolean; propagated?: boolean; disabled?: boolean }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }

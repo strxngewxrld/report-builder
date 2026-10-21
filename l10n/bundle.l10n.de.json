@@ -1,4 +1,7 @@
 {
+  "Pasted items refer to missing report data: {0}": "Eingefügte Elemente verweisen auf fehlende Berichtsdaten: {0}",
+  "Image \"{0}\" cannot be decoded. The file is damaged or is not a supported image.": "Bild „{0}“ kann nicht dekodiert werden. Die Datei ist beschädigt oder kein unterstütztes Bild.",
+  "Trust this workspace before building, downloading symbols or running a report in Business Central.": "Vertrauen Sie diesem Arbeitsbereich, bevor Sie Projekte erstellen, Symbole herunterladen oder Berichte in Business Central ausführen.",
   "\"{0}\" already exists": "„{0}“ gibt es bereits",
   "\"{0}\" cannot be extended in \"{1}\".": "„{0}“ lässt sich in „{1}“ nicht erweitern.",
   "\"{0}\" contains the fixed text \"{1}\", which is not translated. Create it as a label in the AL report (context menu in the designer: \"Create as AL Label…\").": "„{0}“ enthält den festen Text „{1}“, der nicht übersetzt wird. Als Label im AL-Report anlegen (Kontextmenü im Designer: „Als AL-Label anlegen…“).",

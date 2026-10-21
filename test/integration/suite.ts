@@ -311,7 +311,7 @@ async function restore(uri: vscode.Uri, text: string) {
 }
 
 test('Als AL-Label anlegen: Name und Optionen abfragen, Label in AL, Textfeld im Layout – ein Bearbeitungsschritt', async api => {
-  const { doc } = await open(api, 'Verkaufsrechnung.rdlc');
+  const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
   const alUri = file('src/Verkaufsrechnung.Report.al');
   const al = await vscode.workspace.openTextDocument(alUri);
   const [layoutText, alText] = [doc.getText(), al.getText()];
@@ -323,6 +323,13 @@ test('Als AL-Label anlegen: Name und Optionen abfragen, Label in AL, Textfeld im
     assert.match(al.getText(), /MengeLbl = 'Menge', Comment = 'Spaltenüberschrift';/);
     assert.ok(doc.getText().includes('<Value>=Parameters!MengeLbl.Value</Value>'));
     assert.equal(doc.getText().split('\n').length, layoutText.split('\n').length, 'nur die eine Zeile geändert');
+    await until('AL-Label im Designer geladen', () => probe.posted.some(m => m.type === 'load' && String(m.text).includes('Parameters!MengeLbl.Value')));
+    await vscode.commands.executeCommand('bcReportBuilder.findExpressions', uri);
+    await domAction(api, uri, probe, '.expression-search select', 'input', 'uses');
+    await domAction(api, uri, probe, '.expression-search .form-row:nth-child(2) select', 'input', 'Parameters!MengeLbl');
+    assert.equal((await domAction(api, uri, probe, '.expression-result')).count, 1);
+    assert.ok(String((await domAction(api, uri, probe, '.expression-result')).text).includes(item));
+    assert.equal((await domAction(api, uri, probe, '.expression-result button', 'click')).count, 0, 'Navigation schließt den Dialog');
   } finally {
     await restore(doc.uri, layoutText);
     await restore(alUri, alText);
@@ -463,6 +470,54 @@ test('PDF-Export: alle Seiten der Vorschau in Seitengröße des Berichts', async
     Object.assign(w, saved);
     await vscode.workspace.fs.delete(target).then(undefined, () => undefined);
   }
+});
+
+test('Abnahme: PDF bettet die angeforderte Segoe UI Light statt einer Ersatzschrift ein', async api => {
+  const { uri, probe } = await open(api, 'Umsatzbericht.rdl');
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Umsatzvorschau', () => probe.received.find(m => m.type === 'previewReady'));
+  const windows = vscode.window as unknown as Record<string, unknown>;
+  const save = windows.showSaveDialog, info = windows.showInformationMessage;
+  const target = file('Font-Acceptance.pdf');
+  windows.showSaveDialog = async () => target;
+  windows.showInformationMessage = async () => undefined;
+  try {
+    await vscode.commands.executeCommand('bcReportBuilder.exportPdf', uri);
+    const bytes = await until('Schriften-PDF', async () => vscode.workspace.fs.readFile(target).then(b => b.length ? b : undefined, () => undefined), 60000);
+    const { PDFDocument, PDFDict, PDFName } = await import('pdf-lib');
+    const pdf = await PDFDocument.load(bytes);
+    const { FontIndex } = await import('../../src/fonts');
+    const face = await new FontIndex().find({ families: ['Segoe UI Light'], bold: false, italic: false });
+    if (face?.aliases.some(n => n.toLowerCase() === 'segoe ui light')) {
+      assert.ok(pdf.context.enumerateIndirectObjects().some(([, o]) => o instanceof PDFDict &&
+        String(o.get(PDFName.of('BaseFont'))).includes('SegoeUI-Light')), 'Segoe UI Light eingebettet');
+    }
+    if (process.env.BC_RB_KEEP_PDF) await vscode.workspace.fs.writeFile(vscode.Uri.file(process.env.BC_RB_KEEP_PDF.replace(/\.pdf$/i, '-fonts.pdf')), bytes);
+    assert.deepEqual(errorsOf(probe), []);
+  } finally { windows.showSaveDialog = save; windows.showInformationMessage = info; }
+});
+
+test('Abnahme: PDF-Export während neuer Vorschaudaten wartet auf die neue Seitenaufteilung', async api => {
+  const { uri, probe } = await open(api, 'Umsatzbericht.rdl');
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const initial = await until('Erste Vorschau vor Datenwechsel', () => probe.received.find(m => m.type === 'previewReady'));
+  const windows = vscode.window as unknown as Record<string, unknown>;
+  const originalSave = windows.showSaveDialog, originalInfo = windows.showInformationMessage;
+  const target = file('ExportDuringMeasurement.pdf');
+  windows.showSaveDialog = async () => target;
+  windows.showInformationMessage = async () => undefined;
+  try {
+    const count = probe.received.length;
+    const rows = Array.from({ length: 120 }, (_, i) => ({ Region: 'Nord', Kunde: `Neuer Kunde ${i}`, Bestelldatum: '2026-01-01', Menge: i + 1, Umsatz: (i + 1) * 10 }));
+    await probe.send({ type: 'sampleData', data: { Umsaetze: rows } });
+    // Do not wait for previewReady: this command must survive the measurement reset.
+    await vscode.commands.executeCommand('bcReportBuilder.exportPdf', uri);
+    const ready = await until('Neue mehrseitige Vorschau', () => probe.received.slice(count).find(m => m.type === 'previewReady' && Number(m.pages) > Number(initial.pages)));
+    const bytes = await until('PDF nach Datenwechsel', async () => vscode.workspace.fs.readFile(target).then(b => b.length ? b : undefined, () => undefined), 60000);
+    const { PDFDocument } = await import('pdf-lib');
+    assert.equal((await PDFDocument.load(bytes)).getPageCount(), ready.pages, 'Export verwendet die neuen Daten statt alter Messwerte');
+    assert.deepEqual(errorsOf(probe), []);
+  } finally { windows.showSaveDialog = originalSave; windows.showInformationMessage = originalInfo; }
 });
 
 test('Tabellenbefehle aus VS Code wirken in der Webview: Spalte, Zeile, Gruppenfuß, Rückgängig', async api => {
@@ -646,6 +701,410 @@ const uiDom: XmlDom = {
   parse: xml => new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document,
   serialize: node => new XMLSerializer().serializeToString(node as never),
 };
+
+test('Abnahme: Zwischenablage zwischen Berichten mit Bildern, Code, Verweisen und Undo', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem } = await import('../../webview/ops');
+  const { addEmbeddedImage, embeddedImages } = await import('../../webview/images');
+  const source = emptyReport();
+  const group = createItem(source, 'rectangle', { top: 1, left: .5, width: 3, height: 1 });
+  assert.equal(group.type, 'rectangle');
+  if (group.type !== 'rectangle') return;
+  group.name = 'ClipboardGroup';
+  const a = createItem(source, 'textbox', { top: 0, left: 0, width: 1, height: .3 });
+  const b = createItem(source, 'textbox', { top: .4, left: 0, width: 1, height: .3 });
+  assert.equal(a.type, 'textbox'); assert.equal(b.type, 'textbox');
+  if (a.type !== 'textbox' || b.type !== 'textbox') return;
+  a.name = 'ClipboardA'; a.value = 'Clipboard sample';
+  b.name = 'ClipboardB'; b.value = '=Code.Echo(ReportItems!ClipboardA.Value)';
+  const image = createItem(source, 'image', { top: 0, left: 1.2, width: .5, height: .5 });
+  assert.equal(image.type, 'image');
+  if (image.type !== 'image') return;
+  image.source = 'Embedded'; image.value = 'ClipboardLogo';
+  group.items.push(a, b, image); source.body.items.push(group);
+  source.extraXml.push('<Code>Public Function Echo(v As Object) As Object\nReturn v\nEnd Function</Code>');
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=';
+  addEmbeddedImage(source, 'ClipboardLogo', 'image/png', png);
+  await vscode.workspace.fs.writeFile(file('ClipboardSource.rdl'), Buffer.from(serializeRdl(source)));
+  await vscode.workspace.fs.writeFile(file('ClipboardTarget.rdl'), Buffer.from(serializeRdl(emptyReport())));
+  const target = await open(api, 'ClipboardTarget.rdl');
+  await vscode.commands.executeCommand('workbench.action.keepEditor');
+  const before = target.doc.getText();
+  const from = await open(api, 'ClipboardSource.rdl');
+  await selectUi(api, from.uri, from.probe, group.name);
+  await vscode.commands.executeCommand('bcReportBuilder.copy', from.uri);
+  await until('Zwischenablage an anderen Designer', () => target.probe.posted.some(m => m.type === 'clipboard' && m.value));
+  await vscode.commands.executeCommand('vscode.open', target.uri);
+  for (let n = 1; n <= 2; n++) {
+    await vscode.commands.executeCommand('bcReportBuilder.paste', target.uri);
+    await until(`Kopie ${n}`, () => parseRdl(target.doc.getText(), uiDom).body.items.length === n);
+  }
+  const pasted = parseRdl(target.doc.getText(), uiDom);
+  assert.equal(embeddedImages(pasted).length, 1);
+  assert.match(target.doc.getText(), /ReportItems!ClipboardA_2\.Value/);
+  assert.ok(target.doc.getText().includes('<Code>'));
+  assert.equal(pasted.body.items[0].top, 1.125);
+  const names = allReportItems(pasted).map(i => i.name);
+  assert.equal(new Set(names).size, names.length);
+  await vscode.commands.executeCommand('undo');
+  await until('Zweite Kopie rückgängig', () => parseRdl(target.doc.getText(), uiDom).body.items.length === 1);
+  await vscode.commands.executeCommand('undo');
+  await until('Bilder und Code gemeinsam rückgängig', () => target.doc.getText() === before);
+  assert.deepEqual(errorsOf(target.probe), []);
+  // Newly opened designers receive the clipboard too; conflicts must leave the whole document unchanged.
+  const conflict = emptyReport();
+  addEmbeddedImage(conflict, 'ClipboardLogo', 'image/png', 'different');
+  await vscode.workspace.fs.writeFile(file('ClipboardConflict.rdl'), Buffer.from(serializeRdl(conflict)));
+  const conflicting = await open(api, 'ClipboardConflict.rdl');
+  const unchanged = conflicting.doc.getText();
+  await vscode.commands.executeCommand('bcReportBuilder.paste', conflicting.uri);
+  await until('Bildkonflikt gemeldet', () => errorsOf(conflicting.probe).length === 1);
+  assert.equal(conflicting.doc.getText(), unchanged);
+});
+
+test('Abnahme: Defekte Bilder ablehnen, Größenwarnung abbrechen und bestätigen', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalOpen = windowApi.showOpenDialog, originalWarning = windowApi.showWarningMessage;
+  await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  const original = doc.getText();
+  try {
+    const bad = [
+      ['Broken.png', Buffer.from('not a PNG')],
+      ['Truncated.png', Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB', 'base64')],
+      ['Broken.svg', Buffer.from('<svg><broken')],
+    ] as const;
+    for (const [name, bytes] of bad) {
+      const image = file(name);
+      await vscode.workspace.fs.writeFile(image, bytes);
+      windowApi.showOpenDialog = async () => [image];
+      const errors = errorsOf(probe).length;
+      await domAction(api, uri, probe, '.tree-group:last-child .tree-group-head button', 'click');
+      await until(`Fehler für ${name}`, () => errorsOf(probe).length === errors + 1);
+      assert.equal(doc.getText(), original, 'ungültiges Bild ändert nichts');
+    }
+    await assert.rejects(async () => vscode.lm.invokeTool('bcReport_insertItems', {
+      input: { file: uri.fsPath, items: [{ type: 'image', name: 'InvalidToolImage', imageFile: file('Broken.png').fsPath }] },
+      toolInvocationToken: undefined,
+    }));
+    assert.equal(doc.getText(), original, 'auch das KI-Werkzeug lehnt defekte Bilder vor der Änderung ab');
+    const image = file('Large.svg');
+    await vscode.workspace.fs.writeFile(image, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/><!--' + 'x'.repeat(2 * 1024 * 1024) + '--></svg>'));
+    windowApi.showOpenDialog = async () => [image];
+    let warnings = 0;
+    windowApi.showWarningMessage = async () => { warnings++; return undefined; };
+    await domAction(api, uri, probe, '.tree-group:last-child .tree-group-head button', 'click');
+    await until('Größenwarnung', () => warnings === 1);
+    assert.equal(doc.getText(), original);
+    windowApi.showWarningMessage = async (_message: string, action: string) => { warnings++; return action; };
+    await domAction(api, uri, probe, '.tree-group:last-child .tree-group-head button', 'click');
+    await until('Großes Bild eingebettet', () => doc.getText().includes('<EmbeddedImage Name="Large">'));
+    assert.equal(warnings, 2);
+    await vscode.commands.executeCommand('undo');
+    await until('Bildimport rückgängig', () => doc.getText() === original);
+  } finally {
+    windowApi.showOpenDialog = originalOpen;
+    windowApi.showWarningMessage = originalWarning;
+  }
+});
+
+test('Abnahme: Ausdruckssuche mit Stil und Gruppe, Großschreibung, Einzelersetzung, Sammel-Undo und Navigation', async api => {
+  const bytes = await vscode.workspace.fs.readFile(file('Umsatzbericht.rdl'));
+  const xml = new TextDecoder().decode(bytes)
+    .replace('<Group Name="Details" />', '<Group Name="Details"><GroupExpressions><GroupExpression>=Fields!Umsatz.Value</GroupExpression></GroupExpressions></Group>')
+    .replace('<Value>Umsatz</Value>', '<Value>Fields!Umsatz.Value</Value>');
+  await vscode.workspace.fs.writeFile(file('SearchAcceptance.rdl'), Buffer.from(xml));
+  let { uri, doc, probe } = await open(api, 'SearchAcceptance.rdl');
+  const original = doc.getText();
+  const dialog = '.expression-search';
+  await vscode.commands.executeCommand('bcReportBuilder.findExpressions', uri);
+  const query = dialog + ' .form-row:nth-child(2) input';
+  const replacement = dialog + ' .form-row:nth-child(3) input';
+  await domAction(api, uri, probe, query, 'input', 'fields!umsatz.value');
+  const matches = Number((await domAction(api, uri, probe, '.expression-result')).count);
+  assert.ok(matches >= 4);
+  const rows = String((await domAction(api, uri, probe, '.expression-results')).text);
+  assert.match(rows, /GroupExpression/); assert.match(rows, /Color/); assert.match(rows, /Value/);
+  await domAction(api, uri, probe, dialog + ' input[type="checkbox"]', 'click');
+  assert.equal((await domAction(api, uri, probe, '.expression-results')).text, '');
+  await domAction(api, uri, probe, query, 'input', 'Fields!Umsatz.Value');
+  await domAction(api, uri, probe, replacement, 'input', 'Fields!');
+  assert.equal((await domAction(api, uri, probe, dialog + ' .primary')).disabled, true);
+  await domAction(api, uri, probe, replacement, 'input', 'Fields!Menge.Value');
+  await domAction(api, uri, probe, '.expression-result button:last-child', 'click');
+  await until('Einzelersetzung', async () => Number((await domAction(api, uri, probe, '.expression-result')).count) === matches - 1);
+  const one = doc.getText();
+  await domAction(api, uri, probe, dialog + ' .primary', 'click');
+  await until('Sammelersetzung', () => doc.getText() !== one);
+  assert.ok(doc.getText().includes('<Value>Fields!Umsatz.Value</Value>'), 'fester Text bleibt unverändert');
+  await domAction(api, uri, probe, dialog, 'keydown', 'Escape');
+  await vscode.commands.executeCommand('undo');
+  await until('Nur Sammelersetzung rückgängig', () => doc.getText() === one);
+  await vscode.commands.executeCommand('redo');
+  await until('Sammelersetzung wiederholt', () => doc.getText() !== one);
+  await vscode.commands.executeCommand('undo');
+  await until('Sammelersetzung erneut rückgängig', () => doc.getText() === one);
+  await vscode.commands.executeCommand('undo');
+  await until('Einzelersetzung rückgängig', () => doc.getText() === original);
+  await doc.save();
+  await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  await until('Ausdruckssuche-Designer geschlossen', () => !api.probes.has(uri.toString()));
+  ({ uri, doc, probe } = await open(api, 'SearchAcceptance.rdl'));
+  assert.equal(doc.getText(), original, 'nach Speichern und erneutem Öffnen unverändert');
+  await vscode.commands.executeCommand('bcReportBuilder.findExpressions', uri);
+  await domAction(api, uri, probe, dialog + ' select', 'input', 'uses');
+  await domAction(api, uri, probe, dialog + ' .form-row:nth-child(2) select', 'input', 'Parameters!Jahr');
+  assert.ok(Number((await domAction(api, uri, probe, '.expression-result')).count) > 0);
+  await domAction(api, uri, probe, '.expression-result button', 'click');
+  await until('Navigation zum Titel', () => [...probe.received].reverse().some(m => m.type === 'state' && String((m.state as { status: string }).status).includes('Titel')));
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Abnahme: Bausteindialog sperrt fehlende Abhängigkeiten und verwirft Bild-/Codekonflikte atomar', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem } = await import('../../webview/ops');
+  const { addEmbeddedImage } = await import('../../webview/images');
+  const target = emptyReport();
+  addEmbeddedImage(target, 'SharedLogo', 'image/png', 'target');
+  target.extraXml.push('<Code>Public Shared Value As Integer = 1</Code>');
+  await vscode.workspace.fs.writeFile(file('BlockAcceptance.rdl'), Buffer.from(serializeRdl(target)));
+  const { uri, doc, probe } = await open(api, 'BlockAcceptance.rdl');
+  const original = doc.getText();
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalOpen = windowApi.showOpenDialog, originalPick = windowApi.showQuickPick;
+  const blockUri = file('AcceptanceBlock.rdlc');
+  const load = async (report: ReturnType<typeof emptyReport>) => {
+    await vscode.workspace.fs.writeFile(blockUri, Buffer.from(serializeRdl(report)));
+    await vscode.commands.executeCommand('bcReportBuilder.insertBlock', uri);
+    await domAction(api, uri, probe, '.block-dialog');
+  };
+  windowApi.showOpenDialog = async () => [blockUri];
+  windowApi.showQuickPick = async (items: unknown[]) => items[0];
+  try {
+    const source = emptyReport();
+    const box = createItem(source, 'textbox', { top: 0, left: 0, width: 1, height: .3 });
+    assert.equal(box.type, 'textbox'); if (box.type !== 'textbox') return;
+    box.value = '=Fields!Missing.Value & Parameters!MissingLabel.Value';
+    source.body.items.push(box);
+    await load(source);
+    assert.equal((await domAction(api, uri, probe, '.block-dialog .primary')).disabled, true);
+    assert.match(String((await domAction(api, uri, probe, '.block-dialog ul')).text), /Fields!Missing.*Parameters!MissingLabel/);
+    await domAction(api, uri, probe, '.block-dialog select', 'input', 'header');
+    await domAction(api, uri, probe, '.block-dialog input[type="checkbox"]', 'click');
+    await domAction(api, uri, probe, '.block-dialog .primary', 'click');
+    await until('Neuer Seitenkopf mit Baustein', () => !!parseRdl(doc.getText(), uiDom).header?.items.length);
+    await vscode.commands.executeCommand('undo');
+    await until('Seitenkopf gemeinsam rückgängig', () => doc.getText() === original);
+    for (const kind of ['image', 'code']) {
+      const block = emptyReport();
+      const item = createItem(block, kind === 'image' ? 'image' : 'textbox', { top: 0, left: 0, width: 1, height: .3 });
+      if (item.type === 'image') { item.source = 'Embedded'; item.value = 'SharedLogo'; addEmbeddedImage(block, 'SharedLogo', 'image/png', 'source'); }
+      if (item.type === 'textbox') { item.value = '=Code.Value'; block.extraXml.push('<Code>Public Shared Value As Integer = 2</Code>'); }
+      block.body.items.push(item);
+      await load(block);
+      await domAction(api, uri, probe, '.block-dialog .primary', 'click');
+      assert.ok(String((await domAction(api, uri, probe, '.block-dialog [role="alert"]')).text).length > 0);
+      assert.equal(doc.getText(), original, kind + ': keine Teiländerung');
+      await domAction(api, uri, probe, '.block-dialog', 'keydown', 'Escape');
+    }
+  } finally { windowApi.showOpenDialog = originalOpen; windowApi.showQuickPick = originalPick; }
+});
+
+test('Abnahme: Container-Umbrüche, zusammenfallende Umbrüche, stabile Schriften und sofortiger PDF-Export', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem, createTable } = await import('../../webview/ops');
+  const { PDFDocument } = await import('pdf-lib');
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalSave = windowApi.showSaveDialog, originalInfo = windowApi.showInformationMessage;
+  windowApi.showInformationMessage = async () => undefined;
+  try {
+    for (const [location, expected, nested] of [['Start', 2, false], ['End', 2, false], ['StartAndEnd', 3, false], ['End', 2, true]] as const) {
+      const report = emptyReport();
+      report.width = 3.5;
+      report.page = { width: 4, height: 4, marginTop: .25, marginBottom: .25, marginLeft: .25, marginRight: .25, extra: [] };
+      const textbox = (name: string, value: string, top: number, font: string) => {
+        const item = createItem(report, 'textbox', { top, left: 0, width: 3, height: .3 });
+        assert.equal(item.type, 'textbox');
+        if (item.type !== 'textbox') throw new Error('textbox expected');
+        item.name = name; item.value = value; item.style.FontFamily = font; item.style.FontSize = '10pt';
+        return item;
+      };
+      report.body.items.push(textbox('BeforeBreak', 'Vor dem Umbruch – ÄÖÜ', 0, 'Arial'));
+      const container = createItem(report, 'rectangle', { top: .4, left: 0, width: 3, height: .4 });
+      assert.equal(container.type, 'rectangle'); if (container.type !== 'rectangle') return;
+      container.name = 'BreakContainer';
+      container.extra = [`<PageBreak><BreakLocation>${location}</BreakLocation></PageBreak>`];
+      const middle = textbox('InsideBreak', 'Container mit zweiter Schrift', 0, 'Georgia');
+      if (nested) {
+        const inner = createItem(report, 'rectangle', { top: 0, left: 0, width: 3, height: .4 });
+        assert.equal(inner.type, 'rectangle'); if (inner.type !== 'rectangle') return;
+        inner.name = 'InnerBreak'; inner.items.push(middle);
+        inner.extra = ['<PageBreak><BreakLocation>End</BreakLocation><ResetPageNumber>true</ResetPageNumber></PageBreak>'];
+        container.items.push(inner);
+      } else container.items.push(middle);
+      report.body.items.push(container, textbox('AfterBreak', 'Nach dem Umbruch', .9, 'Arial'));
+      report.body.height = 1.2;
+      report.footer = { height: .3, style: {}, items: [textbox('PageNumber', '="PAGE " & Globals!PageNumber', 0, 'Consolas')] };
+      const name = `BreakAcceptance-${location}-${nested}.rdl`;
+      const uri = file(name);
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(serializeRdl(report)));
+      const opened = await open(api, name);
+      const preview = async () => {
+        const count = opened.probe.received.length;
+        await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+        const ready = await until('Vorschau mit Umbruch ' + name, () => opened.probe.received.slice(count).find(m => m.type === 'previewReady'));
+        assert.equal(ready.pages, expected, name);
+        assert.equal(ready.errors, 0);
+      };
+      await preview();
+      const pdfUri = file(name + '.pdf');
+      windowApi.showSaveDialog = async () => pdfUri;
+      await vscode.commands.executeCommand('bcReportBuilder.exportPdf', uri);
+      const bytes = await until('PDF mit Umbruch', async () => vscode.workspace.fs.readFile(pdfUri).then(b => b.length ? b : undefined, () => undefined), 60000);
+      assert.equal((await PDFDocument.load(bytes)).getPageCount(), expected, 'PDF und Vorschau stimmen überein');
+      if (nested) assert.match(String((await domAction(api, uri, opened.probe, '.rv-page:last-child')).text), /PAGE 1/);
+      for (let n = 0; n < 2; n++) {
+        await vscode.commands.executeCommand('bcReportBuilder.showDesign', uri);
+        await preview();
+      }
+      assert.deepEqual(errorsOf(opened.probe), []);
+    }
+    for (const location of ['Start', 'End', 'StartAndEnd']) {
+      const report = emptyReport();
+      report.width = 3;
+      report.page = { width: 4, height: 4, marginTop: .25, marginBottom: .25, marginLeft: .25, marginRight: .25, extra: [] };
+      report.dataSets.push({ id: 'acceptance', name: 'AcceptanceData', dataSourceName: '', commandText: '', fields: [{ name: 'Text', dataField: 'Text', typeName: 'System.String' }], extra: [], queryExtra: [] });
+      for (const [name, top] of [['BeforeTable', 0], ['AfterTable', 1.2]] as const) {
+        const item = createItem(report, 'textbox', { top, left: 0, width: 3, height: .3 });
+        assert.equal(item.type, 'textbox'); if (item.type !== 'textbox') return;
+        item.name = name; item.value = name; report.body.items.push(item);
+      }
+      const table = createTable(report, { top: .4, left: 0, width: 3 }, 1, 'AcceptanceData', ['Text']);
+      table.extra = [`<PageBreak><BreakLocation>${location}</BreakLocation></PageBreak>`];
+      report.body.items.push(table); report.body.height = 1.5;
+      const name = `TableBreakAcceptance-${location}.rdl`;
+      await vscode.workspace.fs.writeFile(file(name), Buffer.from(serializeRdl(report)));
+      await vscode.workspace.fs.writeFile(file(name.replace('.rdl', '.data.json')), Buffer.from(JSON.stringify({ AcceptanceData: [{ Text: 'TABELLENINHALT' }] })));
+      const opened = await open(api, name);
+      await until('Tabellendaten geladen', () => opened.probe.posted.some(m => m.type === 'sampleData' && Object.keys(m.data as object).length > 0));
+      await vscode.commands.executeCommand('bcReportBuilder.showPreview', opened.uri);
+      const ready = await until('Tabellenumbruch ' + location, () => opened.probe.received.find(m => m.type === 'previewReady'));
+      assert.equal(ready.pages, location === 'StartAndEnd' ? 3 : 2);
+      assert.equal(ready.errors, 0);
+      const pdfUri = file(name + '.pdf');
+      windowApi.showSaveDialog = async () => pdfUri;
+      await vscode.commands.executeCommand('bcReportBuilder.exportPdf', opened.uri);
+      const bytes = await until('PDF mit Tabellenumbruch', async () => vscode.workspace.fs.readFile(pdfUri).then(b => b.length ? b : undefined, () => undefined), 60000);
+      assert.equal((await PDFDocument.load(bytes)).getPageCount(), ready.pages);
+      assert.deepEqual(errorsOf(opened.probe), []);
+    }
+    const flowing = emptyReport();
+    flowing.width = 3;
+    flowing.page = { width: 4, height: 4, marginTop: .25, marginBottom: .25, marginLeft: .25, marginRight: .25, extra: [] };
+    for (const [index, font] of ['Arial', 'Georgia'].entries()) {
+      const item = createItem(flowing, 'textbox', { top: index * .4, left: 0, width: 3, height: .3 });
+      assert.equal(item.type, 'textbox'); if (item.type !== 'textbox') return;
+      item.name = `LongText${index}`; item.canGrow = true;
+      item.value = 'Langer Text mit Umlauten ÄÖÜ und wechselnden Schriften. '.repeat(50);
+      item.style.FontFamily = font; item.style.FontSize = '12pt'; flowing.body.items.push(item);
+    }
+    flowing.body.height = .8;
+    await vscode.workspace.fs.writeFile(file('LongTextAcceptance.rdl'), Buffer.from(serializeRdl(flowing)));
+    const long = await open(api, 'LongTextAcceptance.rdl');
+    let expectedPages = 0;
+    for (let n = 0; n < 3; n++) {
+      const count = long.probe.received.length;
+      await vscode.commands.executeCommand('bcReportBuilder.showPreview', long.uri);
+      const ready = await until('Langer Text nach Laden der Schriften', () => long.probe.received.slice(count).find(m => m.type === 'previewReady'));
+      assert.equal(ready.errors, 0);
+      if (!n) { expectedPages = Number(ready.pages); assert.ok(expectedPages > 1); }
+      else assert.equal(ready.pages, expectedPages, 'Schriftladen verändert die Seitenaufteilung nicht');
+      if (n < 2) await vscode.commands.executeCommand('bcReportBuilder.showDesign', long.uri);
+    }
+    const longPdf = file('LongTextAcceptance.pdf');
+    windowApi.showSaveDialog = async () => longPdf;
+    await vscode.commands.executeCommand('bcReportBuilder.exportPdf', long.uri);
+    const longBytes = await until('PDF mit langen Texten', async () => vscode.workspace.fs.readFile(longPdf).then(b => b.length ? b : undefined, () => undefined), 60000);
+    assert.equal((await PDFDocument.load(longBytes)).getPageCount(), expectedPages);
+    assert.deepEqual(errorsOf(long.probe), []);
+  } finally { windowApi.showSaveDialog = originalSave; windowApi.showInformationMessage = originalInfo; }
+});
+
+test('Abnahme: Bookmark springt auf eine andere Seite und fehlendes Ziel meldet einen Hinweis', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem } = await import('../../webview/ops');
+  const report = emptyReport();
+  report.width = 3; report.page.width = 4; report.page.height = 8;
+  report.page.marginTop = report.page.marginBottom = report.page.marginLeft = report.page.marginRight = .25;
+  const source = createItem(report, 'textbox', { top: 0, left: 0, width: 2, height: .3 });
+  assert.equal(source.type, 'textbox'); if (source.type !== 'textbox') return;
+  source.name = 'BookmarkSource'; source.value = 'Go to page two';
+  source.extra = ['<ActionInfo><Actions><Action><BookmarkLink>FarTarget</BookmarkLink></Action></Actions></ActionInfo>'];
+  report.body.items.push(source);
+  const container = createItem(report, 'rectangle', { top: .5, left: 0, width: 3, height: .5 });
+  assert.equal(container.type, 'rectangle'); if (container.type !== 'rectangle') return;
+  container.extra = ['<PageBreak><BreakLocation>Start</BreakLocation></PageBreak>'];
+  const target = createItem(report, 'textbox', { top: 0, left: 0, width: 2, height: .3 });
+  assert.equal(target.type, 'textbox'); if (target.type !== 'textbox') return;
+  target.name = 'BookmarkTarget'; target.value = 'TARGET PAGE'; target.extra = ['<Bookmark>FarTarget</Bookmark>'];
+  container.items.push(target); report.body.items.push(container); report.body.height = 1;
+  await vscode.workspace.fs.writeFile(file('BookmarkAcceptance.rdl'), Buffer.from(serializeRdl(report)));
+  const { uri, doc, probe } = await open(api, 'BookmarkAcceptance.rdl');
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const ready = await until('Zwei Bookmark-Seiten', () => probe.received.find(m => m.type === 'previewReady'));
+  assert.equal(ready.pages, 2);
+  await domAction(api, uri, probe, '.rv-page:first-child [data-action]', 'click');
+  await until('Bookmark scrollt zu Seite 2', async () => String((await domAction(api, uri, probe, '.page-indicator')).text).trim() === '2 / 2');
+  await vscode.commands.executeCommand('bcReportBuilder.showDesign', uri);
+  await selectUi(api, uri, probe, source.name);
+  const value = '.props-pane .prop-row:has(select option[value="hyperlink"]) + .prop-row input';
+  await domAction(api, uri, probe, value, 'input', 'MissingTarget');
+  await domAction(api, uri, probe, value, 'keydown', 'Enter');
+  await until('Fehlendes Ziel geschrieben', () => doc.getText().includes('<BookmarkLink>MissingTarget</BookmarkLink>'));
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await domAction(api, uri, probe, '.rv-page:first-child [data-action]', 'click');
+  await until('Fehlendes Bookmark gemeldet', () => probe.received.some(m => m.type === 'info' && String(m.message).includes('MissingTarget')));
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Abnahme: Gruppen-Endumbruch inklusive letzter Gruppe, bedingte Umbrüche und Tabellen-Endumbruch', async api => {
+  const { createItem } = await import('../../webview/ops');
+  const original = new TextDecoder().decode(await vscode.workspace.fs.readFile(file('Verkaufsrechnung.rdlc')));
+  const header = (no: string, paid: boolean) => ({ CompanyName: 'CRONUS AG', No_SalesInvHdr: no, DocDate_SalesInvHdr: '2026-01-31', Paid: paid });
+  const data = { DataSet_Result: [
+    { ...header('103001', false), LineNo_Line: 0 },
+    { ...header('103001', false), LineNo_Line: 10000, Description_Line: 'Tisch', Quantity_Line: 1, UnitPrice_Line: 650, LineAmount_Line: 650 },
+    { ...header('103002', true), LineNo_Line: 0 },
+    { ...header('103002', true), LineNo_Line: 10000, Description_Line: 'Lampe', Quantity_Line: 2, UnitPrice_Line: 45.5, LineAmount_Line: 91 },
+  ] };
+  for (const conditional of [false, true]) {
+    let xml = original.replace('<BreakLocation>Between</BreakLocation>', '<BreakLocation>End</BreakLocation>' + (conditional ? '<Disabled>=Fields!Paid.Value</Disabled>' : ''))
+      .replace('<ResetPageNumber>true</ResetPageNumber>', '<ResetPageNumber>=Not Fields!Paid.Value</ResetPageNumber>');
+    if (!conditional) xml = xml.replace('<Tablix Name="Table_Document">', '<Tablix Name="Table_Document"><PageBreak><BreakLocation>End</BreakLocation></PageBreak>');
+    const report = parseRdl(xml, uiDom);
+    const tail = createItem(report, 'textbox', { top: 2, left: 0, width: 2, height: .3 });
+    assert.equal(tail.type, 'textbox'); if (tail.type !== 'textbox') return;
+    tail.name = 'AfterLastGroup'; tail.value = '="AFTER LAST GROUP TOTAL " & Sum(Fields!LineAmount_Line.Value, "DataSet_Result")'; report.body.items.push(tail); report.body.height = 2.3;
+    const name = `GroupAcceptance-${conditional}.rdlc`;
+    await vscode.workspace.fs.writeFile(file(name), Buffer.from(serializeRdl(report)));
+    await vscode.workspace.fs.writeFile(file(name.replace('.rdlc', '.data.json')), Buffer.from(JSON.stringify(data)));
+    const { uri, probe } = await open(api, name);
+    await until('Gruppendaten geladen', () => probe.posted.some(m => m.type === 'sampleData' && Object.keys(m.data as object).length > 0));
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    const ready = await until('Gruppen mit Endumbruch', () => probe.received.find(m => m.type === 'previewReady'));
+    assert.equal(ready.pages, conditional ? 2 : 3, 'letzte Gruppe trennt Nachfolgeinhalt ab, zusammenfallender Tabellenumbruch erzeugt keine Leerseite');
+    assert.equal(ready.errors, 0);
+    assert.match(String((await domAction(api, uri, probe, '.rv-page:first-child')).text), /650,00|650\.00/);
+    for (let n = 1; n < Number(ready.pages); n++) {
+      await domAction(api, uri, probe, '.preview .toolbar button:has(.codicon-arrow-down)', 'click');
+      await until('Gruppenseite ' + (n + 1), async () => String((await domAction(api, uri, probe, '.page-indicator')).text).startsWith(`${n + 1} /`));
+    }
+    const last = String((await domAction(api, uri, probe, '.rv-page:last-child')).text);
+    assert.match(last, /AFTER LAST GROUP TOTAL 741/);
+    assert.match(last, conditional ? /Seite 1/ : /Seite 2/, 'Reset-Ausdruck wird pro Gruppe ausgewertet');
+    assert.deepEqual(errorsOf(probe), []);
+  }
+});
 
 async function openUi(api: Api) {
   await vscode.workspace.fs.writeFile(file('UI-Abnahme.rdl'), await vscode.workspace.fs.readFile(file('Umsatzbericht.rdl')));
@@ -836,6 +1295,7 @@ test('UI: Eingebettetes Bild laden, auf Fläche ziehen, umbenennen, abbrechen un
 test('UI: Dataset und Feld ziehen erzeugt Tabelle bzw. Zellbindung, Formatierung und Aktionen', async api => {
   const { uri, doc, probe } = await openUi(api);
   await vscode.commands.executeCommand('bcReportBuilder.toggleReportData', uri);
+  await domAction(api, uri, probe, '.tree-node[draggable="true"]');
   await domAction(api, uri, probe, '.section-body', 'drop', '.tree-node[draggable="true"]');
   await until('Tabelle erzeugt', () => (doc.getText().match(/<Tablix Name=/g) ?? []).length === 2);
   await domAction(api, uri, probe, '[data-name="Kunde"].cell', 'drop', '.tree-leaf.field:nth-child(5)');
@@ -952,6 +1412,66 @@ test('UI: Alle Diagrammtypen einfügen, Bereichswerte validieren und gemeinsam i
   assert.deepEqual(errorsOf(probe), []);
 });
 
+test('UI: Berechnete Diagrammreihen, Periodenvalidierung und Punktfarben', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  const formulas = ['MovingAverage', 'ExponentialMovingAverage', 'WeightedMovingAverage', 'TriangularMovingAverage', 'Mean', 'Median'];
+  for (const formula of formulas) {
+    await vscode.commands.executeCommand('bcReportBuilder.insert.chart', uri);
+    await domAction(api, uri, probe, '.modal-body > .form-row > .expr-prop .field-pick', 'input', 'Region');
+    await domAction(api, uri, probe, '.list-editor .list-row .field-pick', 'input', 'Umsatz');
+    await domAction(api, uri, probe, '.series-extra select:has(option[value="Mean"])', 'input', formula);
+    if (formula.endsWith('MovingAverage')) {
+      await domAction(api, uri, probe, '.series-extra input[type="number"]', 'input', '0');
+      assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+      await domAction(api, uri, probe, '.series-extra input[type="number"]', 'input', '3');
+    }
+    await domAction(api, uri, probe, '.series-extra .expr-prop input', 'input', '=IIf(Fields!Umsatz.Value > 100, "Green", "Red")');
+    await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+    await until(`Berechnete Reihe ${formula}`, () => doc.getText().includes(`<DerivedSeriesFormula>${formula}</DerivedSeriesFormula>`));
+  }
+  assert.equal((doc.getText().match(/<DerivedSeriesFormula>/g) ?? []).length, formulas.length);
+  assert.match(doc.getText(), /&quot;Green&quot;|"Green"/);
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  const preview = await until('Berechnete Reihen in Vorschau', () => probe.received.find(message => message.type === 'previewReady'), 60000);
+  assert.equal(preview.errors, 0);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('UI: Bookmark und Drillthrough eingeben und in der Vorschau anklicken', async api => {
+  const { uri, doc, probe } = await openUi(api);
+  await selectUi(api, uri, probe, 'Titel');
+  const kind = '.props-pane select:has(option[value="hyperlink"])';
+  const value = '.props-pane .prop-row:has(select option[value="hyperlink"]) + .prop-row input';
+  await domAction(api, uri, probe, kind, 'input', 'bookmarkLink');
+  await domAction(api, uri, probe, value, 'input', 'QaTarget');
+  await domAction(api, uri, probe, value, 'keydown', 'Enter');
+  const target = '.props-pane .prop-row:has(select option[value="hyperlink"]) + .prop-row + .prop-row input';
+  await domAction(api, uri, probe, target, 'input', 'QaTarget');
+  await domAction(api, uri, probe, target, 'keydown', 'Enter');
+  await until('Bookmark gespeichert', () => doc.getText().includes('<Bookmark>QaTarget</Bookmark>'));
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Bookmark-Vorschau', () => probe.received.find(message => message.type === 'previewReady'));
+  const before = probe.received.length;
+  await domAction(api, uri, probe, '.rv-page [data-action]', 'click');
+  assert.ok(!probe.received.slice(before).some(message => message.type === 'info'), 'vorhandenes Bookmark ohne Fehlermeldung');
+  await vscode.commands.executeCommand('bcReportBuilder.showDesign', uri);
+  await selectUi(api, uri, probe, 'Titel');
+  await domAction(api, uri, probe, kind, 'input', 'drillthrough');
+  await domAction(api, uri, probe, value, 'input', 'QaDetailReport');
+  await domAction(api, uri, probe, value, 'keydown', 'Enter');
+  await until('Drillthrough gespeichert', () => doc.getText().includes('<ReportName>QaDetailReport</ReportName>'));
+  await domAction(api, uri, probe, '.props-pane .prop-row button:has(.codicon-add)', 'click');
+  await domAction(api, uri, probe, '.action-param > input:first-of-type', 'input', 'DocumentNo');
+  await domAction(api, uri, probe, '.action-param > input:first-of-type', 'keydown', 'Enter');
+  await domAction(api, uri, probe, '.action-param > input:nth-of-type(2)', 'input', '=21*2');
+  await domAction(api, uri, probe, '.action-param > input:nth-of-type(2)', 'keydown', 'Enter');
+  await until('Drillthrough-Parameter gespeichert', () => /<Parameter Name="DocumentNo">[\s\S]*?<Value>=21\*2<\/Value>/.test(doc.getText()));
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await domAction(api, uri, probe, '.rv-page [data-action]', 'click');
+  await until('Drillthrough-Hinweis', () => probe.received.some(message => message.type === 'info' && /QaDetailReport.*DocumentNo = 42/.test(String(message.message))));
+  assert.deepEqual(errorsOf(probe), []);
+});
+
 test('UI: Gruppen verschachteln, Sortierung, Filter, Umbruch und Spaltengruppe', async api => {
   const { uri, doc, probe } = await openUi(api);
   await selectUi(api, uri, probe, 'Kunde');
@@ -983,6 +1503,13 @@ test('UI: Gruppen verschachteln, Sortierung, Filter, Umbruch und Spaltengruppe',
   await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Region');
   await domAction(api, uri, probe, '.modal-footer .primary', 'click');
   await until('Spaltengruppe geschrieben', () => doc.getText().includes('<Group Name="UiColumns">'));
+  await selectUi(api, uri, probe, 'Kunde');
+  await vscode.commands.executeCommand('bcReportBuilder.table.addColumnGroup', uri);
+  await domAction(api, uri, probe, '.modal-body > .form-row:first-child input', 'input', 'UiOuterColumns');
+  await domAction(api, uri, probe, '.modal-body > .form-row:nth-child(2) .field-pick', 'input', 'Kunde');
+  await domAction(api, uri, probe, '.modal-footer .primary', 'click');
+  await until('Zweite Spaltengruppe geschrieben', () => doc.getText().includes('<Group Name="UiOuterColumns">'));
+  assert.ok(doc.getText().includes('<Group Name="UiColumns">'), 'bestehende Spaltengruppe bleibt erhalten');
   await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
   const preview = await until('Gruppenvorschau', () => probe.received.find(message => message.type === 'previewReady'));
   assert.equal(preview.errors, 0);
@@ -1051,6 +1578,216 @@ test('UI: Vorschau exportiert Excel und Word über die echten Befehle und den Sp
   }
 });
 
+test('Absichern: Diagrammtypen per Pfeil/Home/End, ein Tabstopp und angesagte Validierung', async api => {
+  const { uri, probe, doc } = await openUi(api);
+  const before = doc.getText();
+  await vscode.commands.executeCommand('bcReportBuilder.insert.chart', uri);
+  const radio = '.chart-kind[aria-checked="true"]';
+  assert.equal((await domAction(api, uri, probe, '.chart-kind[tabindex="0"]')).count, 1);
+  await domAction(api, uri, probe, radio, 'focus');
+  await domAction(api, uri, probe, radio, 'keydown', 'ArrowRight');
+  assert.equal((await domAction(api, uri, probe, '.chart-kind:nth-child(2)')).focused, true);
+  await domAction(api, uri, probe, radio, 'keydown', 'ArrowLeft');
+  assert.equal((await domAction(api, uri, probe, '.chart-kind:first-child')).focused, true);
+  await domAction(api, uri, probe, radio, 'keydown', 'ArrowUp');
+  assert.equal((await domAction(api, uri, probe, '.chart-kind:last-child')).focused, true);
+  await domAction(api, uri, probe, radio, 'keydown', 'Home');
+  assert.equal((await domAction(api, uri, probe, '.chart-kind:first-child')).focused, true);
+  await domAction(api, uri, probe, radio, 'keydown', 'End');
+  assert.equal((await domAction(api, uri, probe, '.chart-kind:last-child')).focused, true);
+  assert.equal((await domAction(api, uri, probe, '.chart-kind[tabindex="0"]')).count, 1);
+  await domAction(api, uri, probe, '.modal-body > .form-row input', 'input', '');
+  assert.ok(String((await domAction(api, uri, probe, '.modal-error[role="alert"]')).text).length > 0);
+  assert.equal((await domAction(api, uri, probe, '.modal-footer .primary')).disabled, true);
+  await domAction(api, uri, probe, '.modal', 'keydown', 'Escape');
+  assert.equal(doc.getText(), before);
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Absichern: kombinierte Zeilenfilter und TopN, Drilldown je Beleg und wiederholtes Aufklappen', async api => {
+  const source = new TextDecoder().decode(await vscode.workspace.fs.readFile(file('Verkaufsrechnung.rdlc')));
+  const filter = (expression: string, operator: string, value: string) => `<Filter><FilterExpression>${expression}</FilterExpression><Operator>${operator}</Operator><FilterValues><FilterValue>${value}</FilterValue></FilterValues></Filter>`;
+  const xml = source.replace('<Tablix Name="Table_Lines">', `<Tablix Name="Table_Lines"><Visibility><Hidden>true</Hidden><ToggleItem>DocumentNo</ToggleItem></Visibility><Filters>${
+    filter('=Fields!LineAmount_Line.Value', 'GreaterThanOrEqual', '=100') +
+    filter('=Fields!Description_Line.Value', 'Like', 'Keep*') +
+    filter('=Fields!LineAmount_Line.Value', 'TopN', '=1')}</Filters>`)
+    .replace('<Textbox Name="DocumentNo">', '<Textbox Name="DocumentNo"><UserSort><SortExpression>=Fields!No_SalesInvHdr.Value</SortExpression><SortExpressionScope>Group_Document</SortExpressionScope></UserSort>');
+  await vscode.workspace.fs.writeFile(file('Filter-Drilldown.rdlc'), Buffer.from(xml));
+  const { uri, probe, doc } = await open(api, 'Filter-Drilldown.rdlc');
+  const data = ['A', 'B'].flatMap((no, index) => [
+    { LineNo_Line: 0 },
+    { LineNo_Line: 10000, Description_Line: `Keep low ${no}`, LineAmount_Line: 10 },
+    { LineNo_Line: 20000, Description_Line: `Keep middle ${no}`, LineAmount_Line: 150 },
+    { LineNo_Line: 30000, Description_Line: `Keep high ${no}`, LineAmount_Line: 300 + index * 100 },
+    { LineNo_Line: 40000, Description_Line: `Excluded ${no}`, LineAmount_Line: 9999 },
+  ].map(line => ({ CompanyName: 'QA', No_SalesInvHdr: no, Paid: false, DocDate_SalesInvHdr: '2026-10-21', ...line })));
+  await probe.send({ type: 'sampleData', data: { DataSet_Result: data } });
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+  await until('Drilldown-Vorschau', () => probe.received.find(m => m.type === 'previewReady'));
+  const visible = async () => String((await domAction(api, uri, probe, '.rv-page:first-child', 'readVisible')).text);
+  assert.doesNotMatch(await visible(), /Keep high/);
+  const first = '.rv-page:nth-child(1) .rv-interactive';
+  const second = '.rv-page:first-child table[data-table] > tbody > tr:nth-child(3) .rv-interactive';
+  await domAction(api, uri, probe, first, 'focus');
+  await domAction(api, uri, probe, first, 'keydown', 'Enter');
+  await until('Nur Beleg A aufgeklappt', async () => /Keep high A/.test(await visible()));
+  assert.doesNotMatch(await visible(), /Keep high B|Keep middle|Keep low|Excluded/);
+  await domAction(api, uri, probe, second, 'click');
+  await until('Beide Belege aufgeklappt', async () => /Keep high B/.test(await visible()));
+  assert.match(await visible(), /Keep high A/);
+  await domAction(api, uri, probe, first, 'keydown', ' ');
+  await until('A wieder eingeklappt', async () => !/Keep high A/.test(await visible()));
+  assert.match(await visible(), /Keep high B/);
+  const sort = '.rv-page:first-child .rv-interactive:not([aria-expanded])';
+  await domAction(api, uri, probe, sort, 'focus');
+  await domAction(api, uri, probe, sort, 'keydown', 'Enter');
+  await domAction(api, uri, probe, sort, 'keydown', ' ');
+  assert.equal((await domAction(api, uri, probe, sort)).text, '▼');
+  assert.match(await visible(), /Keep high B/);
+  assert.doesNotMatch(await visible(), /Keep high A/, 'Sortierung erhält den aufgeklappten Beleg');
+  assert.equal(doc.getText(), xml, 'Vorschauinteraktion verändert das Layout nicht');
+  assert.deepEqual(errorsOf(probe), []);
+});
+
+test('Absichern: Ziehrichtungen, Zoom, Raster, Alt und verschachtelte Container', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem } = await import('../../webview/ops');
+  const report = emptyReport();
+  report.unit = 'in'; report.width = 8; report.body.height = 6;
+  report.extraXml.push('<Language>de-DE</Language>');
+  const container = createItem(report, 'rectangle', { left: 3, top: 1, width: 3, height: 3 });
+  if (container.type !== 'rectangle') throw new Error('Rechteck erwartet');
+  const child = createItem(report, 'textbox', { left: .25, top: .25, width: 2, height: .3 });
+  if (child.type !== 'textbox') throw new Error('Textfeld erwartet');
+  child.value = '=1234.5';
+  child.style = { FontFamily: 'Georgia', FontSize: '14pt', FontWeight: 'Bold', FontStyle: 'Italic', Format: 'N2', BorderStyle: 'Dashed', BorderColor: 'Navy', BorderWidth: '1pt' };
+  container.items.push(child); report.body.items.push(container);
+  for (const [top, value, format, font, border] of [[.8, '=1234.5', 'C2', 'Consolas', 'Dotted'], [1.3, '=0.125', 'P1', 'Arial', 'Solid']] as const) {
+    const item = createItem(report, 'textbox', { left: .25, top, width: 2, height: .3 });
+    if (item.type !== 'textbox') throw new Error('Textfeld erwartet');
+    item.value = value; item.style = { FontFamily: font, Format: format, BorderStyle: border, BorderWidth: '1pt', BorderColor: 'Navy' };
+    container.items.push(item);
+  }
+  await vscode.workspace.fs.writeFile(file('Gesture-Acceptance.rdl'), Buffer.from(serializeRdl(report)));
+  const { uri, probe, doc } = await open(api, 'Gesture-Acceptance.rdl');
+  const original = doc.getText();
+  const settings = vscode.workspace.getConfiguration('bcReportBuilder.designer');
+  const savedSnap = settings.inspect<boolean>('snapToGrid')?.workspaceValue;
+  const items = () => parseRdl(doc.getText(), uiDom).body.items;
+  try {
+    await settings.update('snapToGrid', true, vscode.ConfigurationTarget.Workspace);
+    for (const zoom of [.5, 1, 2]) {
+      await probe.send({ type: 'command', id: 'setZoom', arg: zoom });
+      await until('Zoom gesetzt', () => (probe.received.filter(m => m.type === 'state').at(-1)?.state as { zoom: number })?.zoom === zoom);
+      for (const [dx, dy] of [[96, 48], [-96, 48], [96, -48], [-96, -48]]) {
+        await vscode.commands.executeCommand('bcReportBuilder.insert.rectangle', uri);
+        await domAction(api, uri, probe, '.section-body', 'pointerDrag', JSON.stringify({ from: [192 * zoom, 192 * zoom], delta: [dx * zoom, dy * zoom] }));
+        await until('Rechteck gezeichnet', () => items().length === 2);
+        const box = items()[1];
+        assert.equal(box.width, 1); assert.equal(box.height, .5);
+        assert.equal(box.left, dx < 0 ? 1 : 2); assert.equal(box.top, dy < 0 ? 1.5 : 2);
+        await vscode.commands.executeCommand('undo');
+        await until('Zeichnen rückgängig', () => doc.getText() === original);
+      }
+    }
+    await probe.send({ type: 'command', id: 'setZoom', arg: 1 });
+    await until('Zoom 100', () => (probe.received.filter(m => m.type === 'state').at(-1)?.state as { zoom: number })?.zoom === 1);
+    const target = `.item[data-name="${child.name}"]`;
+    await domAction(api, uri, probe, target, 'pointerDrag', JSON.stringify({ delta: [17, 11] }));
+    const moved = () => (items()[0] as typeof container).items[0];
+    await until('Kind am Raster verschoben', () => moved().left !== .25);
+    assert.equal(moved().left, .375); assert.equal(moved().top, .375);
+    assert.equal(items()[0].left, 3, 'Container bleibt stehen');
+    await vscode.commands.executeCommand('undo');
+    await until('Kind zurück', () => doc.getText() === original);
+    await domAction(api, uri, probe, target, 'pointerDrag', JSON.stringify({ delta: [17, 11], altKey: true }));
+    await until('Alt ohne Raster', () => Math.abs(moved().left - (.25 + 17 / 96)) < .001);
+    assert.ok(Math.abs(moved().top - (.25 + 11 / 96)) < .001);
+    assert.equal(moved().style.FontFamily, 'Georgia'); assert.equal(moved().style.Format, 'N2');
+    await vscode.commands.executeCommand('undo');
+    await until('Alt zurück', () => doc.getText() === original);
+    await settings.update('snapToGrid', false, vscode.ConfigurationTarget.Workspace);
+    await domAction(api, uri, probe, target, 'pointerDrag', JSON.stringify({ delta: [17, 11] }));
+    await until('Raster ausgeschaltet', () => Math.abs(moved().left - (.25 + 17 / 96)) < .001);
+    await vscode.commands.executeCommand('undo');
+    await until('Alles rückgängig', () => doc.getText() === original);
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    await until('Gestaltungsvorschau', () => probe.received.find(m => m.type === 'previewReady'));
+    const shown = String((await domAction(api, uri, probe, '.rv-page', 'readVisible')).text).replace(/\s/g, ' ');
+    assert.match(shown, /1\.234,50/); assert.match(shown, /1\.234,50 €/); assert.match(shown, /12,5 %/);
+    const css = JSON.parse(String((await domAction(api, uri, probe, '.rv-page [data-leaf] span', 'readStyle')).text));
+    assert.match(css.fontFamily, /Georgia/); assert.equal(css.fontWeight, '700'); assert.equal(css.fontStyle, 'italic');
+    assert.ok(Math.abs(parseFloat(css.fontSize) - 14 * 96 / 72) < .1);
+    const border = JSON.parse(String((await domAction(api, uri, probe, '.rv-page [data-leaf]', 'readStyle')).text));
+    assert.equal(border.borderTopStyle, 'dashed');
+    assert.ok(parseFloat(border.borderTopWidth) >= 1 && parseFloat(border.borderTopWidth) <= 1.34, '1pt-Rahmen, ggf. auf Gerätepixel gerundet');
+    assert.deepEqual(errorsOf(probe), []);
+  } finally { await settings.update('snapToGrid', savedSnap, vscode.ConfigurationTarget.Workspace); }
+});
+
+test('Copilot E2E Regression: Textvorschau verwendet die Berichtssprache statt der VS-Code-Sprache', async api => {
+  const { emptyReport } = await import('../../webview/model');
+  const { createItem } = await import('../../webview/ops');
+  const report = emptyReport();
+  report.extraXml.push('<Language>de-DE</Language>');
+  const item = createItem(report, 'textbox', { top: 0, left: 0, width: 3, height: .4 });
+  if (item.type !== 'textbox') throw new Error('Textfeld erwartet');
+  item.value = '=1234.5'; item.style.Format = 'N2'; report.body.items.push(item);
+  const uri = file('Copilot-Language.rdl');
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(serializeRdl(report)));
+  const output = await vscode.lm.invokeTool('bcReport_previewReport', { input: { file: uri.fsPath }, toolInvocationToken: undefined });
+  const text = output.content.map(p => p instanceof vscode.LanguageModelTextPart ? p.value : '').join('\n');
+  assert.match(text, /1\.234,50/);
+  assert.doesNotMatch(text, /1,234\.50/);
+});
+
+test('Copilot E2E Regression: Projektwurzel über app.json auch ohne Workspace-Zuordnung einer AL-URI', async api => {
+  const { AlWorkspace } = await import('../../src/al/workspace');
+  const ws = vscode.workspace as unknown as Record<string, unknown>;
+  const previous = ws.getWorkspaceFolder;
+  ws.getWorkspaceFolder = () => undefined;
+  const index = new AlWorkspace();
+  try {
+    await index.whenReady();
+    const owner = await index.ownerOf(file('Verkaufsrechnung.rdlc'));
+    assert.ok(owner);
+    assert.equal(owner.file.root.fsPath.toLowerCase(), folder().fsPath.toLowerCase());
+    const layouts = await index.layoutsOf(owner);
+    assert.ok(layouts.some(l => l.uri.fsPath.toLowerCase() === file('Verkaufsrechnung.rdlc').fsPath.toLowerCase()));
+  } finally { ws.getWorkspaceFolder = previous; index.dispose(); }
+});
+
+test('Copilot E2E Regression: Build speichert unsichtbare AL-/Layout-Änderungen vor dem Compiler und bricht bei Speicherfehler ab', async api => {
+  const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  const alUri = file('src/Verkaufsrechnung.Report.al');
+  const al = await vscode.workspace.openTextDocument(alUri);
+  const beforeAl = al.getText(), beforeLayout = doc.getText();
+  await vscode.lm.invokeTool('bcReport_createAlLabel', { input: { file: uri.fsPath, name: 'CopilotSaveLbl', text: 'KI Menge', textbox: 'Quantity_Lbl' }, toolInvocationToken: undefined });
+  assert.ok(al.isDirty && doc.isDirty);
+  let calls = 0;
+  const compiler = vscode.commands.registerCommand('al.package', async () => {
+    calls++;
+    const a = new TextDecoder().decode(await vscode.workspace.fs.readFile(alUri));
+    const l = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    assert.ok(a.includes("CopilotSaveLbl = 'KI Menge'"), `Compiler liest das neue Label von der Platte (dirty=${al.isDirty}): ${a.slice(-800)}`);
+    assert.ok(l.includes('=Parameters!CopilotSaveLbl.Value'), 'Compiler liest die neue Layout-Bindung von der Platte');
+  });
+  const ws = vscode.workspace as unknown as Record<string, unknown>;
+  const originalSave = ws.saveAll;
+  try {
+    await vscode.lm.invokeTool('bcReport_buildProject', { input: {}, toolInvocationToken: undefined });
+    assert.equal(calls, 1);
+    assert.ok(!al.isDirty && !doc.isDirty);
+    ws.saveAll = async () => false;
+    await assert.rejects(async () => vscode.lm.invokeTool('bcReport_buildProject', { input: {}, toolInvocationToken: undefined }));
+    assert.equal(calls, 1, 'kein Compiler-Aufruf nach fehlgeschlagenem Speichern');
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    ws.saveAll = originalSave; compiler.dispose();
+    await restore(alUri, beforeAl); await restore(uri, beforeLayout);
+  }
+});
+
 test('Sprachmodell-Tools: registriert, lesen den AL-Kontext, ändern das Layout im offenen Designer, Rückgängig', async api => {
   const { uri, probe, doc } = await open(api, 'Verkaufsrechnung.rdlc');
   const original = doc.getText();
@@ -1079,6 +1816,42 @@ test('Sprachmodell-Tools: registriert, lesen den AL-Kontext, ändern das Layout 
     assert.deepEqual(errorsOf(probe), []);
   } finally {
     await restore(uri, original);
+  }
+});
+
+if (process.env.BC_RB_UNTRUSTED === '1') test('Abnahme: Eingeschränkter Modus sperrt AL und Serverzugriff, Entwurf und Vorschau bleiben verfügbar', async api => {
+  assert.equal(vscode.workspace.isTrusted, false, 'echter eingeschränkter Workspace');
+  const { uri, doc, probe } = await open(api, 'Verkaufsrechnung.rdlc');
+  await until('AL-Kontext geladen', () => probe.posted.some(m => m.type === 'bcContext' && m.context));
+  const before = doc.getText();
+  await probe.deliver({ type: 'edit', text: before.replace('Rechnungsnr.', 'QA trust') });
+  assert.ok(doc.isDirty);
+  const windows = vscode.window as unknown as Record<string, unknown>;
+  const originalWarning = windows.showWarningMessage;
+  let warnings = 0, alCalls = 0, requests = 0;
+  const originalFetch = globalThis.fetch;
+  const stubs = ['al.package', 'al.publishNoDebug', 'al.downloadSymbols'].map(command =>
+    vscode.commands.registerCommand(command, () => { alCalls++; }));
+  windows.showWarningMessage = async () => { warnings++; return undefined; };
+  globalThis.fetch = (async () => { requests++; throw new Error('Unexpected network request'); }) as typeof fetch;
+  try {
+    await vscode.commands.executeCommand('bcReportBuilder.buildAl');
+    await vscode.commands.executeCommand('bcReportBuilder.runInBc');
+    assert.equal(warnings, 2);
+    assert.ok(doc.isDirty, 'kein implizites Speichern im eingeschränkten Modus');
+    await assert.rejects(async () => vscode.lm.invokeTool('bcReport_buildProject', {
+      input: {}, toolInvocationToken: undefined,
+    }));
+    assert.equal(alCalls, 0);
+    assert.equal(requests, 0);
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    const preview = await until('Vorschau im eingeschränkten Modus', () => probe.received.find(m => m.type === 'previewReady'));
+    assert.equal(preview.errors, 0);
+  } finally {
+    windows.showWarningMessage = originalWarning;
+    globalThis.fetch = originalFetch;
+    stubs.forEach(s => s.dispose());
+    await restore(uri, before);
   }
 });
 

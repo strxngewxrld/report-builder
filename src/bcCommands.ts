@@ -3,6 +3,7 @@
 // report in the web client, navigating from AL to the layout, and editing the layout's <Code> block in a VB editor.
 
 import * as vscode from 'vscode';
+import { checkWorkspaceTrust } from './workspaceTrust';
 import { execFile } from 'node:child_process';
 import {
   LabelOptions, applyInsert, columnName, findDataItem, insertAddBlock, insertColumns, insertLabel, labelName, offsetOf, renameIdentifierAt, TextInsert,
@@ -183,7 +184,7 @@ async function addColumns(service: LayoutService, arg: MenuArg) {
   if (!found) {
     const pick = await vscode.window.showWarningMessage(
       l10n.t('Table "{0}" was found neither in the workspace nor in the symbols (.alpackages).', table), l10n.t('Download Symbols'));
-    if (pick) await vscode.commands.executeCommand('al.downloadSymbols').then(undefined, () => vscode.window.showErrorMessage(l10n.t('The AL Language extension is not installed.')));
+    if (pick && checkWorkspaceTrust()) await vscode.commands.executeCommand('al.downloadSymbols').then(undefined, () => vscode.window.showErrorMessage(l10n.t('The AL Language extension is not installed.')));
     return;
   }
   const norm = (s: string) => s.replace(/"/g, '').replace(/^Rec\./i, '').trim().toLowerCase();
@@ -323,6 +324,7 @@ export function insertInto(src: string, report: AlReport, dataItem: string, colu
 // ------------------------------------------------------------------------------------------------ build and run
 
 async function buildAl() {
+  if (!checkWorkspaceTrust()) return;
   await vscode.commands.executeCommand('workbench.action.files.saveAll');
   const commands = await vscode.commands.getCommands(true);
   if (!commands.includes('al.package')) {
@@ -333,6 +335,7 @@ async function buildAl() {
 }
 
 async function runInBc(service: LayoutService) {
+  if (!checkWorkspaceTrust()) return;
   const session = ReportEditorProvider.active;
   if (!session) return;
   const owner = await service.al.ownerOf(session.uri);

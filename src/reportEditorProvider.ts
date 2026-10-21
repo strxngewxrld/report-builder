@@ -7,6 +7,8 @@ import { LayoutService } from './layoutService';
 import { BcContext } from '../webview/bc';
 import { ExportBlock, writeDocx, writeXlsx } from './ooxml';
 import { FontIndex, FontRequest } from './fonts';
+import type { LayoutClipboard } from '../webview/vscode';
+import type { EmbeddedImage } from '../webview/images';
 
 /** What the designer reports about itself (status bar, context keys of the editor title and context menus). */
 export interface DesignerState {
@@ -40,6 +42,7 @@ export interface DesignerSession {
   post(msg: { type: string; [k: string]: unknown }): Thenable<boolean>;
   /** Runs a designer command in the webview (toolbar, context menu, command palette). */
   command(id: string, arg?: unknown): Thenable<boolean>;
+  validateImage(image: EmbeddedImage): Promise<void>;
   revealAl(line?: number, character?: number): Promise<void>;
   /** Resolves once the webview has loaded the report and handles commands. */
   ready: Promise<void>;
@@ -48,6 +51,8 @@ export interface DesignerSession {
 /** Messages webview → extension. */
 type FromWebview =
   | { type: 'ready' }
+  | { type: 'clipboard'; value: LayoutClipboard }
+  | { type: 'imageValidated'; id: number; error?: string }
   | { type: 'testDomResult'; id: number; text?: string; count?: number; error?: string; focused?: boolean; focusInside?: boolean; defaultPrevented?: boolean; propagated?: boolean; disabled?: boolean }
   | { type: 'edit'; text: string }
   | { type: 'importSampleData'; dataSet?: string }
@@ -84,6 +89,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
    */
   private static sessions = new Map<string, DesignerSession[]>();
   private static activeSession: DesignerSession | undefined;
+  private static clipboard: LayoutClipboard | null = null;
   /** Installed fonts for the PDF export, indexed on first use. */
   private static fonts = new FontIndex();
   private static changed = new vscode.EventEmitter<DesignerSession | undefined>();
@@ -116,9 +122,27 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
       return webview.postMessage(msg);
     };
     let markReady!: () => void;
+    let imageRequestId = 0;
+    const imageRequests = new Map<number, (error?: string) => void>();
     const session: DesignerSession = {
       uri: document.uri, panel, bc: null, post, ready: new Promise<void>(r => { markReady = r; }),
       command: (id, arg) => post({ type: 'command', id, arg }),
+      validateImage: async image => {
+        await session.ready;
+        return new Promise<void>((resolve, reject) => {
+          const id = ++imageRequestId;
+          const timer = setTimeout(() => finish('Image validation timed out.'), 15000);
+          const finish = (error?: string) => {
+            clearTimeout(timer);
+            imageRequests.delete(id);
+            if (error) reject(new Error(error)); else resolve();
+          };
+          imageRequests.set(id, finish);
+          void session.command('images.validate', { id, image }).then(sent => {
+            if (!sent) finish('The image validation editor was closed.');
+          }, e => finish(String(e)));
+        });
+      },
       revealAl: async (line, character) => {
         const bc = session.bc;
         if (!bc) return;
@@ -166,10 +190,20 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
         probe?.received.push(msg);
         switch (msg.type) {
           case 'ready':
+            post({ type: 'clipboard', value: ReportEditorProvider.clipboard });
             post({ type: 'config', config: readConfig() });
             sendDocument();
             await sendSampleData();
             await sendBc();
+            break;
+          case 'clipboard':
+            ReportEditorProvider.clipboard = msg.value;
+            for (const list of ReportEditorProvider.sessions.values()) {
+              for (const s of list) s.post({ type: 'clipboard', value: msg.value });
+            }
+            break;
+          case 'imageValidated':
+            imageRequests.get(msg.id)?.(msg.error);
             break;
           case 'revealAl':
             await session.revealAl(msg.line, msg.character);
@@ -273,6 +307,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     watcher.onDidCreate(sendSampleData);
     watcher.onDidDelete(sendSampleData);
     panel.onDidDispose(() => {
+      for (const finish of imageRequests.values()) finish('The image validation editor was closed.');
       register(false);
       if (ReportEditorProvider.activeSession === session) {
         ReportEditorProvider.activeSession = undefined;

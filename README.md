@@ -4,6 +4,8 @@ Visueller Designer für RDLC-Layouts von Business-Central-Berichten (`.rdlc`, au
 Microsoft Report Builder, mit der **Dokumentgliederung**, die es sonst nur im Berichts-Designer von Visual Studio gibt,
 und mit dem **AL-Report als Datenquelle**.
 
+![Designer mit Gliederung sowie Berichtsdaten und Vorschau im geteilten Editor](media/preview.png)
+
 ## Installation
 
 Die Extension wird als VSIX über die [GitHub Releases](https://github.com/strxngewxrld/report-builder/releases) verteilt:
@@ -15,6 +17,9 @@ code --install-extension bc-report-builder-1.0.0.vsix
 ```
 
 Voraussetzung ist VS Code 1.95 oder neuer. Das Paket enthält alle Laufzeitabhängigkeiten.
+
+Im eingeschränkten Modus sind Entwurf und Vorschau verfügbar. Für Projekt-Build, Symbol-Download und das Ausführen
+von Berichten in Business Central muss dem Arbeitsbereich vertraut werden.
 
 **Updates**: Beim Start prüft die Extension, ob in den GitHub Releases eine neuere Version liegt, und bietet dann
 *Installieren* (lädt die VSIX, prüft die SHA-256-Prüfsumme von GitHub und installiert sie), *Release öffnen* oder *Diese

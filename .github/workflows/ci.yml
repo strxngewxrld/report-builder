@@ -53,6 +53,16 @@ jobs:
           BC_RB_TIMEOUT_SCALE: '3'
           BC_RB_TEST_LANGUAGE: de
           BC_RB_ONLY: 'Lokalisierung|UI:'
+      - name: Eingeschränkter Modus unter Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:vscode:untrusted
+        env:
+          BC_RB_TIMEOUT_SCALE: '3'
+      - name: Eingeschränkter Modus unter Windows
+        if: runner.os == 'Windows'
+        run: npm run test:vscode:untrusted
+        env:
+          BC_RB_TIMEOUT_SCALE: '3'
       - name: VSIX bauen und prüfen
         run: npm run package
       - uses: actions/upload-artifact@v4
