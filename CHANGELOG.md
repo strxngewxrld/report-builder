@@ -5,6 +5,10 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [1.0.0] - 2026-10-18
 
+### Korrigiert bei der macOS-Nachprüfung (21.10.2026)
+- CI auf Node 24 aktualisiert: Testdatei-Platzhalter funktionieren damit auch unter Windows,
+  und die Node-Anforderungen der Build-/Paketwerkzeuge werden erfüllt.
+
 ### Korrigiert bei der Windows-Abnahme (21.10.2026)
 - KI-Werkzeuge: AL-Build speichert auch unsichtbare, durch Werkzeuge geänderte Dokumente
   und bricht bei Speicherfehlern ab. AL-Projektwurzel über `app.json` auch ohne Workspace-Zuordnung

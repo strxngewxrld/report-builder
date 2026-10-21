@@ -41,6 +41,12 @@ ohne Wiederholungsversuch. Das VSIX wurde nach den Produktkorrekturen erneut geb
 
 ## Lokal noch nicht vollständig abgenommen
 
+macOS-Nachprüfung 21.10.: [Protokoll](RELEASE-TEST-2026-10-21-MACOS.md), 162/162 Unit-Tests,
+58/58 Integrationstests je Sprache, Restricted Mode je Sprache, 379/379 Korpuslayouts und VSIX grün.
+Native Zwischenablage im Direkttexteditor, Cmd+Enter/Speichern, bytegenaues Undo/Redo und PDF in
+macOS Vorschau geprüft. Kein bestätigter Produktfehler; die Windows-CI braucht Node 24.
+Die folgende Liste bleibt die Grenze der repräsentativen Abnahme.
+
 Weitere Absicherung 21.10.: [Filter/Drilldown, Gestaltung, NVDA und Undo](RELEASE-TEST-2026-10-21-ABSICHERN.md).
 Zusätzliche repräsentative Filter-/Drilldown-/Sortier- und Drag-/Zoom-/Raster-/Containerkombinationen geprüft.
 Native NVDA-Ansagen für Diagrammdialog und Ausdruckssuche nachgeprüft; Tastaturbedienung der Diagrammtypen,
