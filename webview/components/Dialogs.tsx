@@ -47,7 +47,7 @@ function Modal(props: { title: string; children: ReactNode; onOk?: () => void; o
         <div className="modal-title"><span className="grow">{props.title}</span><ActionButton icon="close" title={l10n.t('Close (Esc)')} onClick={props.onCancel} /></div>
         <div className="modal-body">{props.children}</div>
         <div className="modal-footer">
-          {props.error && <span className="modal-error"><Codicon name="error" /> {props.error}</span>}
+          {props.error && <span className="modal-error" role="alert"><Codicon name="error" /> {props.error}</span>}
           {PRIMARY_LAST ? [...buttons].reverse() : buttons}
         </div>
       </div>

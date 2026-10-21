@@ -23,6 +23,23 @@ export function embeddedImages(r: Report): EmbeddedImage[] {
 /** data: URL of an image for display. */
 export const imageUrl = (img: EmbeddedImage) => `data:${img.mimeType};base64,${img.data}`;
 
+/** Decode with the same browser engine that displays the image, before changing the report. */
+export function validateImage(img: EmbeddedImage): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const finish = (ok: boolean) => {
+      clearTimeout(timer);
+      image.onload = image.onerror = null;
+      if (ok) resolve();
+      else reject(new Error(l10n.t('Image "{0}" cannot be decoded. The file is damaged or is not a supported image.', img.name)));
+    };
+    const timer = setTimeout(() => finish(false), 10000);
+    image.onload = () => finish(image.naturalWidth > 0 && image.naturalHeight > 0);
+    image.onerror = () => finish(false);
+    image.src = imageUrl(img);
+  });
+}
+
 /** Image names must be unique and follow the rules for RDL names (letters, digits, underscore). */
 export function imageName(r: Report, wanted: string): string {
   const base = (wanted.replace(/\.[^.]*$/, '').replace(/[^\p{L}\p{N}_]/gu, '_').replace(/^(?=[\p{N}_])/u, l10n.t('Image')) || l10n.t('Image')).slice(0, 60);

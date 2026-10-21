@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 export interface FontRequest { families: string[]; bold: boolean; italic: boolean }
 
-interface Face { file: string; index: number; family: string; weight: number; italic: boolean }
+interface Face { file: string; index: number; family: string; aliases: string[]; weight: number; italic: boolean }
 
 /** Families tried after the requested ones, by kind (the generic CSS families and common report fonts). */
 const FALLBACKS: Record<string, string[]> = {
@@ -48,8 +48,13 @@ async function tables(handle: fs.FileHandle, offset: number): Promise<Map<string
 
 /** Family name (typographic family preferred) from a 'name' table; Windows Unicode English records first. */
 export function familyName(name: Buffer): string | null {
+  return familyNames(name)[0] ?? null;
+}
+
+/** Keep legacy family names too: CSS uses e.g. "Segoe UI Light", whose typographic family is "Segoe UI". */
+export function familyNames(name: Buffer): string[] {
   const count = u16(name, 2), strings = u16(name, 4);
-  let best: { score: number; value: string } | null = null;
+  const names: { score: number; value: string }[] = [];
   for (let i = 0; i < count; i++) {
     const r = 6 + i * 12;
     if (r + 12 > name.length) break;
@@ -65,9 +70,9 @@ export function familyName(name: Buffer): string | null {
     } else if (platform === 1 && encoding === 0) value = raw.toString('latin1');
     else continue;
     const score = (id === 16 ? 4 : 0) + (platform === 3 ? 2 : 0) + (language === 0x409 || (platform === 1 && language === 0) ? 1 : 0);
-    if (!best || score > best.score) best = { score, value };
+    if (value.trim()) names.push({ score, value: value.trim() });
   }
-  return best?.value.trim() || null;
+  return [...new Set(names.sort((a, b) => b.score - a.score).map(n => n.value))];
 }
 
 /** The faces of one font file (several for a .ttc collection); empty when it cannot be read or must not be embedded. */
@@ -86,7 +91,8 @@ async function facesOf(file: string): Promise<Face[]> {
       const t = await tables(handle, start);
       const name = t.get('name'), os2 = t.get('OS/2'), headT = t.get('head');
       if (!name || !(t.has('glyf') || t.has('CFF '))) continue;
-      const family = familyName(await readAt(handle, name[0], name[1]));
+      const aliases = familyNames(await readAt(handle, name[0], name[1]));
+      const family = aliases[0];
       if (!family) continue;
       let weight = 400, italic = false;
       if (os2) {
@@ -102,7 +108,7 @@ async function facesOf(file: string): Promise<Face[]> {
         weight = mac & 1 ? 700 : 400;
         italic = (mac & 2) === 2;
       }
-      faces.push({ file, index, family, weight, italic });
+      faces.push({ file, index, family, aliases, weight, italic });
     }
     return faces;
   } catch {
@@ -134,8 +140,9 @@ export class FontIndex {
       const byFamily = new Map<string, Face[]>();
       for (const faces of await Promise.all(files.map(f => facesOf(f)))) {
         for (const face of faces) {
-          const key = face.family.toLowerCase();
-          byFamily.set(key, [...byFamily.get(key) ?? [], face]);
+          for (const key of new Set(face.aliases.map(n => n.toLowerCase()))) {
+            byFamily.set(key, [...byFamily.get(key) ?? [], face]);
+          }
         }
       }
       return byFamily;

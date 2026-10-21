@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef } from 'react';
 import type { Row } from './expr';
-import { ItemType, Report, ReportItem } from './model';
+import { ItemType, Report } from './model';
 import type { BcContext } from './bc';
 
 /** A lint finding for this layout (from the extension). */
@@ -44,7 +44,7 @@ export interface Editor {
     leftWidth: number; rightWidth: number;
   };
   setView: (v: Partial<Editor['view']>) => void;
-  clipboard: ReportItem[];
+  clipboard: boolean;
   copy: (cut: boolean) => void;
   paste: () => void;
   /** AL report of a Business Central layout (null: not found / not BC). */

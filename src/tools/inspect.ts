@@ -495,11 +495,13 @@ export function previewText(text: string, opts: PreviewOptions & { maxRows?: num
     renderNodes(s.nodes, '  ', out, budget);
   };
   const budget = { rows: opts.maxRows ?? 60 };
-  if (result.header) section('Page header (as on page 1)', result.renderSection('header', page));
+  if (result.header) section('Page header (unpaginated snapshot)', result.renderSection('header', page));
   section('Body', result.body);
-  if (result.footer) section('Page footer (as on page 1)', result.renderSection('footer', page));
+  if (result.footer) section('Page footer (unpaginated snapshot)', result.renderSection('footer', page));
   if (result.errors.length) out.push('Evaluation errors:', ...result.errors.map(([item, message]) => `- ${item}: ${message}`));
   out.push('Page breaks are only applied in the designer preview (they depend on measured text heights).');
+  out.push('PageNumber/TotalPages here are placeholders (1/1), not a measured page count. Do not infer the number of pages or absence of overlap from this text snapshot; inspect the paginated designer preview.');
+  if (result.header || result.footer) out.push('Page-specific Code/ReportItems values are not resolved here: this unpaginated header/footer snapshot may reflect the last document. Verify individual page headers/footers in the designer preview.');
   return out.join('\n');
 }
 

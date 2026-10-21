@@ -17,6 +17,7 @@
     "package": "node scripts/package.mjs",
     "test:corpus": "node esbuild.mjs --corpus && node --enable-source-maps out/corpus.js",
     "test:vscode": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js",
+    "test:vscode:untrusted": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js --untrusted",
     "check:package": "node scripts/check-package.mjs",
     "publish:github": "node tools/publish-github.mjs"
   },
@@ -1631,7 +1632,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(open-preview)",
         "userDescription": "%tool.previewReport.description%",
-        "modelDescription": "Renders the report with its preview data (the <layout>.data.json sidecar, else generated rows shaped like the AL dataset) and returns what the reader sees: textbox values, tables row by row (groups expanded, sorted, filtered, totals), charts as categories and series values, page header/footer of page 1, and evaluation errors. Use it to verify expressions, formats, grouping, visibility and totals after a change. Page breaks/pagination are not computed.",
+        "modelDescription": "Renders the report with its preview data (the <layout>.data.json sidecar, else generated rows shaped like the AL dataset) and returns what the reader sees: textbox values, tables row by row (groups expanded, sorted, filtered, totals), charts as categories and series values, an unpaginated page header/footer snapshot, and evaluation errors. Use it to verify expressions, formats, grouping, visibility and totals after a change. Page breaks/pagination are not computed. Code/ReportItems in these snapshots may reflect the last document; verify per-page headers/footers in the paginated designer preview (bcReport_showInDesigner with mode preview). Number/date formatting follows the report Language, independently of the VS Code UI language. PageNumber/TotalPages in this snapshot are placeholders (1/1), never an actual page count; do not claim a page count or visually verified non-overlap from this output.",
         "tags": [
           "bc-report-builder",
           "rdlc",
@@ -1665,7 +1666,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(database)",
         "userDescription": "%tool.getReportData.description%",
-        "modelDescription": "The Business Central side of a layout: the AL report or report extension using it with its data items and columns (marked whether the layout dataset has them yet), labels, caption parameters, the other layouts of the report and the preview data sidecar (<layout>.data.json – write it as JSON to test with realistic data). With `tableFieldsOf` (a data item name) it also lists the fields of that data item's table from the workspace and the symbol packages (.alpackages), i.e. what bcReport_addAlColumns can add. Use it to know which Fields!/Parameters! a layout can reference.",
+        "modelDescription": "The Business Central side of a layout: the AL report or report extension using it with its data items and columns (marked whether the layout dataset has them yet), labels, caption parameters, the other layouts of the report and the preview data sidecar (<layout>.data.json – write it as JSON to test with realistic data). With `tableFieldsOf` (a data item name) it also lists the fields of that data item's table from the workspace and the symbol packages (.alpackages), i.e. what bcReport_addAlColumns can add. Use it to know which Fields!/Parameters! a layout can reference. AL LayoutFile paths are relative to the folder containing app.json, even when the AL source file is in src/.",
         "tags": [
           "bc-report-builder",
           "rdlc",
@@ -1680,7 +1681,7 @@
             },
             "tableFieldsOf": {
               "type": "string",
-              "description": "Name of a data item whose table fields to list."
+              "description": "Name of a data item whose table fields to list. Use the AL data item identifier (for example Header), not its table name (for example Sales Invoice Header)."
             }
           }
         }
@@ -1692,7 +1693,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(add)",
         "userDescription": "%tool.insertItems.description%",
-        "modelDescription": "Inserts report items with unique names and the XML structure the designer writes, following Business Central conventions: textbox; rectangle (a container, use its name as `parent` of further items); line; image (embedded from `imageFile`, or `value` = embedded image name / URL / expression); table (one column per entry of `fields`: header captions from <Field>Caption parameters, number formats from <Field>Format fields); matrix (row group × column group with a value); chart (`chart` with kind, category and series). Sizes are numbers in the report unit or strings with unit. Without `top` an item goes below the existing items of its container. A missing page header/footer is created. Prefer this over writing new items as XML; adjust details afterwards.",
+        "modelDescription": "Inserts report items with unique names and the XML structure the designer writes, following Business Central conventions: textbox; rectangle (a container, use its name as `parent` of further items); line; image (embedded from `imageFile`, or `value` = embedded image name / URL / expression); table (one column per entry of `fields`: header captions from <Field>Caption parameters, number formats from <Field>Format fields); matrix (row group × column group with a value); chart (`chart` with kind, category and series). Sizes are numbers in the report unit or strings with unit. Without `top` an item goes below the existing items of its container. A missing page header/footer is created. Prefer this over writing new items as XML; adjust details afterwards. Use parent for a textbox that must repeat inside an existing rectangle in a table/group (for example a Business Central document header); without parent it is a top-level section item and does not repeat with that group.",
         "tags": [
           "bc-report-builder",
           "rdlc",
@@ -2786,7 +2787,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(symbol-string)",
         "userDescription": "%tool.createAlLabel.description%",
-        "modelDescription": "Creates a translatable label in the AL report (labels block; optional Comment for translators, MaxLength, Locked) and with `textbox` makes that textbox show it as =Parameters!<Label>.Value – both files in one undoable edit. Business Central layouts should use labels instead of fixed texts (validate reports those as \"literal-text\"). The name defaults to the base app convention (<Text>Lbl).",
+        "modelDescription": "Creates a translatable label in the AL report (labels block; optional Comment for translators, MaxLength, Locked) and with `textbox` makes that textbox show it as =Parameters!<Label>.Value – both files in one undoable edit. Business Central layouts should use labels instead of fixed texts (validate reports those as \"literal-text\"). The name defaults to the base app convention (<Text>Lbl). AL edits stay in the undoable VS Code working copy until saved. Run bcReport_buildProject to save them and generate the layout parameters before checking on-disk AL or compiler output. For a new layout, first add its rendering/LayoutFile reference to the AL report; an unregistered RDLC has no AL target.",
         "tags": [
           "bc-report-builder",
           "rdlc",
@@ -2865,7 +2866,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(package)",
         "userDescription": "%tool.buildProject.description%",
-        "modelDescription": "Saves all files and runs \"AL: Package\" (Microsoft AL Language extension). The AL compiler regenerates the <DataSets> and label parameters of the RDLC layouts from the AL report – needed after adding AL columns or labels before the layout can use them without warnings. Check bcReport_validateLayout afterwards.",
+        "modelDescription": "Saves all files and runs \"AL: Package\" (Microsoft AL Language extension). The AL compiler regenerates the <DataSets> and label parameters of the RDLC layouts from the AL report – needed after adding AL columns or labels before the layout can use them without warnings. Check bcReport_validateLayout afterwards. Dirty AL documents without visible editor tabs are saved explicitly; a save failure stops the build. A returned tool result confirms the command ran, not that compilation succeeded: inspect AL diagnostics/output and revalidate the layout.",
         "tags": [
           "bc-report-builder",
           "rdlc",
@@ -2921,7 +2922,8 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "%workspaceTrust.description%"
     },
     "virtualWorkspaces": true
   }

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Diagnostic, Dialog, Editor, EditorContext, InsertTool, TablePart, useCommand, useEditor } from './editor';
-import { createBlock } from './blocks';
-import { addEmbeddedImage } from './images';
+import { createBlock, insertBlock } from './blocks';
+import { addEmbeddedImage, EmbeddedImage, validateImage } from './images';
 import { BcContext, isBcLayout } from './bc';
-import { Report, ReportItem, TextboxItem, allReportItems } from './model';
+import { Report, TextboxItem, allReportItems } from './model';
 import { alignItems, centerInContainer, distribute, focusOrder, makeSameSize } from './layoutTools';
-import { cloneItems, deleteItems, fitSections, locate, reorder, sectionOf } from './ops';
+import { deleteItems, fitSections, locate, reorder } from './ops';
 import { parseRdl, serializeRdl } from './rdl';
 import { newReportTemplate } from './templates';
-import { DesignerConfig, post, vscode } from './vscode';
+import { DesignerConfig, LayoutClipboard, post, vscode } from './vscode';
 import { Designer } from './components/Designer';
 import { Dialogs } from './components/Dialogs';
 import { DocumentOutline } from './components/DocumentOutline';
@@ -22,6 +22,7 @@ import { l10n } from './l10n';
 
 type FromExtension =
   | { type: 'load'; text: string; fileName: string }
+  | { type: 'clipboard'; value: LayoutClipboard | null }
   | { type: 'sampleData'; data: Record<string, Record<string, unknown>[]> }
   | { type: 'bcContext'; context: BcContext | null }
   | { type: 'diagnostics'; issues: Diagnostic[] }
@@ -58,7 +59,8 @@ export function App() {
   const [view, setViewState] = useState<Editor['view']>(() => ({ ...DEFAULT_VIEW, ...saved.current }));
   const commands = useRef(new Map<string, (arg?: unknown) => void>()).current;
   const [page, setPage] = useState<{ current: number; total: number } | undefined>();
-  const [clipboard, setClipboard] = useState<ReportItem[]>([]);
+  const [clipboard, setClipboard] = useState(false);
+  const clipboardRef = useRef<LayoutClipboard | null>(null);
   const [mode, setMode] = useState<'design' | 'preview'>('design');
   const [bc, setBc] = useState<BcContext | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
@@ -119,6 +121,9 @@ export function App() {
         } catch (err) {
           setLoadError((err as Error).message);
         }
+      } else if (msg.type === 'clipboard') {
+        clipboardRef.current = msg.value;
+        setClipboard(!!msg.value);
       } else if (msg.type === 'sampleData') {
         setSampleData(msg.data ?? {});
       } else if (msg.type === 'bcContext') {
@@ -145,27 +150,37 @@ export function App() {
   const copy = useCallback((cut: boolean) => {
     const r = reportRef.current;
     if (!r) return;
-    const items = selectionRef.current.map(n => locate(r, n)).filter(l => l?.container).map(l => structuredClone(l!.item));
-    if (!items.length) return;
-    setClipboard(items);
+    const locations = selectionRef.current.map(n => locate(r, n)).filter(l => l?.container);
+    if (!locations.length) return;
+    const value = {
+      text: serializeRdl(createBlock(r, selectionRef.current)),
+      top: Math.min(...locations.map(l => l!.item.top + l!.originTop)),
+      left: Math.min(...locations.map(l => l!.item.left + l!.originLeft)),
+    };
+    clipboardRef.current = value;
+    setClipboard(true);
+    post({ type: 'clipboard', value });
     if (cut) {
       commit(d => deleteItems(d, selectionRef.current));
       select([]);
     }
   }, [commit, select]);
 
-  const clipboardRef = useRef(clipboard);
-  clipboardRef.current = clipboard;
   const paste = useCallback(() => {
+    const value = clipboardRef.current;
+    if (!value) return;
     let names: string[] = [];
-    commit(r => {
-      if (!clipboardRef.current.length) return false;
-      const target = selectionRef.current.map(n => locate(r, n)).find(Boolean)?.section ?? 'body';
-      const copies = cloneItems(r, clipboardRef.current, 0.125);
-      sectionOf(r, target).items.push(...copies);
-      names = copies.map(c => c.name);
-    });
-    if (names.length) select(names);
+    try {
+      let missing: string[] = [];
+      commit(r => {
+        const target = selectionRef.current.map(n => locate(r, n)).find(Boolean)?.section ?? 'body';
+        ({ names, missing } = insertBlock(r, parseRdl(value.text), target, value.top + 0.125, value.left + 0.125));
+      });
+      if (names.length) select(names);
+      if (missing.length) post({ type: 'info', message: l10n.t('Pasted items refer to missing report data: {0}', missing.join(', ')) });
+    } catch (e) {
+      post({ type: 'error', message: (e as Error).message });
+    }
   }, [commit, select]);
 
   // ------------------------------------------------------------------------------------------------ keyboard
@@ -257,13 +272,13 @@ export function App() {
     if (!report) return;
     post({
       type: 'state', state: {
-        mode, zoom: view.zoom, unit: report.unit, status, hasSelection: selection.length > 0, canPaste: clipboard.length > 0,
+        mode, zoom: view.zoom, unit: report.unit, status, hasSelection: selection.length > 0, canPaste: clipboard,
         hasHeader: !!report.header, hasFooter: !!report.footer,
         panes: { outline: view.dataPane && view.leftTab === 'outline', reportData: view.dataPane && view.leftTab === 'data', properties: view.propertiesPane },
         page: mode === 'preview' ? page : undefined,
       },
     });
-  }, [report, mode, view.zoom, view.dataPane, view.leftTab, view.propertiesPane, status, selection.length, clipboard.length, page]);
+  }, [report, mode, view.zoom, view.dataPane, view.leftTab, view.propertiesPane, status, selection.length, clipboard, page]);
 
   // Ctrl/⌘ + mouse wheel zooms, like the image preview and the editor.
   const zoomRef = useRef(view.zoom);
@@ -359,9 +374,21 @@ function AppCommands() {
   });
   useCommand('reportProperties', () => ed.setDialog({ kind: 'reportProperties' }));
   // an image file picked in VS Code (Report data › Images › ＋)
-  useCommand('images.add', arg => {
+  useCommand('images.validate', async arg => {
+    const { id, image } = arg as { id: number; image: EmbeddedImage };
+    try {
+      await validateImage(image);
+      post({ type: 'imageValidated', id });
+    } catch (e) { post({ type: 'imageValidated', id, error: (e as Error).message }); }
+  });
+  useCommand('images.add', async arg => {
     const { name, mimeType, data } = arg as { name: string; mimeType: string; data: string };
-    ed.commit(r => { addEmbeddedImage(r, name, mimeType, data); });
+    try {
+      await validateImage({ name, mimeType, data });
+      ed.commit(r => { addEmbeddedImage(r, name, mimeType, data); });
+    } catch (e) {
+      post({ type: 'error', message: (e as Error).message });
+    }
   });
   useCommand('importSampleData', arg => {
     const picked = (arg as { entryKind?: string; name?: string } | undefined)?.entryKind === 'dataSet' ? (arg as { name: string }).name : undefined;

@@ -65,3 +65,34 @@ test('FontIndex finds families, styles and fallbacks in a font directory', async
   assert.ok(Buffer.from(await index.bytes(face)).equals(TTF));
   assert.equal(await index.find({ families: ['Arial', 'sans-serif'], bold: false, italic: false }), null);
 });
+
+test('FontIndex resolves a CSS legacy family without losing the typographic family', async () => {
+  const records = [[1, 'Example Sans Light'], [16, 'Example Sans']] as const;
+  const strings = records.map(([, value]) => Buffer.from(value, 'utf16le').swap16());
+  const name = Buffer.alloc(6 + records.length * 12);
+  name.writeUInt16BE(records.length, 2);
+  name.writeUInt16BE(name.length, 4);
+  let offset = 0;
+  records.forEach(([id], i) => {
+    const at = 6 + i * 12;
+    [3, 1, 0x409, id, strings[i].length, offset].forEach((v, j) => name.writeUInt16BE(v, at + j * 2));
+    offset += strings[i].length;
+  });
+  const table = Buffer.concat([name, ...strings]);
+  const font = Buffer.concat([TTF, table]);
+  for (let i = 0; i < font.readUInt16BE(4); i++) {
+    const at = 12 + i * 16;
+    if (font.toString('latin1', at, at + 4) !== 'name') continue;
+    font.writeUInt32BE(TTF.length, at + 8);
+    font.writeUInt32BE(table.length, at + 12);
+  }
+  assert.equal(familyName(table), 'Example Sans');
+  const dir = mkdtempSync(path.join(tmpdir(), 'font-alias-'));
+  writeFileSync(path.join(dir, 'light.ttf'), font);
+  const index = new FontIndex([dir]);
+  for (const family of ['Example Sans Light', 'Example Sans']) {
+    const face = await index.find({ families: [family], bold: false, italic: false });
+    assert.ok(face, family);
+    assert.ok(face.file.endsWith('light.ttf'));
+  }
+});

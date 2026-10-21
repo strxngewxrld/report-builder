@@ -595,7 +595,7 @@ class Engine {
     const title = child(el, 'ChartTitles', 'ChartTitle');
     const legendEl = child(el, 'ChartLegends', 'ChartLegend');
     const out: RChart = {
-      ...base, kind: 'chart', css: this.styleCss(child(el, 'Style'), ctx, name), categories: [], series: [],
+      ...base, kind: 'chart', locale: ctx.locale, css: this.styleCss(child(el, 'Style'), ctx, name), categories: [], series: [],
       title: title ? toStr(this.eval(text(title, 'Caption') ?? '', ctx, name)) || undefined : undefined,
       legend: !!legendEl && (text(legendEl, 'Hidden') ?? '').toLowerCase() !== 'true',
       palette: text(el, 'Palette') ?? 'Default', sample: this.design,

@@ -94,6 +94,8 @@ export interface RChartSeries {
 export interface RChartAxis { title?: string; format?: string; min?: number; max?: number }
 export interface RChart extends RBase {
   kind: 'chart';
+  /** Evaluated report language, shared with textbox number/currency formatting. */
+  locale?: string;
   categories: string[];
   series: RChartSeries[];
   title?: string;

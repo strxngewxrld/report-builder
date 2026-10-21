@@ -1,4 +1,5 @@
 {
+  "workspaceTrust.description": "Entwurf und Vorschau sind verfügbar. Erstellen, Symbol-Download und Ausführen von Berichten in Business Central benötigen einen vertrauenswürdigen Arbeitsbereich.",
   "description": "Visueller Designer für Business-Central-RDLC-Layouts (.rdlc/.rdl) mit Dokumentgliederung – inspiriert vom Microsoft Report Builder und dem Visual-Studio-Berichts-Designer",
   "category": "Business Central Report Builder",
   "command.newReport": "Neues Berichtslayout…",

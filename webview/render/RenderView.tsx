@@ -37,11 +37,16 @@ function Interactive({ node }: { node: Extract<RNode, { kind: 'box' }> }) {
   };
   return <>
     {node.toggle && o.onToggle && (
-      <span className="rv-interactive" style={box} title={node.toggle.expanded ? l10n.t('Collapse') : l10n.t('Expand')}
+      <span className="rv-interactive" style={box} role="button" tabIndex={0} aria-expanded={node.toggle.expanded}
+        aria-label={node.toggle.expanded ? l10n.t('Collapse') : l10n.t('Expand')}
+        title={node.toggle.expanded ? l10n.t('Collapse') : l10n.t('Expand')}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); o.onToggle!(node.toggle!.key); } }}
         onClick={e => { e.stopPropagation(); o.onToggle!(node.toggle!.key); }}>{node.toggle.expanded ? '−' : '+'}</span>
     )}
     {node.userSort && o.onSort && (
-      <span className="rv-interactive" title={l10n.t('Sort')} style={{ float: 'right', cursor: 'pointer', fontSize: 9, color: node.userSort.direction ? '#0a84ff' : '#999', userSelect: 'none' }}
+      <span className="rv-interactive" role="button" tabIndex={0} aria-label={l10n.t('Sort')}
+        title={l10n.t('Sort')} style={{ float: 'right', cursor: 'pointer', fontSize: 9, color: node.userSort.direction ? '#0a84ff' : '#999', userSelect: 'none' }}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); o.onSort!(node.userSort!.name); } }}
         onClick={e => { e.stopPropagation(); o.onSort!(node.userSort!.name); }}>
         {node.userSort.direction === 'Ascending' ? '▲' : node.userSort.direction === 'Descending' ? '▼' : '⇅'}
       </span>

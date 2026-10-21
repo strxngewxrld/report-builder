@@ -23,6 +23,19 @@ export function installDomDriver() {
         el.blur();
       } else if (m.action === 'doubleClick') {
         el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      } else if (m.action === 'pointerDrag') {
+        const { from, delta, altKey = false } = JSON.parse(m.value);
+        const bounds = el.getBoundingClientRect();
+        const x = bounds.left + (from?.[0] ?? bounds.width / 2);
+        const y = bounds.top + (from?.[1] ?? bounds.height / 2);
+        const event = (type: string, clientX: number, clientY: number) => new PointerEvent(type, {
+          clientX, clientY, altKey, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+          pointerId: 1, pointerType: 'mouse', bubbles: true, cancelable: true,
+        });
+        el.dispatchEvent(event('pointerdown', x, y));
+        window.dispatchEvent(event('pointermove', x + delta[0], y + delta[1]));
+        await new Promise<void>(r => requestAnimationFrame(() => r()));
+        window.dispatchEvent(event('pointerup', x + delta[0], y + delta[1]));
       } else if (m.action === 'drop') {
         const source = document.querySelector<HTMLElement>(m.value);
         if (!source) throw new Error(`Drag source not found: ${m.value}`);
@@ -53,7 +66,10 @@ export function installDomDriver() {
       }
       await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
       const current = document.querySelector<HTMLElement>(m.selector);
-      post({ type: 'testDomResult', id: m.id, text: current?.textContent ?? '', count: document.querySelectorAll(m.selector).length,
+      const css = current && m.action === 'readStyle' ? getComputedStyle(current) : undefined;
+      const text = css ? JSON.stringify(Object.fromEntries(['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'borderTopStyle', 'borderTopWidth', 'borderTopColor'].map(k => [k, css[k as keyof CSSStyleDeclaration]])))
+        : (m.action === 'readVisible' ? current?.innerText : current?.textContent) ?? '';
+      post({ type: 'testDomResult', id: m.id, text, count: document.querySelectorAll(m.selector).length,
         focused: current === document.activeElement, focusInside: current?.contains(document.activeElement) ?? false, defaultPrevented, propagated,
         disabled: current instanceof HTMLButtonElement ? current.disabled : undefined });
     } catch (e) { post({ type: 'testDomResult', id: m.id, error: (e as Error).message }); }

@@ -1,4 +1,5 @@
 {
+  "workspaceTrust.description": "Designing and previewing reports is available. Building, downloading symbols and running reports in Business Central require a trusted workspace.",
   "description": "Visual designer for Business Central RDLC layouts (.rdlc/.rdl) with a document outline – inspired by Microsoft Report Builder and the Visual Studio report designer",
   "category": "Business Central Report Builder",
   "command.newReport": "New Report Layout…",

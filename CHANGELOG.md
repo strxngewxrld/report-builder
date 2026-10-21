@@ -5,6 +5,19 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [1.0.0] - 2026-10-18
 
+### Korrigiert bei der Windows-Abnahme (21.10.2026)
+- KI-Werkzeuge: AL-Build speichert auch unsichtbare, durch Werkzeuge geänderte Dokumente
+  und bricht bei Speicherfehlern ab. AL-Projektwurzel über `app.json` auch ohne Workspace-Zuordnung
+  bestimmen. Textvorschau verwendet die Berichtssprache und kennzeichnet Kopf-/Fußzeilen als
+  unpaginierten Snapshot mit Seitenzahl-Platzhaltern. Diagrammachsen, Datenbeschriftungen und
+  Tooltips berücksichtigen ebenfalls die Berichtssprache. Werkzeugbeschreibungen anhand
+  echter Copilot-Aufgaben präzisiert.
+- Tastaturbedienung: Diagrammtypen mit Pfeiltasten/Home/End und einem Tabstopp auswählen;
+  Validierungsfehler werden als Warnung angesagt. Drilldown und interaktive Sortierung in der Vorschau
+  sind per Tastatur erreichbar und auslösbar; Drilldown meldet seinen aufgeklappten Zustand.
+- PDF-Export erkennt neben typografischen auch klassische Schriftfamiliennamen. Dadurch wird etwa
+  „Segoe UI Light“ korrekt eingebettet; eine breitere Ersatzschrift verschluckt keine Wortabstände mehr.
+
 ### Hinzugefügt
 - **KI-Werkzeuge für GitHub Copilot** (Agentenmodus, `vscode.lm`): 14 Tools, mit denen ein Sprachmodell RDLC-Berichte
   vollständig bauen kann – Überblick mit XML-Zeilennummern, Prüfung (auch falsch geschachtelte Tags, `Fields!` im
@@ -62,6 +75,14 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
   Schließen des vorherigen Designers; neue Tests für Label, Spalten, Umbenennen, Layouts, PDF und Tabellenbefehle
 
 ### Behoben
+- PDF-Export während einer Neuberechnung der Vorschau: Exportanfragen werden bis zur Vermessung vorgemerkt;
+  Seitenzahlen und Export verwenden nur Messwerte des aktuellen Berichts-/Datenstands.
+- Kopieren/Einfügen zwischen geöffneten Berichten: gemeinsame Designer-Zwischenablage mit Bildern, Code,
+  eindeutigen Namen und angepassten internen Verweisen; Konflikte brechen ohne Teiländerung ab, gemeinsames Undo.
+- Defekte Bilddateien werden vor dem Einbetten tatsächlich dekodiert und mit Fehlermeldung abgelehnt;
+  dieselbe Prüfung gilt für das KI-Werkzeug zum Einfügen von Bildern.
+- Eingeschränkter Workspace: Build, Symbol-Download und BC-Aufruf verlangen Vertrauen, auch vor Metadatenabruf
+  und Windows-Anmeldung; Build-Werkzeug ebenfalls gesperrt. Entwurf und Vorschau bleiben verfügbar (`limited`).
 - Vorschau: Umbrüche vor/nach Rechtecken und Datenbereichen; Gruppen-Umbrüche „Am Ende“ auch nach der letzten Instanz,
   ausdrucksgesteuertes `Disabled` und `ResetPageNumber`; zusammenfallende Umbrüche behalten den Seitenzahl-Neustart
 - Vorschau und PDF-Export warten auf geladene Schriften, bevor Seiten vermessen bzw. exportiert werden
