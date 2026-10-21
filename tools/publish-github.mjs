@@ -43,8 +43,8 @@ export function releaseNotes(changelog, version, vsixName) {
   const end = start < 0 ? -1 : lines.findIndex((line, index) => index > start && /^## /.test(line));
   const changes = start < 0 ? '' : lines.slice(start + 1, end < 0 ? undefined : end).join('\n').trim();
   return (changes ? `${changes}\n\n` : '') +
-    `Die Datei \`${vsixName}\` unter Assets herunterladen und in VS Code über „Extensions: Install from VSIX…“ installieren. ` +
-    'Bereits installierte Versionen bieten das Update beim Start selbst an.\n';
+    `Download \`${vsixName}\` from Assets and install it in VS Code using “Extensions: Install from VSIX…”. ` +
+    'Existing installations offer the update automatically at startup.\n';
 }
 
 /** Return false for a missing tag; reject existing tags on a different commit. */

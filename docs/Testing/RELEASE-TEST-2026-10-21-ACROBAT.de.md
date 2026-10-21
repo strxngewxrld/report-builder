@@ -1,8 +1,10 @@
 # Windows-MCP- und Acrobat-Abnahme am 21.10.2026
 
+[English](RELEASE-TEST-2026-10-21-ACROBAT.md) | Deutsch
+
 ## Ergebnis
 
-Die konkrete Windows-Checkliste in [ABNAHME.md](ABNAHME.md) ist vollständig erledigt.
+Die konkrete Windows-Checkliste in `ABNAHME.md` (historischer Verweis; im Checkout nicht vorhanden) ist vollständig erledigt.
 Acrobat Reader 64 Bit **26.2.22031.0** wurde über den Windows-MCP mit echter Maus/Tastatur bedient.
 Der beim Erststart angezeigte Adobe-Lizenzvertrag wurde nach ausdrücklicher Zustimmung des Benutzers akzeptiert.
 Die Prüfung fand unter Windows Server 2025, VS Code 1.142.0 und aktivem RDP-Desktop 1620 × 952 statt.

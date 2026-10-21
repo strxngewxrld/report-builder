@@ -35,7 +35,19 @@ export function unzip(zip) {
 const EXPECTED = [
   'package.json', 'package.nls.json', 'package.nls.de.json', 'l10n/bundle.l10n.de.json',
   'readme.md', 'changelog.md', 'LICENSE.txt', 'THIRD_PARTY_NOTICES.md', 'media/icon.png',
+  'README.de.md', 'media/preview.png',
+  'CHANGELOG.de.md', 'docs/README.md', 'docs/README.de.md',
+  ...['README', 'UI-TESTMATRIX', 'RELEASE-TEST-2026-10-18', 'RELEASE-TEST-2026-10-20-WINDOWS',
+    'RELEASE-TEST-2026-10-20-RESTPUNKTE', 'RELEASE-TEST-2026-10-20-FIXES', 'RELEASE-TEST-2026-10-21-ACROBAT',
+    'RELEASE-TEST-2026-10-21-ABSICHERN', 'RELEASE-TEST-2026-10-21-COPILOT', 'RELEASE-TEST-2026-10-21-MACOS']
+    .flatMap(name => [`docs/Testing/${name}.md`, `docs/Testing/${name}.de.md`]),
   'out/extension.js', 'out/webview.js', 'out/webview.css', 'out/fontkit.js', 'out/codicon.css', 'out/codicon.ttf',
+  'docs/ANWENDERHANDBUCH.md', 'docs/UMSTIEG-REPORT-BUILDER.md', 'docs/images/README.md',
+  'docs/USER-GUIDE.md', 'docs/MIGRATION.md', 'docs/AI-TOOLS.md', 'docs/AI-TOOLS.de.md', 'docs/images/README.de.md',
+  'docs/images/01-designer.png', 'docs/images/02-berichtsdaten-al.png', 'docs/images/03-ausdruck.png',
+  'docs/images/04-gruppeneigenschaften.png', 'docs/images/05-vorschau.png', 'docs/images/06-export.png',
+  'samples/Umsatzbericht.rdl', 'samples/Umsatzbericht.data.json', 'samples/Bericht1.rdlc',
+  'samples/Verkaufsrechnung.rdlc', 'samples/app.json', 'samples/src/Verkaufsrechnung.Report.al',
 ];
 
 /** A stand-in for any VS Code API object: every property, call and construction yields another stand-in. */
@@ -66,6 +78,20 @@ export async function checkPackage(path) {
   const en = JSON.parse(text('package.nls.json')), de = JSON.parse(text('package.nls.de.json'));
   for (const match of JSON.stringify(pkg).matchAll(/"%([^%"]+)%"/g)) assert(en[match[1]] && de[match[1]], `Missing translation: ${match[1]}`);
   JSON.parse(text('l10n/bundle.l10n.de.json'));
+  // Every walkthrough image and button must work in the installed, offline package.
+  const commandIds = new Set(pkg.contributes.commands.map(c => c.command));
+  for (const walkthrough of pkg.contributes.walkthroughs ?? []) {
+    assert(walkthrough.steps.length > 0, 'Empty walkthrough');
+    for (const step of walkthrough.steps) {
+      assert(files[`extension/${step.media.image}`], `Missing walkthrough image: ${step.media.image}`);
+      for (const bundle of [en, de]) {
+        const description = bundle[step.description.replace(/^%|%$/g, '')];
+        for (const match of description.matchAll(/\]\(command:([^)?]+)/g)) {
+          assert(commandIds.has(match[1]), `Unknown walkthrough command: ${match[1]}`);
+        }
+      }
+    }
+  }
   assert.match(text('THIRD_PARTY_NOTICES.md'), /## react /, 'THIRD_PARTY_NOTICES.md lists no bundled packages');
 
   const png = files['extension/media/icon.png'];

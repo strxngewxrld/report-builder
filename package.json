@@ -19,6 +19,7 @@
     "test:vscode": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js",
     "test:vscode:untrusted": "npm run build && node esbuild.mjs --integration && node out/test/integration/run.js --untrusted",
     "check:package": "node scripts/check-package.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
     "publish:github": "node tools/publish-github.mjs"
   },
   "license": "MIT",
@@ -85,6 +86,31 @@
       }
     ],
     "commands": [
+      {
+        "command": "bcReportBuilder.gettingStarted",
+        "title": "%command.gettingStarted%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.openExample",
+        "title": "%command.openExample%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.openUserGuide",
+        "title": "%command.openUserGuide%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.openMigrationGuide",
+        "title": "%command.openMigrationGuide%",
+        "category": "%category%"
+      },
+      {
+        "command": "bcReportBuilder.openAiToolsGuide",
+        "title": "%command.openAiToolsGuide%",
+        "category": "%category%"
+      },
       {
         "command": "bcReportBuilder.newReport",
         "title": "%command.newReport%",
@@ -2909,6 +2935,69 @@
             }
           }
         }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "bcReportBuilder.gettingStarted",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
+        "steps": [
+          {
+            "id": "bcReportBuilder.example",
+            "title": "%walkthrough.example.title%",
+            "description": "%walkthrough.example.description%",
+            "media": {
+              "image": "docs/images/05-vorschau.png",
+              "altText": "%walkthrough.example.title%"
+            }
+          },
+          {
+            "id": "bcReportBuilder.design",
+            "title": "%walkthrough.design.title%",
+            "description": "%walkthrough.design.description%",
+            "media": {
+              "image": "docs/images/01-designer.png",
+              "altText": "%walkthrough.design.title%"
+            }
+          },
+          {
+            "id": "bcReportBuilder.preview",
+            "title": "%walkthrough.preview.title%",
+            "description": "%walkthrough.preview.description%",
+            "media": {
+              "image": "docs/images/05-vorschau.png",
+              "altText": "%walkthrough.preview.title%"
+            }
+          },
+          {
+            "id": "bcReportBuilder.al",
+            "title": "%walkthrough.al.title%",
+            "description": "%walkthrough.al.description%",
+            "media": {
+              "image": "docs/images/02-berichtsdaten-al.png",
+              "altText": "%walkthrough.al.title%"
+            }
+          },
+          {
+            "id": "bcReportBuilder.export",
+            "title": "%walkthrough.export.title%",
+            "description": "%walkthrough.export.description%",
+            "media": {
+              "image": "docs/images/06-export.png",
+              "altText": "%walkthrough.export.title%"
+            }
+          },
+          {
+            "id": "bcReportBuilder.docs",
+            "title": "%walkthrough.docs.title%",
+            "description": "%walkthrough.docs.description%",
+            "media": {
+              "image": "docs/images/03-ausdruck.png",
+              "altText": "%walkthrough.docs.title%"
+            }
+          }
+        ]
       }
     ]
   },

@@ -1,7 +1,9 @@
 # Findings behoben und Abnahme erweitert
 
+[English](RELEASE-TEST-2026-10-20-FIXES.md) | Deutsch
+
 20.10.2026, Windows Server 2025, VS Code 1.142.0, Node.js 26, deutsche Tastatur, aktive RDP-Sitzung.
-Fortsetzung der [Nachprüfung](RELEASE-TEST-2026-10-20-RESTPUNKTE.md). Alle Desktoptests in isolierten Profilen mit
+Fortsetzung der [Nachprüfung](RELEASE-TEST-2026-10-20-RESTPUNKTE.de.md). Alle Desktoptests in isolierten Profilen mit
 Kopien von `samples/`; zusätzlich das frisch gebaute VSIX installiert. Testprofile und Belege:
 `artifacts/qa-fixes/` (Git-ignoriert).
 

@@ -40,6 +40,56 @@ async function open(api: Api, name: string) {
 
 const errorsOf = (p: EditorProbe) => p.received.filter(m => m.type === 'error');
 
+test('Getting Started: Rundgang, unabhängige Beispielkopien und Offline-Handbuch', async api => {
+  await vscode.commands.executeCommand('bcReportBuilder.gettingStarted');
+  const ext = vscode.extensions.all.find(e => e.packageJSON.name === 'bc-report-builder')!;
+  const source = vscode.Uri.joinPath(ext.extensionUri, 'samples', 'Umsatzbericht.rdl');
+  const original = await vscode.workspace.fs.readFile(source);
+  const openCopy = async () => {
+    await vscode.commands.executeCommand('bcReportBuilder.openExample');
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    assert.ok(input instanceof vscode.TabInputCustom);
+    assert.equal(input.viewType, 'bcReportBuilder.designer');
+    assert.notEqual(input.uri.toString(), source.toString());
+    const probe = await until('Beispielkopie geladen', () => {
+      const p = api.probes.get(input.uri.toString());
+      return p?.received.some(m => m.type === 'state') && p;
+    });
+    return { uri: input.uri, probe };
+  };
+  const first = await openCopy();
+  const data = JSON.parse(new TextDecoder().decode(await vscode.workspace.fs.readFile(
+    vscode.Uri.joinPath(first.uri, '..', 'Umsatzbericht.data.json'))));
+  assert.equal(data.Umsaetze.length, 8);
+  assert.equal(Math.round(data.Umsaetze.reduce((sum: number, row: { Umsatz: number }) => sum + row.Umsatz, 0) * 100), 3752340);
+  await vscode.commands.executeCommand('bcReportBuilder.showPreview', first.uri);
+  const preview = await until('Beispielvorschau', () => first.probe.received.find(m => m.type === 'previewReady'));
+  assert.equal(preview.errors, 0);
+
+  const doc = docOf(first.uri);
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(first.uri, new vscode.Position(0, 0), '<!-- working copy -->\n');
+  assert.ok(await vscode.workspace.applyEdit(edit));
+  assert.ok(await doc.save());
+  const second = await openCopy();
+  assert.notEqual(second.uri.toString(), first.uri.toString());
+  assert.deepEqual(await vscode.workspace.fs.readFile(second.uri), original);
+  assert.deepEqual(await vscode.workspace.fs.readFile(source), original);
+  const german = (process.env.BC_RB_TEST_LANGUAGE || vscode.env.language).toLowerCase().startsWith('de');
+  for (const [command, english, translated] of [
+    ['openUserGuide', 'USER-GUIDE.md', 'ANWENDERHANDBUCH.md'],
+    ['openMigrationGuide', 'MIGRATION.md', 'UMSTIEG-REPORT-BUILDER.md'],
+    ['openAiToolsGuide', 'AI-TOOLS.md', 'AI-TOOLS.de.md'],
+  ]) {
+    await vscode.commands.executeCommand(`bcReportBuilder.${command}`);
+    const name = german ? translated : english;
+    await until('Anleitung öffnet als Markdown-Vorschau', () => {
+      const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return tab?.label.includes(name) && tab.input instanceof vscode.TabInputWebview;
+    });
+  }
+});
+
 test('.rdlc öffnet standardmäßig im Designer', async api => {
   const { uri, probe } = await open(api, 'Verkaufsrechnung.rdlc');
   const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;

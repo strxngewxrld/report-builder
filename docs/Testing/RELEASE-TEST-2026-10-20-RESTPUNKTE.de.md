@@ -1,7 +1,9 @@
 # Nachprüfung offener TODOs unter Windows
 
+[English](RELEASE-TEST-2026-10-20-RESTPUNKTE.md) | Deutsch
+
 **Die unten dokumentierten Findings sind inzwischen behoben und erneut geprüft.** Aktueller Stand und zusätzliche
-Abnahmefälle: [Findings behoben und Abnahme erweitert](RELEASE-TEST-2026-10-20-FIXES.md).
+Abnahmefälle: [Findings behoben und Abnahme erweitert](RELEASE-TEST-2026-10-20-FIXES.de.md).
 Dieses Protokoll erhält die ursprünglichen Reproduktionsschritte und Befunde.
 
 20.10.2026, Windows Server 2025, VS Code 1.142.0, aktive RDP-Sitzung mit 1620 × 952 Pixeln.

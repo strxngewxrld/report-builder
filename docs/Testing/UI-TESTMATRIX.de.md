@@ -1,5 +1,7 @@
 # Lokale UI-Testmatrix
 
+[English](UI-TESTMATRIX.md) | Deutsch
+
 Diese Matrix trennt Tests im echten Webview-DOM von Desktopbedienung per macOS MCP.
 Ein grüner Einzelablauf ist keine Abnahme aller Kombinationen oder anderer Betriebssysteme.
 
@@ -24,7 +26,7 @@ Ein grüner Einzelablauf ist keine Abnahme aller Kombinationen oder anderer Betr
 | Datengruppen | Plus klappt Gruppe nicht zu; Kategorie und Aktionen per Tastatur erreichbar; Enter im Auswahlfeld | Korrigiert; Tastatur-Regression grün |
 | Layout-Bausteine | Dateiimport, Bibliothek speichern/auswählen, zweimal einfügen, Namenskonflikte, gemeinsames Undo | Vorhandene und neue Webview-/Unit-Tests grün |
 | AL-Integration | Datasetabgleich, Definitionen, Labels, Spalten, Layoutwechsel, Code-Block | Vorhandene Integrationstests grün; echte AL-Laufzeit extern erforderlich |
-| KI-Berichte | Echter Copilot erstellt Rechnungs-RDLC aus AL-Report und passt Umsatzbericht mit Gruppen, Summen, Diagramm und Stilen an | [Copilot-Abnahme](RELEASE-TEST-2026-10-21-COPILOT.md): echter AL-Build, unabhängige Summenprüfung, paginierte Vorschau, Befunde behoben; 162 Unit-Tests und 58 Integrationstests je Sprache |
+| KI-Berichte | Echter Copilot erstellt Rechnungs-RDLC aus AL-Report und passt Umsatzbericht mit Gruppen, Summen, Diagramm und Stilen an | [Copilot-Abnahme](RELEASE-TEST-2026-10-21-COPILOT.de.md): echter AL-Build, unabhängige Summenprüfung, paginierte Vorschau, Befunde behoben; 162 Unit-Tests und 58 Integrationstests je Sprache |
 | Tabellen | Spalten/Zeilen, Gruppenfuß, Undo; Mehrfachauswahl/Verbinden/Teilen | Vorhandener Integrationstest grün; Shift-Auswahl, Verbinden und Teilen nativ geprüft, gespeichertes ColSpan kontrolliert |
 | Designer | Abschnittshöhe; Rechteck zeichnen/bewegen/skalieren; Kopieren/Einfügen; Rahmenauswahl; gleiche Breite und links ausrichten | Nativ geprüft; eindeutige Kopienamen, Positionen und Größen im DOM kontrolliert, Layout gespeichert |
 | Navigation | Gliederungsfilter, Pfeiltasten, Zoom ohne Dokumentänderung | Neuer Webview-Test grün |
@@ -41,26 +43,26 @@ ohne Wiederholungsversuch. Das VSIX wurde nach den Produktkorrekturen erneut geb
 
 ## Lokal noch nicht vollständig abgenommen
 
-macOS-Nachprüfung 21.10.: [Protokoll](RELEASE-TEST-2026-10-21-MACOS.md), 162/162 Unit-Tests,
+macOS-Nachprüfung 21.10.: [Protokoll](RELEASE-TEST-2026-10-21-MACOS.de.md), 162/162 Unit-Tests,
 58/58 Integrationstests je Sprache, Restricted Mode je Sprache, 379/379 Korpuslayouts und VSIX grün.
 Native Zwischenablage im Direkttexteditor, Cmd+Enter/Speichern, bytegenaues Undo/Redo und PDF in
 macOS Vorschau geprüft. Kein bestätigter Produktfehler; die Windows-CI braucht Node 24.
 Die folgende Liste bleibt die Grenze der repräsentativen Abnahme.
 
-Weitere Absicherung 21.10.: [Filter/Drilldown, Gestaltung, NVDA und Undo](RELEASE-TEST-2026-10-21-ABSICHERN.md).
+Weitere Absicherung 21.10.: [Filter/Drilldown, Gestaltung, NVDA und Undo](RELEASE-TEST-2026-10-21-ABSICHERN.de.md).
 Zusätzliche repräsentative Filter-/Drilldown-/Sortier- und Drag-/Zoom-/Raster-/Containerkombinationen geprüft.
 Native NVDA-Ansagen für Diagrammdialog und Ausdruckssuche nachgeprüft; Tastaturbedienung der Diagrammtypen,
 Validierungsansagen und Vorschau-Schalter korrigiert. Kein vollständiger NVDA-/VoiceOver-Durchgang.
 Spalten-Undo aus dem AL-Editor mit zuvor geschlossenen Designern erneut bytegenau geprüft; keine Rückfrage erschienen.
 Abschließend Typecheck, 161/161 Unit-Tests und 55/55 Integrationstests je Sprache ohne Wiederholung grün.
 
-Nachprüfung 21.10.: [Acrobat-Abnahme über Windows MCP](RELEASE-TEST-2026-10-21-ACROBAT.md).
+Nachprüfung 21.10.: [Acrobat-Abnahme über Windows MCP](RELEASE-TEST-2026-10-21-ACROBAT.de.md).
 Die konkrete Windows-Checkliste in `ABNAHME.md` ist einschließlich Acrobat erledigt. Dabei gefundene
 PDF-Schriftfamilienkorrektur mit 161/161 Unit-Tests und 52/52 Integrationstests je Sprache geprüft;
 im deutschen Gesamtlauf ein Drag-Test im zweiten Versuch, gezielter Nachlauf sofort grün.
 Acrobat bestätigt eingebettete Segoe UI Light; Sonderzeichen, Logo und zwei A4-Seiten nativ geprüft.
 
-Aktueller Stand unter Windows am 20.10.: [Korrekturen und erweiterte Abnahme](RELEASE-TEST-2026-10-20-FIXES.md).
+Aktueller Stand unter Windows am 20.10.: [Korrekturen und erweiterte Abnahme](RELEASE-TEST-2026-10-20-FIXES.de.md).
 Die bestätigten Zwischenablage-/Bildvalidierungsfehler sind behoben und nativ im installierten VSIX nachgeprüft.
 Echter eingeschränkter Modus ebenfalls geprüft; eigener Testbefehl und CI-Prüfung ergänzt.
 Zusätzlich erledigt: Ausdruckssuche mit Stil-/Gruppentreffern, Einzel-/Sammel-Undo, Baustein-Konfliktdialoge,
