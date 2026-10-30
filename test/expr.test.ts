@@ -14,6 +14,30 @@ const ctx = (row: Record<string, unknown> | null = rows[0]): EvalContext => ({
 });
 const ev = (s: string, row?: Record<string, unknown> | null) => evaluate(s, ctx(row));
 
+test('Array dimension expressions reject infinite and excessive traversal', () => {
+  assert.equal(ev('=UBound(Split("a b"), 1)'), 1);
+  assert.equal(ev('=Split("a b").GetLength(0)'), 2);
+  for (const dimension of ['1 / 0', '100000000000000000000', '-1', '1.5', '33']) {
+    assert.throws(() => ev(`=UBound(Split("a b"), ${dimension})`), /Invalid array dimension/);
+    assert.throws(() => ev(`=Split("a b").GetLength(${dimension})`), /Invalid array dimension/);
+    assert.throws(() => ev(`=Split("a b").GetUpperBound(${dimension})`), /Invalid array dimension/);
+  }
+  assert.throws(() => ev('=UBound(Split("a b"), 0 / 0)'), /not a number/);
+});
+
+test('Expression collections and function names cannot expose inherited JavaScript objects', () => {
+  for (const name of ['__proto__', 'constructor', 'toString']) {
+    assert.equal(ev(`=Fields!${name}.Value`), null);
+    assert.equal(ev(`=Globals!${name}.Value`), null);
+    assert.throws(() => ev(`=Parameters!${name}.Value`), /Unknown parameter/);
+    assert.throws(() => ev(`=Sum(Fields!Umsatz.Value, "${name}")`), /Unknown scope/);
+  }
+  assert.throws(() => ev('=constructor(1)'), /Unknown function/);
+  assert.throws(() => ev('=Microsoft.VisualBasic.constructor(1)'), /not supported/);
+  // Explicit data with these names remains accessible.
+  assert.equal(ev('=Fields!__proto__.Value', JSON.parse('{"__proto__":42}')), 42);
+});
+
 test('Space cannot allocate attacker-selected unbounded strings', () => {
   assert.equal(ev('=Space(3)'), '   ');
   for (const value of ['1000000000', '1 / 0']) assert.throws(() => ev(`=Space(${value})`), /string allocation limit/);

@@ -2,6 +2,35 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EvalContext, evaluate } from '../webview/expr';
 import { CodeModule } from '../webview/vb';
+import { bindRows } from '../webview/sampleData';
+
+test('Report code cannot pollute Object.prototype through Fields, Parameters or Globals', () => {
+  const code = new CodeModule('Public Function F(x)\nx.securityProbe = "polluted"\nReturn 1\nEnd Function');
+  const context = { ...ctx(code), row: {} };
+  try {
+    for (const collection of ['Fields', 'Parameters', 'Globals']) {
+      assert.throws(() => evaluate(`=Code.F(${collection}!__proto__.Value)`, context));
+      assert.equal(Object.hasOwn(Object.prototype, 'securityProbe'), false);
+    }
+  } finally {
+    // Keep the test process clean even if the regression returns.
+    delete (Object.prototype as Record<string, unknown>).securityProbe;
+  }
+});
+
+test('Member assignments and sample fields named __proto__ remain data properties', () => {
+  const record = {};
+  const value = { marker: 'data' };
+  const code = new CodeModule('Public Function F(x, v)\nx.__proto__ = v\nReturn 1\nEnd Function');
+  assert.equal(code.call('F', [record, value], ctx(code)), 1);
+  assert.equal(Object.getPrototypeOf(record), Object.prototype);
+  assert.equal(Object.hasOwn(record, '__proto__'), true);
+  assert.equal((record as Record<string, unknown>).__proto__, value);
+  const [row] = bindRows({ id: 'ds', name: 'DS', dataSourceName: '', commandText: '', extra: [], queryExtra: [], fields: [{ name: '__proto__', dataField: '__proto__', typeName: '' }] }, [JSON.parse('{"__proto__":{"marker":"data"}}')]);
+  assert.equal(Object.getPrototypeOf(row), Object.prototype);
+  assert.deepEqual(row.__proto__, value);
+  assert.equal(Object.hasOwn(row, 'marker'), false);
+});
 
 test('VB rejects oversized Dim and ReDim allocations before allocating memory', () => {
   for (const declaration of ['Dim a(1000000000)', 'Dim a(999, 999)', 'Dim a(1 / 0)', 'Dim a(1)\nReDim Preserve a(1000000000)']) {

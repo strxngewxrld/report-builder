@@ -71,6 +71,8 @@ const attr = (tag: string, name: string) => new RegExp(`\\b${name}="([^"]*)"`).e
 /** Column letters of a cell reference ("BC12" → 54, 0-based). */
 const columnIndex = (ref: string) => [...(/^[A-Z]+/.exec(ref)?.[0] ?? 'A')].reduce((a, c) => a * 26 + c.charCodeAt(0) - 64, 0) - 1;
 
+const MAX_COLUMN = 16383;
+
 const DATE_FORMAT_IDS = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47]);
 const isDateFormat = (code: string) => /[dmyhs]/i.test(code.replace(/"[^"]*"|\[[^\]]*\]|\\./g, '')) && !/0|#/.test(code.replace(/"[^"]*"/g, ''));
 
@@ -117,7 +119,10 @@ export function parseXlsx(buf: Uint8Array): Record<string, unknown>[] {
             value = new Date(ms).toISOString().replace(/T00:00:00\.000Z$/, '');
           } else value = num;
         }
-        cells[columnIndex(attr(head, 'r') ?? 'A')] = value;
+        // a forged reference ("ZZZZZZ1") must not allocate a huge sparse row: Excel ends at column XFD
+        const column = columnIndex(attr(head, 'r') ?? 'A');
+        if (column > MAX_COLUMN) throw new Error(l10n.t('Invalid cell reference in the Excel file'));
+        cells[column] = value;
       }
       rows.push(cells);
     }
