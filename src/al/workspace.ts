@@ -77,8 +77,15 @@ export class AlWorkspace implements vscode.Disposable {
     }
   }
 
-  private resolve(file: AlFile, layoutPath: string): vscode.Uri {
-    return vscode.Uri.joinPath(file.root, layoutPath.replace(/\\/g, '/').replace(/^\.\//, ''));
+  /**
+   * LayoutFile is workspace data: "../" must not reach files outside the AL file's workspace folder (or its project
+   * when it has none) – layouts are read, renamed into and opened by the OS.
+   */
+  private resolve(file: AlFile, layoutPath: string): vscode.Uri | undefined {
+    const uri = vscode.Uri.joinPath(file.root, layoutPath.replace(/\\/g, '/').replace(/^\.\//, ''));
+    const boundary = vscode.workspace.getWorkspaceFolder(file.uri)?.uri ?? file.root;
+    const inside = (u: string, dir: string) => u.startsWith(dir.replace(/[\\/]+$/, '') + (process.platform === 'win32' ? '\\' : '/'));
+    return uri.scheme === boundary.scheme && uri.authority === boundary.authority && inside(key(uri), key(boundary)) ? uri : undefined;
   }
 
   /** The report (with its base report, for extensions) whose layout is `layout`. */
@@ -90,7 +97,8 @@ export class AlWorkspace implements vscode.Disposable {
       for (const report of file.reports) {
         for (const l of report.layouts) {
           const owner = { report, file, layoutType: l.type, base: this.baseOf(report) };
-          if (key(this.resolve(file, l.file)) === target) return owner;
+          const resolved = this.resolve(file, l.file);
+          if (resolved && key(resolved) === target) return owner;
           if (l.file.split(/[\\/]/).pop()?.toLowerCase() === layout.path.split('/').pop()?.toLowerCase()) byName ??= owner;
         }
       }
@@ -118,7 +126,8 @@ export class AlWorkspace implements vscode.Disposable {
           if (!l.file) continue;
           const ext = l.file.split('.').pop()?.toLowerCase();
           const type = l.type || (ext === 'docx' ? 'Word' : ext === 'xlsx' ? 'Excel' : 'RDLC');
-          out.push({ name: l.name, type, uri: this.resolve(file, l.file), owner: report.name });
+          const uri = this.resolve(file, l.file);
+          if (uri) out.push({ name: l.name, type, uri, owner: report.name });
         }
       }
     }
@@ -152,8 +161,10 @@ export class AlWorkspace implements vscode.Disposable {
         const targetFile = [...this.files.values()].find(f => f.reports.includes(target))!;
         const entry = out.get(target) ?? { report: target, file: targetFile, layouts: [], onlyRdlc: true };
         for (const l of report.layouts) {
-          if (/^rdlc$/i.test(l.type) || /\.rdlc?$/i.test(l.file)) entry.layouts.push(this.resolve(file, l.file));
-          else entry.onlyRdlc = false;
+          if (/^rdlc$/i.test(l.type) || /\.rdlc?$/i.test(l.file)) {
+            const uri = this.resolve(file, l.file);
+            if (uri) entry.layouts.push(uri);
+          } else entry.onlyRdlc = false;
         }
         out.set(target, entry);
       }

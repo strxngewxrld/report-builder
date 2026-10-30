@@ -98,3 +98,9 @@ test('Business Central 29 "Excel (nur Daten)": elements with namespace prefix x:
   });
   assert.deepEqual(parseXlsx(bc), [{ No_SalesInvHdr: '103001', DocDate_SalesInvHdr: '2028-01-24', Description_Line: 'Möbelmontage, Januar', LineAmount_Line: 2075 }]);
 });
+
+test('forged cell references beyond column XFD are rejected instead of allocating huge rows', () => {
+  const sheet = (ref: string) => zip({ 'xl/worksheets/sheet1.xml': `<worksheet><sheetData><row r="1"><c r="${ref}"><v>1</v></c></row></sheetData></worksheet>` });
+  assert.deepEqual(parseXlsx(sheet('XFD1')), []);
+  assert.throws(() => parseXlsx(sheet('ZZZZZZ1')), /cell reference/);
+});

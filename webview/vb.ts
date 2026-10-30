@@ -638,7 +638,8 @@ export class CodeModule {
       if (!obj || typeof obj !== 'object' || obj instanceof Date || Array.isArray(obj)) throw new Error(l10n.t('Code: cannot assign to .{0}', t.name));
       const rec = obj as Record<string, unknown>;
       const key = Object.keys(rec).find(k => k.toLowerCase() === t.name.toLowerCase()) ?? t.name;
-      rec[key] = combine(rec[key]);
+      // Define a data property: assigning __proto__ must not invoke an inherited setter.
+      Object.defineProperty(rec, key, { value: combine(Object.hasOwn(rec, key) ? rec[key] : null), writable: true, enumerable: true, configurable: true });
       return;
     }
     const arr = this.read(t.name, locals);

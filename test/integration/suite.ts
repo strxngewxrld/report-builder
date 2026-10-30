@@ -1879,6 +1879,29 @@ test('Sprachmodell-Tools: registriert, lesen den AL-Kontext, ändern das Layout 
   }
 });
 
+test('Sicherheit: präparierte Ausdrücke ändern keine Prototypen und blockieren die Vorschau nicht', async api => {
+  const { uri, doc, probe } = await open(api, 'Bericht1.rdlc');
+  const original = doc.getText();
+  const textbox = (name: string, value: string, top: number) => `<Textbox Name="${name}"><Paragraphs><Paragraph><TextRuns><TextRun><Value>${value}</Value><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Top>${top}in</Top><Left>0in</Left><Width>4in</Width><Height>0.3in</Height><Style /></Textbox>`;
+  const code = '<Code>Public Function Pollute(x)\nx.securityProbe = "polluted"\nReturn 1\nEnd Function</Code>';
+  const xml = original.replace('</Report>', `${code}</Report>`).replace('<ReportItems>', '<ReportItems>' +
+    textbox('DimensionAttack', '=UBound(Split("a b"), 1 / 0)', 0.5) +
+    textbox('PrototypeAttack', '=Code.Pollute(Globals!__proto__.Value)', 1) +
+    textbox('PrototypeCheck', '=Globals!securityProbe.Value', 1.5));
+  try {
+    await restore(uri, xml);
+    await until('Präparierter Bericht geladen', () => probe.posted.some(m => m.type === 'load' && m.text === xml));
+    const start = probe.received.length;
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    const preview = await until('Vorschau trotz Angriffen fertig', () => probe.received.slice(start).find(m => m.type === 'previewReady'));
+    assert.equal(preview.errors, 2, 'beide Angriffe werden als Ausdrucksfehler angezeigt');
+    assert.ok(!String((await domAction(api, uri, probe, '.rv-page')).text).includes('polluted'), 'der Objektprototyp bleibt unverändert');
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    await restore(uri, original);
+  }
+});
+
 test('Sicherheit: Bild-Beacons bleiben in Entwurf, Vorschau und HTML-Export gesperrt', async api => {
   const { uri, doc, probe } = await open(api, 'Bericht1.rdlc');
   const original = doc.getText();

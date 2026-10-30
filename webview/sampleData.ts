@@ -54,17 +54,18 @@ export function bindRows(ds: DataSet, rows: Record<string, unknown>[]): Row[] {
   const cols = new Map(ds.fields.map(f => [f.name, column(f)]));
   return rows.map(src => {
     const row: Row = {};
+    const set = (key: string, value: unknown) => Object.defineProperty(row, key, { value, writable: true, enumerable: true, configurable: true });
     for (const f of ds.fields) {
       const col = cols.get(f.name);
-      let v = col !== undefined ? src[col] ?? null : null;
+      let v = col !== undefined && Object.hasOwn(src, col) ? src[col] ?? null : null;
       // dates: typed fields, and ISO dates in untyped fields (Excel imports)
       if (typeof v === 'string' && (/^date/i.test(f.typeName.replace(/^System\./, '')) || (!f.typeName && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(v))) && !Number.isNaN(Date.parse(v))) {
         v = new Date(/T/.test(v) ? v : `${v}T00:00:00`);
       }
-      row[f.name] = v;
+      set(f.name, v);
     }
     // Columns without a declared field are still reachable, which helps while fields are being defined.
-    for (const [k, v] of Object.entries(src)) if (!(k in row)) row[k] = v;
+    for (const [k, v] of Object.entries(src)) if (!Object.hasOwn(row, k)) set(k, v);
     return row;
   });
 }

@@ -50,6 +50,8 @@ export interface DesignerSession {
   revealAl(line?: number, character?: number): Promise<void>;
   /** Resolves once the webview has loaded the report and handles commands. */
   ready: Promise<void>;
+  /** Sends changed settings; reloads the webview when its Content-Security-Policy must change. */
+  configure(config: DesignerConfig): void;
 }
 
 /** Messages webview → extension. */
@@ -107,7 +109,7 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   /** Pushes changed settings to all open designers. */
   static broadcastConfig() {
     const config = readConfig();
-    for (const list of ReportEditorProvider.sessions.values()) for (const s of list) s.post({ type: 'config', config });
+    for (const list of ReportEditorProvider.sessions.values()) for (const s of list) s.configure(config);
   }
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly service: LayoutService) {}
@@ -115,7 +117,9 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
     const webview = panel.webview;
     webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'out')] };
-    webview.html = this.html(webview);
+    // remote images are allowed by the CSP only while the user setting enables them, not merely filtered by the webview
+    let externalImages = readConfig().allowExternalImages;
+    webview.html = this.html(webview, externalImages);
 
     // Text the webview produced last; changes equal to it must not be echoed back (it already has that state).
     let lastFromWebview: string | undefined;
@@ -131,6 +135,11 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     const session: DesignerSession = {
       uri: document.uri, panel, bc: null, post, ready: new Promise<void>(r => { markReady = r; }),
       command: (id, arg) => post({ type: 'command', id, arg }),
+      configure: config => {
+        if (config.allowExternalImages === externalImages) { void post({ type: 'config', config }); return; }
+        externalImages = config.allowExternalImages;
+        webview.html = this.html(webview, externalImages); // the reloaded webview asks for document and config again
+      },
       validateImage: async image => {
         await session.ready;
         return new Promise<void>((resolve, reject) => {
@@ -456,14 +465,14 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
     if (open) await vscode.env.openExternal(target);
   }
 
-  private html(webview: vscode.Webview): string {
+  private html(webview: vscode.Webview, externalImages: boolean): string {
     const asset = (name: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', name));
     const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
     return `<!DOCTYPE html>
 <html lang="${vscode.env.language}">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:${externalImages ? ' https:' : ''}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="${asset('codicon.css')}" rel="stylesheet" id="vscode-codicon-stylesheet">
   <link href="${asset('webview.css')}" rel="stylesheet">

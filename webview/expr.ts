@@ -45,8 +45,11 @@ const VB_NS = Symbol('Microsoft.VisualBasic');
 
 /** The array of dimension `d` (1-based, as UBound's second argument): the first element's sub-array for d > 1. */
 function arrayDim(a: unknown, d: unknown): unknown[] {
+  const dimension = isNothing(d) ? 1 : toNum(d);
+  // Code arrays have at most 32 dimensions. Infinity (including 1 / 0) must never drive this loop.
+  if (!Number.isSafeInteger(dimension) || dimension < 1 || dimension > 32) throw new Error(l10n.t('Invalid array dimension'));
   let cur = a;
-  for (let i = 1; i < (isNothing(d) ? 1 : toNum(d)); i++) cur = Array.isArray(cur) ? cur[0] : undefined;
+  for (let i = 1; i < dimension; i++) cur = Array.isArray(cur) ? cur[0] : undefined;
   if (!Array.isArray(cur)) throw new Error(l10n.t('Not an array'));
   return cur;
 }
@@ -306,7 +309,7 @@ function aggregate(name: string, args: Node[], ctx: EvalContext): unknown {
     const fn = args[1]?.k === 'id' ? args[1].name : args[1]?.k === 'call' ? args[1].name : '';
     if (!AGGREGATES.has(fn) || fn === 'runningvalue') throw new Error(l10n.t('RunningValue() expects an aggregate function as its second argument'));
     const scope = args[2] ? toStr(evalNode(args[2], ctx)) : null;
-    const all = scope ? ctx.scopes?.[scope] ?? ctx.dataSets[scope] ?? ctx.regionRows ?? ctx.scopeRows : ctx.regionRows ?? ctx.scopeRows;
+    const all = scope ? ownValue(ctx.scopes, scope) ?? ownValue(ctx.dataSets, scope) ?? ctx.regionRows ?? ctx.scopeRows : ctx.regionRows ?? ctx.scopeRows;
     const upto = ctx.row && all.includes(ctx.row) ? all.slice(0, all.indexOf(ctx.row) + 1) : all;
     return aggregate(fn, [args[0]], { ...ctx, scopeRows: upto });
   }
@@ -314,7 +317,7 @@ function aggregate(name: string, args: Node[], ctx: EvalContext): unknown {
   const scopeArg = name === 'countrows' ? args[0] : args[1];
   if (scopeArg) {
     const scope = toStr(evalNode(scopeArg, ctx));
-    rows = ctx.scopes?.[scope] ?? ctx.dataSets[scope] ?? (() => { throw new Error(l10n.t('Unknown scope "{0}"', scope)); })();
+    rows = ownValue(ctx.scopes, scope) ?? ownValue(ctx.dataSets, scope) ?? (() => { throw new Error(l10n.t('Unknown scope "{0}"', scope)); })();
   }
   if (name === 'countrows') return rows.length;
   if (!args[0]) throw new Error(l10n.t('{0}() expects an argument', name));
@@ -464,7 +467,7 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
   if (obj === VB_NS) {
     // modules (Strings, Interaction, Conversion, DateAndTime, Information) are only qualifiers
     if (!args.length && ['strings', 'interaction', 'conversion', 'dateandtime', 'information', 'constants'].includes(lname)) return VB_NS;
-    if (lname in FUNCTIONS) return FUNCTIONS[lname](args, ctx);
+    if (Object.hasOwn(FUNCTIONS, lname)) return FUNCTIONS[lname](args, ctx);
     throw new Error(l10n.t('{0} is not supported', `Microsoft.VisualBasic.${name}`));
   }
   if (obj === STRING_NS) {
@@ -589,7 +592,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       if (n.name === 'math') return MATH_NS;
       if (n.name === 'array') return ARRAY_NS;
       if (n.name === 'microsoft') return MICROSOFT_NS;
-      if (n.name in FUNCTIONS && ['now', 'today'].includes(n.name)) return FUNCTIONS[n.name]([], ctx);
+      if (Object.hasOwn(FUNCTIONS, n.name) && ['now', 'today'].includes(n.name)) return FUNCTIONS[n.name]([], ctx);
       throw new Error(l10n.t("Unknown identifier '{0}'", n.name));
     }
     case 'coll': return collection(n, ctx);
@@ -618,7 +621,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
       const args = n.args.map(a => evalNode(a, ctx));
       const user = ctx.callUser?.(n.name, args);
       if (user) return user.value;
-      const fn = FUNCTIONS[n.name];
+      const fn = ownValue(FUNCTIONS, n.name);
       if (!fn) throw new Error(l10n.t('Unknown function {0}()', n.name));
       return fn(args, ctx);
     }
@@ -656,6 +659,11 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
   throw new Error(l10n.t('Invalid expression'));
 }
 
+/** Report names only address data, never inherited constructors or Object.prototype. */
+function ownValue<T>(record: Record<string, T> | undefined, name: string): T | undefined {
+  return record && Object.hasOwn(record, name) ? record[name] : undefined;
+}
+
 function collection(n: Extract<Node, { k: 'coll' }>, ctx: EvalContext): unknown {
   switch (n.coll) {
     case 'fields': {
@@ -665,14 +673,14 @@ function collection(n: Extract<Node, { k: 'coll' }>, ctx: EvalContext): unknown 
         if (sets.length === 1) return null; // dataset without rows
         throw new Error(l10n.t('Fields!{0} outside of a data region', n.name));
       }
-      const v = row[n.name];
+      const v = ownValue(row, n.name);
       return n.prop === 'isnothing' ? isNothing(v) : v ?? null;
     }
     case 'parameters': {
-      if (!(n.name in ctx.parameters)) throw new Error(l10n.t('Unknown parameter {0}', n.name));
+      if (!Object.hasOwn(ctx.parameters, n.name)) throw new Error(l10n.t('Unknown parameter {0}', n.name));
       return ctx.parameters[n.name];
     }
-    case 'globals': return ctx.globals[n.name] ?? null;
+    case 'globals': return ownValue(ctx.globals, n.name) ?? null;
     case 'user': return n.name.toLowerCase() === 'userid' ? 'DOMAIN\\user' : 'de-DE';
     case 'reportitems': {
       const list = ctx.reportItems?.(n.name);
