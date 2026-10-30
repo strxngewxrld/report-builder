@@ -1386,7 +1386,7 @@ test('UI: Gliederung filtern, Tastaturnavigation und Zoom ohne Dokumentänderung
   await selectUi(api, uri, probe, 'Titel');
   await domAction(api, uri, probe, '.outline-tree', 'focus');
   await domAction(api, uri, probe, '.outline-tree', 'keydown', 'ArrowDown');
-  assert.match(String((await domAction(api, uri, probe, '.props-pane .pane-description')).text), /Untertitel/);
+  await until('Auswahl wandert zu Untertitel', () => /Untertitel/.test(String((probe.received.filter(message => message.type === 'state').at(-1)?.state as { status: string })?.status)));
   await vscode.commands.executeCommand('bcReportBuilder.zoomIn', uri);
   await until('Zoom erhöht', () => [...probe.received].reverse().find(message => message.type === 'state' && Number((message.state as { zoom: number }).zoom) > 1));
   await vscode.commands.executeCommand('bcReportBuilder.zoomReset', uri);

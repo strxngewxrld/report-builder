@@ -103,7 +103,8 @@ export function ChartDialog({ d, close, Modal, Field }: {
               set({ kind: kinds[next][0] as ChartKind });
               e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
             }}>
-            <Codicon name={icon} /><span>{label}</span>
+            {/* a pyramid is a funnel upside down */}
+            <Codicon name={icon} className={k === 'Pyramid' ? 'flip' : undefined} /><span>{label}</span>
           </button>
         ))}
       </div>

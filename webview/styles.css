@@ -313,8 +313,8 @@ button.link:hover { background: none; text-decoration: underline; }
 .prop-value { display: flex; min-width: 0; }
 .prop-value > input:not([type=checkbox]), .prop-value > select, .prop-value > textarea { width: 100%; }
 .with-unit { display: flex; align-items: center; gap: 6px; width: 100%; }
-.with-unit input { flex: 1; width: 100%; }
-.unit { color: var(--muted); font-size: 11px; }
+.with-unit input, .with-unit select { flex: 1; width: 100%; }
+.unit { color: var(--muted); font-size: 11px; min-width: 14px; }
 .color-prop { display: flex; gap: 4px; width: 100%; align-items: center; }
 .color-prop input[type=color] { width: 26px; height: 26px; padding: 2px; border: 1px solid var(--input-border); border-radius: 2px; background: var(--input-bg); flex-shrink: 0; }
 .color-prop input:not([type=color]) { flex: 1; width: 100%; }
@@ -354,6 +354,9 @@ button.link:hover { background: none; text-decoration: underline; }
 .item.textbox .text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: normal; }
 .item.textbox .text.expr { color: inherit; }
 .item.textbox.cell .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* CanGrow: the box grows at run time, so show the last line's descenders (4px also fits the resize handles) */
+.item.textbox.can-grow, .item.textbox.can-grow.selected { overflow: clip; overflow-clip-margin: 4px; }
+.item.textbox.can-grow > .text { flex-shrink: 0; }
 .item.rectangle, .item.image { outline: 1px dotted #b5b5b5; outline-offset: -1px; }
 .item.image { overflow: hidden; }
 .item.raw { outline: 1px dashed #999; background: repeating-linear-gradient(45deg, #f6f6f6, #f6f6f6 6px, #eee 6px, #eee 12px); }
@@ -562,3 +565,9 @@ body.vscode-high-contrast-light .designer .item.selected { outline: 2px solid va
 .expression-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--vscode-editor-font-family); }
 .expression-result .replacement-preview { border-left: 3px solid var(--vscode-gitDecoration-addedResourceForeground); padding-left: 8px; }
 .expression-result button + button { margin-left: 8px; }
+
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.al-head button.link { max-width: 100%; }
+.codicon.flip { transform: rotate(180deg); }
+/* only the label column is nudged to the controls' text line, not a control group */
+.form-row > span:not(:first-child) { padding-top: 0; }

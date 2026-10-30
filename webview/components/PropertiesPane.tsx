@@ -43,7 +43,8 @@ export function PropText(props: {
     value: v,
     readOnly: props.readOnly,
     placeholder: props.placeholder,
-    title: props.invalid ?? undefined,
+    // narrow pane: hover shows a cut-off value or hint in full
+    title: props.invalid ?? (v || props.placeholder),
     className: props.invalid ? 'invalid' : undefined,
     onBlur: commit,
   };
@@ -84,7 +85,7 @@ export function PropColor({ value, onCommit }: { value: string | undefined; onCo
 }
 
 export const Row = ({ label, children }: { label: string; children: ReactNode }) => (
-  <label className="prop-row"><span className="prop-label">{label}</span><span className="prop-value">{children}</span></label>
+  <label className="prop-row"><span className="prop-label" title={label}>{label}</span><span className="prop-value">{children}</span></label>
 );
 
 const Category = ({ title, children }: { title: string; children: ReactNode }) => {
@@ -101,8 +102,8 @@ const Category = ({ title, children }: { title: string; children: ReactNode }) =
 };
 
 /** Pane header like a VS Code view: uppercase title and a description. */
-const PaneTitle = ({ description }: { description: string }) => (
-  <div className="pane-header"><span className="pane-title">{l10n.t('Properties')}</span><span className="pane-description" title={description}>{description}</span></div>
+const PaneTitle = ({ description }: { description?: string }) => (
+  <div className="pane-header"><span className="pane-title">{l10n.t('Properties')}</span>{description && <span className="pane-description" title={description}>{description}</span>}</div>
 );
 
 const typeLabel = (type: string): string => ({
@@ -122,7 +123,7 @@ export function PropertiesPane({ width }: { width: number }) {
     else delete it.style[key];
   });
 
-  if (!items.length) return <div className="pane props-pane" style={{ width }}><PaneTitle description={l10n.t('Report')} /><ReportProps /></div>;
+  if (!items.length) return <div className="pane props-pane" style={{ width }}><PaneTitle /><ReportProps /></div>;
 
   const first = items[0];
   const single = items.length === 1 ? first : null;
@@ -133,7 +134,8 @@ export function PropertiesPane({ width }: { width: number }) {
 
   return (
     <div className="pane props-pane" style={{ width }}>
-      <PaneTitle description={single ? `${single.name} · ${loc?.cell ? l10n.t('Table cell') : single.type === 'raw' && single.kind === 'Chart' ? l10n.t('Chart') : single.type === 'raw' && single.kind === 'Textbox' ? l10n.t('Textbox') : typeLabel(single.type)}` : l10n.t('{0} items', items.length)} />
+      {/* the type only: the name is the first field below and in the status bar */}
+      <PaneTitle description={single ? (loc?.cell ? l10n.t('Table cell') : single.type === 'raw' && single.kind === 'Chart' ? l10n.t('Chart') : single.type === 'raw' && single.kind === 'Textbox' ? l10n.t('Textbox') : typeLabel(single.type)) : l10n.t('{0} items', items.length)} />
       <div className="props">
         {single && (
           <Category title={l10n.t('General')}>
@@ -366,10 +368,14 @@ export function ReportProps() {
   return (
     <div className="props">
       <Category title={l10n.t('Report')}>
-        <Row label={l10n.t('Unit of measurement')}>
-          <select value={report.unit} onChange={e => ed.commit(r => { r.unit = e.target.value as 'in' | 'cm'; })}>
-            <option value="cm">{l10n.t('Centimeters')}</option><option value="in">{l10n.t('Inches')}</option>
-          </select>
+        <Row label={l10n.t('Unit')}>
+          {/* empty unit column: the select ends where the size inputs below end */}
+          <span className="with-unit">
+            <select value={report.unit} onChange={e => ed.commit(r => { r.unit = e.target.value as 'in' | 'cm'; })}>
+              <option value="cm">{l10n.t('Centimeters')}</option><option value="in">{l10n.t('Inches')}</option>
+            </select>
+            <span className="unit" />
+          </span>
         </Row>
         <Row label={l10n.t('Width (body)')}><PropSize value={report.width} min={0.5} onCommit={v => ed.commit(r => { r.width = v; })} /></Row>
         <Row label={l10n.t('Height (body)')}><PropSize value={report.body.height} min={0.1} onCommit={v => ed.commit(r => { r.body.height = v; })} /></Row>

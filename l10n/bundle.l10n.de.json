@@ -73,7 +73,6 @@
   "Available values and further settings from the file are kept.": "Verfügbare Werte und weitere Einstellungen aus der Datei bleiben erhalten.",
   "Average": "Mittelwert",
   "Avg(Expression)": "Avg(Ausdruck)",
-  "Back to Design (F5)": "Zurück zum Entwurf (F5)",
   "Background": "Hintergrund",
   "Background color": "Hintergrundfarbe",
   "Bar": "Balken",
@@ -472,7 +471,6 @@
   "Only what is set here changes – further formatting of the chart stays as in the layout.": "Geändert wird nur, was hier eingestellt ist – weitere Formatierung des Diagramms bleibt wie im Layout.",
   "Open": "Öffnen",
   "Open as XML": "Als XML öffnen",
-  "Open in the browser and print or save as PDF": "Im Browser öffnen und drucken bzw. als PDF speichern",
   "Open report {0} \"{1}\" in the web client? The last published version of the app runs.": "Report {0} „{1}“ im Web-Client öffnen? Zuletzt veröffentlichte Version der App wird ausgeführt.",
   "Open {0} in the Designer": "{0} im Designer öffnen",
   "Operators": "Operatoren",
@@ -488,7 +486,6 @@
   "Page height": "Seitenhöhe",
   "Page Number": "Seitenzahl",
   "Page width": "Seitenbreite",
-  "Page {0} of {1}": "Seite {0} von {1}",
   "Pages": "Seiten",
   "Panes": "Bereiche",
   "Paragraph and number": "Absatz und Zahl",
@@ -515,7 +512,6 @@
   "Previous Page": "Vorherige Seite",
   "Previous() expects an argument": "Previous() erwartet ein Argument",
   "Previous(Expression)": "Previous(Ausdruck)",
-  "Print": "Drucken",
   "Prompt": "Eingabeaufforderung",
   "Properties": "Eigenschaften",
   "Properties…": "Eigenschaften…",
@@ -669,7 +665,7 @@
   "Unexpected character '{0}'": "Unerwartetes Zeichen '{0}'",
   "Unexpected end of the expression": "Unerwartetes Ende des Ausdrucks",
   "Unit of Measurement": "Maßeinheit",
-  "Unit of measurement": "Maßeinheit",
+  "Unit": "Maßeinheit",
   "Unit of measurement of the report (rd:ReportUnitType)": "Maßeinheit des Berichts (rd:ReportUnitType)",
   "Unknown function {0}()": "Unbekannte Funktion {0}()",
   "Unknown identifier '{0}'": "Unbekannter Bezeichner '{0}'",
@@ -856,5 +852,6 @@
   "Code: array allocation limit exceeded": "Code: Die maximal zulässige Array-Größe wurde überschritten",
   "Like: pattern matching limit exceeded": "Like: Der Mustervergleich überschreitet die zulässige Größe",
   "Space: string allocation limit exceeded": "Space: Die maximal zulässige Zeichenkettenlänge wurde überschritten",
-  "The report URL is not an http(s) address: {0}": "Die Bericht-URL ist keine http(s)-Adresse: {0}"
+  "The report URL is not an http(s) address: {0}": "Die Bericht-URL ist keine http(s)-Adresse: {0}",
+  "{0} sample rows": "{0} Beispielzeilen"
 }

@@ -14,9 +14,9 @@ export const chartKinds = (): [ChartKind, string, string][] => [
   ['Column', l10n.t('Column'), 'graph'], ['StackedColumn', l10n.t('Stacked column'), 'graph'], ['PercentColumn', l10n.t('100% column'), 'graph'],
   ['Bar', l10n.t('Bar'), 'graph-left'], ['StackedBar', l10n.t('Stacked bar'), 'graph-left'], ['Line', l10n.t('Line'), 'graph-line'],
   ['SmoothLine', l10n.t('Smooth line'), 'graph-line'], ['Area', l10n.t('Area'), 'graph-line'], ['StackedArea', l10n.t('Stacked area'), 'graph-line'],
-  ['Scatter', l10n.t('Scatter'), 'graph-scatter'], ['Pie', l10n.t('Pie'), 'pie-chart'], ['Doughnut', l10n.t('Doughnut'), 'pie-chart'],
-  ['Funnel', l10n.t('Funnel'), 'filter'], ['Pyramid', l10n.t('Pyramid'), 'triangle-up'], ['Range', l10n.t('Range'), 'graph-line'],
-  ['RangeColumn', l10n.t('Range column'), 'graph'], ['RangeBar', l10n.t('Range bar'), 'graph-left'], ['Polar', l10n.t('Polar'), 'target'],
+  ['Scatter', l10n.t('Scatter'), 'graph-scatter'], ['Pie', l10n.t('Pie'), 'pie-chart'], ['Doughnut', l10n.t('Doughnut'), 'circle-large-outline'],
+  ['Funnel', l10n.t('Funnel'), 'filter'], ['Pyramid', l10n.t('Pyramid'), 'filter'], ['Range', l10n.t('Range'), 'graph-line'],
+  ['RangeColumn', l10n.t('Range column'), 'graph'], ['RangeBar', l10n.t('Range bar'), 'graph-left'], ['Polar', l10n.t('Polar'), 'compass'],
   ['Radar', l10n.t('Radar'), 'target'],
 ];
 /** Kinds a single series can have in a combined chart (with the chart's own kind). */

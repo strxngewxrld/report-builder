@@ -200,7 +200,6 @@ function activeResource(): vscode.Uri | undefined {
  */
 class DesignerStatus implements vscode.Disposable {
   private readonly selection = this.item('selection', l10n.t('Selection'), 104);
-  private readonly page = this.item('page', l10n.t('Page'), 103);
   private readonly unit = this.item('unit', l10n.t('Unit of Measurement'), 102, 'bcReportBuilder.changeUnit', l10n.t('Change Unit of Measurement'));
   private readonly zoom = this.item('zoom', l10n.t('Zoom'), 101, 'bcReportBuilder.zoom', l10n.t('Choose the zoom level'));
   private readonly al = this.item('al', l10n.t('AL Report'), 100, 'bcReportBuilder.revealAl');
@@ -229,8 +228,8 @@ class DesignerStatus implements vscode.Disposable {
       if (text) { item.text = text; item.show(); } else item.hide();
     };
     show(this.selection, s?.mode === 'design' ? s.status : undefined);
-    show(this.page, s?.mode === 'preview' && s.page ? l10n.t('Page {0} of {1}', s.page.current, s.page.total) : undefined);
-    show(this.unit, s && (s.unit === 'cm' ? l10n.t('Centimeters') : l10n.t('Inches')));
+    // the preview's page indicator is in its toolbar; the unit only matters while designing
+    show(this.unit, s?.mode === 'design' ? (s.unit === 'cm' ? l10n.t('Centimeters') : l10n.t('Inches')) : undefined);
     show(this.zoom, s && `$(zoom-in) ${Math.round(s.zoom * 100)} %`);
     const bc = session?.bc;
     show(this.al, bc ? `$(symbol-class) ${bc.reportName}` : undefined);
@@ -249,7 +248,7 @@ class DesignerStatus implements vscode.Disposable {
 
   dispose() {
     this.subscription.dispose();
-    for (const i of [this.selection, this.page, this.unit, this.zoom, this.al]) i.dispose();
+    for (const i of [this.selection, this.unit, this.zoom, this.al]) i.dispose();
   }
 }
 

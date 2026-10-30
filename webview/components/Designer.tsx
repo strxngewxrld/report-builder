@@ -678,7 +678,7 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
   switch (item.type) {
     case 'textbox':
       return (
-        <div className={`item textbox ${selected ? 'selected' : ''}`} style={{ ...px(box, S), ...textboxCss(item) }} {...common}
+        <div className={`item textbox${grows(item)} ${selected ? 'selected' : ''}`} style={{ ...px(box, S), ...textboxCss(item) }} {...common}
           onDoubleClick={e => { e.stopPropagation(); r.setEditing(item.name); }}>
           <TextContent tb={item} r={r} />
           {handles}
@@ -763,6 +763,9 @@ export const imageFit = (sizing: string): CSSProperties => ({
   width: '100%', height: '100%', objectPosition: 'left top', pointerEvents: 'none',
   objectFit: sizing === 'Fit' ? 'fill' : sizing === 'FitProportional' ? 'contain' : sizing === 'Clip' ? 'none' : 'contain',
 });
+
+/** CanGrow textboxes grow at run time: the design view must not cut off descenders and underscores of their last line. */
+const grows = (tb: TextboxItem) => (tb.canGrow ? ' can-grow' : '');
 
 function textboxCss(tb: TextboxItem): CSSProperties {
   return {
@@ -853,7 +856,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
         const tb = pc.item;
         return (
           <div key={tb.id} data-name={tb.name} title={label}
-            className={`item textbox cell header-cell ${sel ? 'selected' : ''}`} style={{ ...box, ...textboxCss(tb) }}
+            className={`item textbox cell header-cell${grows(tb)} ${sel ? 'selected' : ''}`} style={{ ...box, ...textboxCss(tb) }}
             onPointerDown={e => { if (e.button !== 0 || ed.tool) return; e.stopPropagation(); ed.select([tb.name]); }}
             onDoubleClick={e => { e.stopPropagation(); r.setEditing(tb.name); }}
             onContextMenu={e => r.onContext(e, tb)}
@@ -882,7 +885,7 @@ function TableView({ t, box, r }: { t: TableItem; box: Box; r: RenderProps }) {
         }
         return (
           <div key={cell.id} data-name={cell.name}
-            className={`item textbox cell ${sel ? 'selected' : ''} ${row.kind === 'groupHeader' || row.kind === 'groupFooter' ? 'group-row' : ''}`}
+            className={`item textbox cell${grows(cell)} ${sel ? 'selected' : ''} ${row.kind === 'groupHeader' || row.kind === 'groupFooter' ? 'group-row' : ''}`}
             style={{ ...cellBox, ...textboxCss(cell) }}
             onPointerDown={e => {
               if (e.button !== 0 || ed.tool) return;

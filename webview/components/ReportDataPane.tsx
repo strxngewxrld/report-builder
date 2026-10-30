@@ -105,7 +105,8 @@ export function ReportDataPane() {
                   title={l10n.t('Drag onto the design surface to create a table with all fields')}>
                   <Twisty open={isOpen(key)} onClick={() => toggle(key)} />
                   <Codicon name="table" className="glyph" />{ds.name}
-                  {rows && <span className="badge" title={l10n.t('Sample data available')}>{rows.length}</span>}
+                  {/* a bare number next to the field list reads as a field count: say what it counts */}
+                  {rows && <span className="tree-meta" title={l10n.t('Sample data available')}>{l10n.t('{0} sample rows', rows.length)}</span>}
                   <RowActions
                     onData={() => post({ type: 'importSampleData', dataSet: ds.name })}
                     onEdit={() => ed.setDialog({ kind: 'dataSet', name: ds.name })}

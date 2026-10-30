@@ -344,7 +344,8 @@ function ExpressionDialog({ d, close }: { d: Extract<Dialog, { kind: 'expression
   const items: [string, string][] = useMemo(() => {
     switch (category) {
       case 'fields': return dataSets.flatMap(ds => ds.fields.map(f => [
-        d.dataSetName ? `Fields!${f.name}.Value` : `First(Fields!${f.name}.Value, "${ds.name}")`, `${ds.name}.${f.name}`] as [string, string]));
+        // the dataset prefix only tells several datasets apart (BC layouts have exactly one)
+        d.dataSetName ? `Fields!${f.name}.Value` : `First(Fields!${f.name}.Value, "${ds.name}")`, dataSets.length > 1 ? `${ds.name}.${f.name}` : f.name] as [string, string]));
       case 'params': return ed.report.parameters.map(p => [`Parameters!${p.name}.Value`, p.name]);
       case 'globals': return ['ExecutionTime', 'PageNumber', 'TotalPages', 'ReportName', 'ReportFolder'].map(g => [`Globals!${g}`, g]);
       case 'functions': return functions().map(([f, l]) => [f, `${f.split('(')[0]} – ${l}`]);

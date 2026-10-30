@@ -289,10 +289,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
           </div>
         )}
         <div className="toolbar" role="toolbar" aria-label={l10n.t('Preview')}>
-          <div className="action-group">
-            <ActionButton icon="edit" title={l10n.t('Back to Design (F5)')} label={l10n.t('Design')} onClick={() => ed.setMode('design')} />
-          </div>
-          <Separator />
+          {/* "Show Design" and "Print / Save as PDF…" are editor title actions; here only what the title bar lacks */}
           <div className="action-group" aria-label={l10n.t('Pages')}>
             <ActionButton icon="arrow-up" title={l10n.t('Previous Page')} disabled={shownPage <= 1} onClick={() => goTo(shownPage - 1)} />
             <span className="page-indicator">{shownPage} / {pages.length || 1}</span>
@@ -300,7 +297,6 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
           </div>
           <Separator />
           <div className="action-group">
-            <ActionButton icon="file-pdf" title={l10n.t('Open in the browser and print or save as PDF')} label={l10n.t('Print')} disabled={!pages.length} onClick={() => exportPages('print')} />
             <DropdownAction icon="export" title={l10n.t('Export')} disabled={!pages.length} items={[
               { label: 'PDF (.pdf)…', icon: 'file-pdf', run: exportPdf },
               { label: 'Excel (.xlsx)…', icon: 'table', run: () => exportDocument('xlsx') },

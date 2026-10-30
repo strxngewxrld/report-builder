@@ -61,9 +61,14 @@ export function BcDataPane() {
       <div className="tree" {...vsContext({ preventDefaultContextMenuItems: true })}>
         {bc ? (
           <div className="al-head">
-            <button className="link" onClick={() => reveal(bc.line, bc.character)} title={bc.alFile}>
-              <Codicon name="symbol-class" /> {bc.kind === 'reportextension' ? l10n.t('Report extension {0} "{1}"', bc.id, bc.reportName) : l10n.t('Report {0} "{1}"', bc.id, bc.reportName)}
-            </button>
+            {(() => {
+              const title = bc.kind === 'reportextension' ? l10n.t('Report extension {0} "{1}"', bc.id, bc.reportName) : l10n.t('Report {0} "{1}"', bc.id, bc.reportName);
+              return (
+                <button className="link" onClick={() => reveal(bc.line, bc.character)} title={title}>
+                  <Codicon name="symbol-class" /><span className="ellipsis">{title}</span>
+                </button>
+              );
+            })()}
             <div className="muted">{bc.alFile}</div>
             {!bc.complete && <div className="prop-note warn">{l10n.t('The base report is not in the workspace; only the extensions are known.')}</div>}
             {bc.missingInLayout.length > 0 && (

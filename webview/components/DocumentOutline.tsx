@@ -144,6 +144,8 @@ export function DocumentOutline() {
   const activeNode = activeEntry?.node;
   const target = active ? designerTarget(active) : null;
   const editable = activeNode?.itemName && target === activeNode.itemName ? locate(report, activeNode.itemName)?.item : undefined;
+  // value, position and "Edit Expression" are in the visible properties pane: only path and problems here
+  const inProperties = !!editable && ed.view.propertiesPane;
   const count = index.size;
 
   return (
@@ -205,7 +207,7 @@ export function DocumentOutline() {
             <div className="outline-path">
               {[...(activeEntry?.ancestors ?? []).map(a => a.name), activeNode.name].join(' › ')}
             </div>
-            {activeNode.details.map(([k, v]) => (
+            {!inProperties && activeNode.details.map(([k, v]) => (
               <div key={k} className="detail-row"><span>{k}</span><code>{v}</code></div>
             ))}
             {activeNode.itemName && diagByItem.has(activeNode.itemName) && (
@@ -225,7 +227,7 @@ export function DocumentOutline() {
             {activeNode.kind === 'Textbox' && activeNode.itemName && target !== activeNode.itemName && rawOwner(activeEntry!) && (
               <NestedTextboxEditor raw={rawOwner(activeEntry!)!} name={activeNode.itemName} />
             )}
-            {editable?.type === 'textbox' && (
+            {editable?.type === 'textbox' && !inProperties && (
               <button className="secondary" onClick={() => ed.setDialog({
                 kind: 'expression', title: l10n.t('Value of {0}', editable.name), value: editable.value,
                 dataSetName: locate(report, editable.name)?.table?.dataSetName,
