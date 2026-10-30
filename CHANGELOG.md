@@ -5,6 +5,22 @@ English | [Deutsch](CHANGELOG.de.md)
 Notable changes to this extension. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-30
+
+### Security
+
+- Prevent report expressions and VB code from accessing inherited JavaScript properties or changing object prototypes.
+- Reject infinite and excessive array dimensions before evaluation can block the preview.
+- Bound ZIP decompression and Excel cell references when importing preview data and AL symbol packages.
+- Block external image requests by default, retain resource restrictions in HTML/print exports, and restrict links and layout launch targets.
+- Enforce workspace trust before AL builds, symbol downloads and workspace-configured server access.
+
+### Fixed
+
+- Improve AL layout path handling, localization and designer controls.
+- Save direct textbox edits reliably with Ctrl/Cmd+Enter, including when the window lacks OS focus.
+- Update bundled dependencies and add regression coverage for malicious reports and restricted workspaces.
+
 ## [1.0.0] - 2026-10-18
 
 ### Fixed during macOS follow-up (2026-10-21)

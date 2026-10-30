@@ -803,7 +803,14 @@ function TextContent({ tb, r }: { tb: TextboxItem; r: RenderProps }) {
             done(null);
             surface?.focus({ preventScroll: true });
           }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); surface?.focus({ preventScroll: true }); }
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Commit explicitly: Electron may not deliver blur while the window lacks OS focus.
+            e.currentTarget.dataset.cancelled = 'true';
+            done(e.currentTarget.value);
+            surface?.focus({ preventScroll: true });
+          }
         }}
       />
     );

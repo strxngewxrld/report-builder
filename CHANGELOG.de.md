@@ -5,6 +5,22 @@
 Alle nennenswerten Änderungen an der Erweiterung. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## [1.0.1] - 2026-10-30
+
+### Sicherheit
+
+- Berichtsausdrücke und VB-Code können keine geerbten JavaScript-Eigenschaften mehr lesen oder Objektprototypen verändern.
+- Unendliche und übermäßig große Array-Dimensionen werden abgewiesen, bevor sie die Vorschau blockieren können.
+- ZIP-Dekomprimierung und Excel-Zellreferenzen beim Import von Beispieldaten und AL-Symbolpaketen begrenzt.
+- Externe Bildabrufe standardmäßig gesperrt, Ressourcenbeschränkungen im HTML-/Druckexport beibehalten und Links sowie Layout-Startziele eingeschränkt.
+- Workspace-Vertrauen vor AL-Builds, Symbol-Downloads und Zugriffen auf im Workspace konfigurierte Server durchgesetzt.
+
+### Korrigiert
+
+- Behandlung von AL-Layoutpfaden, Übersetzungen und Designer-Bedienelemente verbessert.
+- Direkte Textfeldänderungen mit Ctrl/Cmd+Enter zuverlässig speichern, auch wenn das Fenster keinen Betriebssystem-Fokus hat.
+- Gebündelte Abhängigkeiten aktualisiert und Regressionstests für präparierte Berichte und eingeschränkte Workspaces ergänzt.
+
 ## [1.0.0] - 2026-10-18
 
 ### Korrigiert bei der macOS-Nachprüfung (21.10.2026)
