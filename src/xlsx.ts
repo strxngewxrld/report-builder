@@ -5,32 +5,62 @@
 import { inflateRawSync } from 'node:zlib';
 import { l10n } from '../webview/l10n';
 
-/** Files of a zip archive by name. */
-export function unzip(buf: Uint8Array): Map<string, Uint8Array> {
+/** Bound actual decompression, including when ZIP size metadata is forged. Shared by Excel and AL packages. */
+const ZIP_LIMITS = { maxEntryBytes: 128 * 1024 * 1024, maxTotalBytes: 512 * 1024 * 1024, maxEntries: 10_000 };
+
+/** Files of a zip archive by name. Limits may be lowered by callers. */
+export function unzip(buf: Uint8Array, limits: Partial<typeof ZIP_LIMITS> = {}): Map<string, Uint8Array> {
+  const cap = { ...ZIP_LIMITS, ...limits };
+  for (const k of Object.keys(cap) as (keyof typeof cap)[]) {
+    if (!Number.isSafeInteger(cap[k]) || cap[k] <= 0 || cap[k] > ZIP_LIMITS[k]) throw new Error('Invalid ZIP limit');
+  }
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const damaged = () => new Error(l10n.t('Damaged ZIP directory'));
+  const range = (start: number, size: number, end = buf.length) => {
+    if (start < 0 || size < 0 || start + size > end) throw damaged();
+  };
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
-    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (view.getUint32(i, true) === 0x06054b50 && i + 22 + view.getUint16(i + 20, true) === buf.length) { eocd = i; break; }
   }
   if (eocd < 0) throw new Error(l10n.t('Not a ZIP archive (no valid Excel or .app file)'));
   const count = view.getUint16(eocd + 10, true);
+  if (count > cap.maxEntries) throw new Error(l10n.t('ZIP entry limit exceeded'));
+  if (view.getUint16(eocd + 4, true) !== 0 || view.getUint16(eocd + 6, true) !== 0 || view.getUint16(eocd + 8, true) !== count) throw damaged();
   // archives behind a header (Business Central .app files start with a "NAVX" header): all offsets are shifted
   const shift = eocd - (view.getUint32(eocd + 16, true) + view.getUint32(eocd + 12, true));
   let p = view.getUint32(eocd + 16, true) + shift;
+  if (shift < 0) throw damaged();
+  const directoryStart = p;
+  let total = 0;
   const files = new Map<string, Uint8Array>();
   const dec = new TextDecoder();
   for (let n = 0; n < count; n++) {
+    range(p, 46, eocd);
     if (view.getUint32(p, true) !== 0x02014b50) throw new Error(l10n.t('Damaged ZIP directory'));
     const method = view.getUint16(p + 10, true);
     const size = view.getUint32(p + 20, true);
+    const unpackedSize = view.getUint32(p + 24, true);
+    const budget = Math.min(cap.maxEntryBytes, cap.maxTotalBytes - total);
+    if (unpackedSize > budget || budget <= 0) throw new Error(l10n.t('ZIP decompression limit exceeded'));
+    if ((view.getUint16(p + 8, true) & 1) !== 0 || (method !== 0 && method !== 8)) throw new Error(l10n.t('Unsupported ZIP compression or encryption'));
     const nameLen = view.getUint16(p + 28, true), extraLen = view.getUint16(p + 30, true), commentLen = view.getUint16(p + 32, true);
     const local = view.getUint32(p + 42, true) + shift;
+    range(p + 46, nameLen + extraLen + commentLen, eocd);
+    range(local, 30, directoryStart);
+    if (view.getUint32(local, true) !== 0x04034b50) throw damaged();
     const name = dec.decode(buf.subarray(p + 46, p + 46 + nameLen));
     const dataStart = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    range(dataStart, size, directoryStart);
     const raw = buf.subarray(dataStart, dataStart + size);
-    files.set(name, method === 8 ? new Uint8Array(inflateRawSync(raw)) : raw);
+    if (method === 0 && size > budget) throw new Error(l10n.t('ZIP decompression limit exceeded'));
+    const data = method === 8 ? new Uint8Array(inflateRawSync(raw, { maxOutputLength: budget })) : raw;
+    if (data.length !== unpackedSize) throw damaged();
+    total += data.length; // count duplicates too: Map replacement must not reset the budget
+    files.set(name, data);
     p += 46 + nameLen + extraLen + commentLen;
   }
+  if (p !== eocd) throw damaged();
   return files;
 }
 

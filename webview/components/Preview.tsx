@@ -14,6 +14,7 @@ import { ActionButton, Codicon, DropdownAction, Separator } from './Icon';
 import { exportBlocks } from '../render/export';
 import { pagesToPdf } from '../render/pdf';
 import { l10n } from '../l10n';
+import { previewHtml } from '../render/html';
 
 const S = 96;
 
@@ -136,8 +137,8 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
   const result = useMemo(() => renderReport(xml, {
     dom: browserDom, mode: 'preview', data, reportName: fileName.replace(/\.rdlc?$/i, ''),
     parameters: { ...alOnlyParameters(report, bc), ...Object.fromEntries(report.parameters.map(p => [p.name, convertParam(p, applied[p.name] ?? '')])) },
-    toggled, userSort,
-  }), [xml, data, applied, fileName, report.parameters, bc, toggled, userSort]);
+    toggled, userSort, allowExternalImages: ed.allowExternalImages,
+  }), [xml, data, applied, fileName, report.parameters, bc, toggled, userSort, ed.allowExternalImages]);
   const nodes = useMemo(() => indexNodes(result.body.nodes), [result]);
 
   // measure the continuous body, then break it into pages
@@ -219,11 +220,7 @@ export function Preview({ fileName, onPage }: { fileName: string; onPage: (p: { 
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
       const html = pagesRef.current?.innerHTML ?? '';
       setRenderAll(false);
-      const doc = `<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>${fileName.replace(/[<>&]/g, '')}</title>
-<style>@page { size: ${p.width}in ${p.height}in; margin: 0 } body { margin: 0; background: #eee } .rv-page { margin: 16px auto }
-@media print { body { background: none } .rv-page { margin: 0 !important; box-shadow: none !important; break-after: page } }
-.rv-interactive { display: none !important }</style></head>
-<body>${html}${kind === 'print' ? '<script>window.onload = () => setTimeout(() => window.print(), 300)</script>' : ''}</body></html>\n`;
+      const doc = previewHtml(html, fileName, p, kind === 'print', ed.allowExternalImages);
       post(kind === 'print' ? { type: 'print', html: doc } : { type: 'exportHtml', html: doc });
     }, 200)));
   };

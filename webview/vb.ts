@@ -68,12 +68,24 @@ function defaultValue(type: string): unknown {
 
 /** An array with the upper bounds `bounds` (VB: Dim a(2) has three elements), nested for several dimensions. */
 function makeArray(bounds: number[], type: string, old?: unknown): unknown[] {
-  const [n, ...rest] = bounds;
-  return Array.from({ length: Math.max(0, Math.trunc(n) + 1) }, (_, i) => {
-    const prev = Array.isArray(old) ? old[i] : undefined;
-    if (rest.length) return makeArray(rest, type, prev);
-    return Array.isArray(old) && i < old.length ? prev : defaultValue(type);
+  // Include intermediate arrays: a(99999, -1) still allocates 100000 child arrays.
+  let product = 1, slots = 0;
+  if (bounds.length > 32) throw new LimitError(l10n.t('Code: array allocation limit exceeded'));
+  const lengths = bounds.map(n => {
+    if (!Number.isFinite(n)) throw new LimitError(l10n.t('Code: array allocation limit exceeded'));
+    const length = Math.max(0, Math.trunc(n) + 1);
+    if (length > 100000) throw new LimitError(l10n.t('Code: array allocation limit exceeded'));
+    product *= length;
+    slots += product;
+    if (slots > 100000) throw new LimitError(l10n.t('Code: array allocation limit exceeded'));
+    return length;
   });
+  const build = (depth: number, previous: unknown): unknown[] => Array.from({ length: lengths[depth] }, (_, i) => {
+    const prev = Array.isArray(previous) ? previous[i] : undefined;
+    if (depth + 1 < lengths.length) return build(depth + 1, prev);
+    return Array.isArray(previous) && i < previous.length ? prev : defaultValue(type);
+  });
+  return build(0, old);
 }
 
 /** The first top-level assignment operator of a statement: [left, operator, right], or null. */

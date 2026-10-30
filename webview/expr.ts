@@ -417,7 +417,11 @@ const FUNCTIONS: Record<string, Fn> = {
   split: ([s, sep]) => toStr(s).split(isNothing(sep) ? ' ' : toStr(sep)),
   join: ([a, sep]) => (Array.isArray(a) ? a.map(toStr).join(isNothing(sep) ? ' ' : toStr(sep)) : toStr(a)),
   val: ([s]) => parseFloat(toStr(s)) || 0,
-  space: ([n]) => ' '.repeat(Math.max(0, toNum(n))),
+  space: ([n]) => {
+    const length = Math.max(0, Math.trunc(toNum(n)));
+    if (!Number.isFinite(length) || length > 1000000) throw new Error(l10n.t('Space: string allocation limit exceeded'));
+    return ' '.repeat(length);
+  },
   sign: ([v]) => Math.sign(toNum(v)),
   instrrev: ([a, b]) => toStr(a).lastIndexOf(toStr(b)) + 1,
   strreverse: ([s]) => [...toStr(s)].reverse().join(''),
@@ -533,6 +537,41 @@ function callMember(obj: unknown, name: string, args: unknown[], ctx: EvalContex
   throw new Error(l10n.t('Unknown member .{0}', name));
 }
 
+/** VB Like without backtracking: a report must not freeze the webview with repeated *a patterns. */
+function likeMatch(value: string, pattern: string): boolean {
+  if (pattern.length > 100000) throw new Error(l10n.t('Like: pattern matching limit exceeded'));
+  const tokens: ('*' | ((c: string) => boolean))[] = [];
+  const lastClosing = pattern.lastIndexOf(']');
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '*') { if (tokens.at(-1) !== '*') tokens.push('*'); }
+    else if (c === '?') tokens.push(() => true);
+    else if (c === '#') tokens.push(c => /[0-9]/.test(c));
+    else if (c === '[' && i < lastClosing && pattern.indexOf(']', i + 1) > i + 1) {
+      const end = pattern.indexOf(']', i + 1);
+      const content = pattern.slice(i + 1, end);
+      // Character classes match one character only; no user-supplied regex operators outside them.
+      const escaped = content.replace(/\\/g, '\\\\');
+      const body = escaped.startsWith('!') ? '^' + escaped.slice(1) : escaped.replace(/^\^/, '\\^');
+      const re = new RegExp(`^[${body}]$`);
+      tokens.push(c => re.test(c));
+      i = end;
+    } else tokens.push(v => v === c);
+  }
+  if ((tokens.length + 1) * (value.length + 1) > 1000000) throw new Error(l10n.t('Like: pattern matching limit exceeded'));
+  let previous = new Uint8Array(value.length + 1);
+  previous[0] = 1;
+  for (const token of tokens) {
+    const current = new Uint8Array(value.length + 1);
+    if (token === '*') current[0] = previous[0];
+    for (let i = 1; i <= value.length; i++) {
+      current[i] = token === '*' ? previous[i] | current[i - 1] : previous[i - 1] && token(value[i - 1]) ? 1 : 0;
+    }
+    previous = current;
+  }
+  return previous[value.length] === 1;
+}
+
 export function evalNode(n: Node, ctx: EvalContext): unknown {
   switch (n.k) {
     case 'lit': return n.v;
@@ -610,10 +649,7 @@ export function evalNode(n: Node, ctx: EvalContext): unknown {
         case 'and': return toBool(a) && toBool(b);
         case 'or': return toBool(a) || toBool(b);
         case 'xor': return toBool(a) !== toBool(b);
-        case 'like': {
-          const re = toStr(b).replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.').replace(/#/g, '\\d');
-          return new RegExp(`^${re}$`).test(toStr(a));
-        }
+        case 'like': return likeMatch(toStr(a), toStr(b));
       }
     }
   }

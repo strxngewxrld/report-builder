@@ -54,6 +54,7 @@ export function App() {
   const [tool, setTool] = useState<InsertTool | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [sampleData, setSampleData] = useState<Editor['sampleData']>({});
+  const [allowExternalImages, setAllowExternalImages] = useState(false);
   // Restored per editor (VS Code keeps webview state across reloads); without saved state the settings decide the zoom.
   const saved = useRef(vscode.getState() as Partial<PersistedView> | undefined);
   const [view, setViewState] = useState<Editor['view']>(() => ({ ...DEFAULT_VIEW, ...saved.current }));
@@ -131,6 +132,7 @@ export function App() {
       } else if (msg.type === 'diagnostics') {
         setDiagnostics(msg.issues);
       } else if (msg.type === 'config') {
+        setAllowExternalImages(msg.config.allowExternalImages === true);
         const { grid, snap, ruler, defaultZoom } = msg.config;
         setViewState(prev => ({ ...prev, grid, snap, ruler, zoom: saved.current?.zoom ?? defaultZoom }));
         saved.current = { ...saved.current, zoom: saved.current?.zoom ?? defaultZoom };
@@ -258,8 +260,8 @@ export function App() {
 
   const editor = useMemo<Editor | null>(() => report && {
     report, commit, selection, select, tablePart, tool, setTool, dialog, setDialog, sampleData, view, setView, clipboard, copy, paste,
-    bc, isBc: isBcLayout(report, bc), diagnostics, nested, setNested, mode, setMode: changeMode, commands,
-  }, [report, commit, selection, select, tablePart, tool, dialog, sampleData, view, setView, clipboard, copy, paste, bc, diagnostics, nested, mode, changeMode, commands]);
+    bc, isBc: isBcLayout(report, bc), diagnostics, nested, setNested, mode, setMode: changeMode, commands, allowExternalImages,
+  }, [report, commit, selection, select, tablePart, tool, dialog, sampleData, view, setView, clipboard, copy, paste, bc, diagnostics, nested, mode, changeMode, commands, allowExternalImages]);
 
   // ------------------------------------------------------------------------------------------------ state for VS Code
 

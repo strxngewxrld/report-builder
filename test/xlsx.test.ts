@@ -19,6 +19,7 @@ function zip(files: Record<string, string>): Uint8Array {
     const cen = new Uint8Array(46 + nameBytes.length);
     const cv = new DataView(cen.buffer);
     cv.setUint32(0, 0x02014b50, true); cv.setUint16(10, 8, true); cv.setUint32(20, data.length, true);
+    cv.setUint32(24, enc.encode(content).length, true);
     cv.setUint16(28, nameBytes.length, true); cv.setUint32(42, offset, true);
     cen.set(nameBytes, 46);
     locals.push(local); central.push(cen);
@@ -50,6 +51,31 @@ const workbook = zip({
 test('unzip reads deflated entries', () => {
   assert.ok(unzip(workbook).has('xl/workbook.xml'));
   assert.throws(() => unzip(new Uint8Array(100)), /ZIP/);
+});
+
+test('ZIP bombs: enforce entry, total and entry-count budgets', () => {
+  assert.throws(() => unzip(zip({ bomb: 'x'.repeat(4096) }), { maxEntryBytes: 1024 }), /limit/);
+  assert.throws(() => unzip(zip({ a: 'x'.repeat(600), b: 'y'.repeat(600) }), { maxTotalBytes: 1024 }), /limit/);
+  assert.throws(() => unzip(zip({ a: '', b: '' }), { maxEntries: 1 }), /limit/);
+});
+
+test('ZIP bombs: forged size cannot bypass the actual inflater output limit', () => {
+  const archive = zip({ bomb: 'x'.repeat(4096) });
+  const view = new DataView(archive.buffer);
+  const directory = view.getUint32(archive.length - 6, true);
+  view.setUint32(directory + 24, 1, true);
+  assert.throws(() => unzip(archive, { maxEntryBytes: 1024 }), /larger than|limit|buffer/i);
+});
+
+test('ZIP parser rejects truncated payloads and unsupported compression', () => {
+  const archive = zip({ a: 'hello' });
+  const view = new DataView(archive.buffer);
+  const directory = view.getUint32(archive.length - 6, true);
+  view.setUint32(directory + 20, archive.length, true);
+  assert.throws(() => unzip(archive), /Damaged ZIP/);
+  view.setUint32(directory + 20, 1, true);
+  view.setUint16(directory + 10, 99, true);
+  assert.throws(() => unzip(archive), /Unsupported ZIP/);
 });
 
 test('rows by header: shared/inline strings, numbers, dates, booleans, gaps', () => {

@@ -38,6 +38,7 @@ export interface Editor {
   setDialog: (d: Dialog | null) => void;
   /** Raw rows per dataset from <report>.data.json. */
   sampleData: Record<string, Record<string, unknown>[]>;
+  allowExternalImages: boolean;
   /** Zoom, panes and pane widths are per editor; grid, snap and ruler come from the settings. */
   view: {
     zoom: number; grid: boolean; snap: boolean; ruler: boolean; dataPane: boolean; propertiesPane: boolean; leftTab: 'data' | 'outline';

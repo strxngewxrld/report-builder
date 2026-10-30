@@ -367,7 +367,9 @@ async function runInBc(service: LayoutService) {
     await vscode.commands.executeCommand('workbench.action.files.saveAll');
     await vscode.commands.executeCommand('al.publishNoDebug').then(undefined, () => vscode.window.showErrorMessage(l10n.t('Publishing needs the AL Language extension.')));
   }
-  if (pick) await vscode.env.openExternal(vscode.Uri.parse(url));
+  // `server` comes from launch.json: never hand file:, UNC or protocol-handler URIs to the OS
+  if (pick && /^https?:\/\/[^/\\]/i.test(url)) await vscode.env.openExternal(vscode.Uri.parse(url, true));
+  else if (pick) vscode.window.showErrorMessage(l10n.t('The report URL is not an http(s) address: {0}', url));
 }
 
 /**
@@ -466,7 +468,12 @@ class LayoutCodeFileSystem implements vscode.FileSystemProvider, vscode.Disposab
     this.emitter.fire([{ type: vscode.FileChangeType.Changed, uri: LayoutCodeFileSystem.uriFor(e.document.uri) }]);
   });
 
-  private layoutOf(uri: vscode.Uri) { return vscode.Uri.parse(uri.query); }
+  private layoutOf(uri: vscode.Uri) {
+    // the query names the document this file system reads and writes: only report layouts
+    const layout = vscode.Uri.parse(uri.query, true);
+    if (!/\.rdlc?$/i.test(layout.path) || uri.path !== `${layout.path}.vb` && !`${layout.path}.vb`.startsWith(`${uri.path.replace(/\/$/, '')}/`)) throw vscode.FileSystemError.FileNotFound(uri);
+    return layout;
+  }
   private async layoutDoc(uri: vscode.Uri) { return vscode.workspace.openTextDocument(this.layoutOf(uri)); }
 
   watch(uri: vscode.Uri): vscode.Disposable {

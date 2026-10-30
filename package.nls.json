@@ -153,5 +153,6 @@
   "walkthrough.export.description": "In the preview, check totals, page breaks and repeated headers. Use the export menu beside **Print** for **PDF, Excel, Word or HTML**. PDF preserves pagination; Excel and Word are intended for further editing. Install the report fonts locally for PDF export. Finally compare your BC report with the real output in Business Central.",
   "walkthrough.docs.title": "Keep the guides at hand",
   "walkthrough.docs.description": "All three guides are included with the extension and work offline. English is the default; a German VS Code UI opens German guides. Each guide links to the other language. The migration guide maps familiar Microsoft Report Builder features to VS Code; the AI tools guide covers all 14 tools with inputs and examples. Reopen this walkthrough anytime using **Business Central Report Builder: Getting Started** in the Command Palette.\n[User Guide](command:bcReportBuilder.openUserGuide)\n[Coming from Microsoft Report Builder?](command:bcReportBuilder.openMigrationGuide)\n[AI Tools Guide](command:bcReportBuilder.openAiToolsGuide)",
-  "command.openAiToolsGuide": "Open AI Tools Guide"
+  "command.openAiToolsGuide": "Open AI Tools Guide",
+  "config.allowExternalImages": "Allow HTTPS images in preview and HTML export for trusted workspaces. Image URLs can transmit report data to remote servers. Enable only for reports you trust. Local files and HTTP images stay blocked."
 }

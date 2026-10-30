@@ -119,10 +119,10 @@ function appPackage(files: Record<string, string>): Uint8Array {
     const n = Buffer.from(name);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(data.length, 18);
-    local.writeUInt32LE(content.length, 22); local.writeUInt16LE(n.length, 26);
+    local.writeUInt32LE(Buffer.byteLength(content), 22); local.writeUInt16LE(n.length, 26);
     locals.push(local, n, data);
     const c = Buffer.alloc(46);
-    c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(8, 10); c.writeUInt32LE(data.length, 20); c.writeUInt32LE(content.length, 24);
+    c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(8, 10); c.writeUInt32LE(data.length, 20); c.writeUInt32LE(Buffer.byteLength(content), 24);
     c.writeUInt16LE(n.length, 28); c.writeUInt32LE(offset, 42);
     central.push(c, n);
     offset += 30 + n.length + data.length;

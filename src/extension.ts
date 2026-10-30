@@ -62,8 +62,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     new DesignerStatus(),
     vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('bcReportBuilder.designer')) ReportEditorProvider.broadcastConfig();
+      if (e.affectsConfiguration('bcReportBuilder.designer') || e.affectsConfiguration('bcReportBuilder.preview')) ReportEditorProvider.broadcastConfig();
     }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => ReportEditorProvider.broadcastConfig()),
 
     command('newReport', async (folder?: vscode.Uri) => {
       const base = folder instanceof vscode.Uri ? folder : vscode.workspace.workspaceFolders?.[0]?.uri;

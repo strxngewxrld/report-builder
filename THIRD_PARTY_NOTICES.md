@@ -476,7 +476,7 @@ Creative Commons may be contacted at creativecommons.org.
 
 Git Logo by [Jason Long](https://bsky.app/profile/jasonlong.me) is licensed under the [Creative Commons Attribution 3.0 Unported License](https://creativecommons.org/licenses/by/3.0/).
 
-## @xmldom/xmldom 0.8.10 (MIT)
+## @xmldom/xmldom 0.8.15 (MIT)
 
 Copyright 2019 - present Christopher J. Brody and other contributors, as listed in: https://github.com/xmldom/xmldom/graphs/contributors
 Copyright 2012 - 2017 @jindw <jindw@xidea.org> and other contributors, as listed in: https://github.com/jindw/xmldom/graphs/contributors

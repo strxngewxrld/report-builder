@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import { EvalContext, evaluate } from '../webview/expr';
 import { CodeModule } from '../webview/vb';
 
+test('VB rejects oversized Dim and ReDim allocations before allocating memory', () => {
+  for (const declaration of ['Dim a(1000000000)', 'Dim a(999, 999)', 'Dim a(1 / 0)', 'Dim a(1)\nReDim Preserve a(1000000000)']) {
+    const code = new CodeModule(`Public Function F()\n${declaration}\nReturn 1\nEnd Function`);
+    assert.throws(() => code.call('F', [], ctx(code)), /array allocation limit/, declaration);
+  }
+});
+
 // Code as found in Microsoft's Business Central layouts (BCApps)
 const BC_CODE = `Public Function BlankZero(ByVal Value As Decimal)
     if Value = 0 then

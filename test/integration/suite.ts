@@ -838,6 +838,16 @@ test('Abnahme: Defekte Bilder ablehnen, Größenwarnung abbrechen und bestätige
       toolInvocationToken: undefined,
     }));
     assert.equal(doc.getText(), original, 'auch das KI-Werkzeug lehnt defekte Bilder vor der Änderung ab');
+    const outside = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '..', 'Outside.png');
+    await vscode.workspace.fs.writeFile(outside, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'));
+    try {
+      for (const imageFile of [outside.fsPath, '../Outside.png']) {
+        await assert.rejects(async () => vscode.lm.invokeTool('bcReport_insertItems', {
+          input: { file: uri.fsPath, items: [{ type: 'image', name: 'OutsideImage', imageFile }] }, toolInvocationToken: undefined,
+        }), /outside the workspace/);
+      }
+    } finally { await vscode.workspace.fs.delete(outside).then(undefined, () => undefined); }
+    assert.equal(doc.getText(), original, 'das KI-Werkzeug liest keine Dateien außerhalb des Workspace');
     const image = file('Large.svg');
     await vscode.workspace.fs.writeFile(image, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/><!--' + 'x'.repeat(2 * 1024 * 1024) + '--></svg>'));
     windowApi.showOpenDialog = async () => [image];
@@ -1865,6 +1875,50 @@ test('Sprachmodell-Tools: registriert, lesen den AL-Kontext, ändern das Layout 
     await until('Rückgängig', () => doc.getText() === original);
     assert.deepEqual(errorsOf(probe), []);
   } finally {
+    await restore(uri, original);
+  }
+});
+
+test('Sicherheit: Bild-Beacons bleiben in Entwurf, Vorschau und HTML-Export gesperrt', async api => {
+  const { uri, doc, probe } = await open(api, 'Bericht1.rdlc');
+  const original = doc.getText();
+  const windowApi = vscode.window as unknown as Record<string, unknown>;
+  const originalSave = windowApi.showSaveDialog;
+  windowApi.showSaveDialog = async () => undefined;
+  const envApi = vscode.env as unknown as Record<string, unknown>;
+  const originalOpen = envApi.openExternal;
+  let opened: vscode.Uri | undefined;
+  envApi.openExternal = async (target: vscode.Uri) => { opened = target; return true; };
+  try {
+    const beacon = (name: string, url: string) => `<Image Name="${name}"><Source>External</Source><Value>${url}</Value><Top>1in</Top><Left>0in</Left><Width>1in</Width><Height>1in</Height></Image>`;
+    await restore(uri, original.replace('<ReportItems>', `<ReportItems>${beacon('CollectHttp', 'http://127.0.0.1:18743/collect?value=SYNTHETIC')}${beacon('CollectHttps', 'https://example.invalid/collect?value=SYNTHETIC')}${beacon('CollectFile', 'file://server/share/image.png')}`));
+    await until('Beacons im Designer geladen', () => probe.posted.some(m => m.type === 'load' && String(m.text).includes('CollectHttp')));
+    await vscode.commands.executeCommand('bcReportBuilder.showPreview', uri);
+    await until('Sicherheitsvorschau fertig', () => probe.received.find(m => m.type === 'previewReady'));
+    await vscode.commands.executeCommand('bcReportBuilder.exportHtml', uri);
+    const exported = await until('HTML-Export angefordert', () => probe.received.find(m => m.type === 'exportHtml'));
+    const html = String(exported.html);
+    assert.match(html, /Content-Security-Policy/);
+    assert.match(html, /img-src data:;/);
+    assert.ok(!/<img\b[^>]*src="(?:https?:|file:)/i.test(html), 'kein Bild mit Netzwerk- oder Dateizugriff im Export');
+    assert.ok(!html.includes('collect?value='), 'keine Beacon-URL im Export');
+    await vscode.commands.executeCommand('bcReportBuilder.print', uri);
+    const printed = await until('Druckansicht geöffnet', () => opened);
+    assert.equal(printed.scheme, 'file', 'der Browser bekommt eine lokale Datei statt vscode-userdata:');
+    const printHtml = new TextDecoder().decode(await vscode.workspace.fs.readFile(printed));
+    assert.match(printHtml, /img-src data:;/);
+    assert.match(printHtml, /script-src 'nonce-[a-f0-9]{32}'/);
+    opened = undefined;
+    const blocked = await withAnswers({}, async () => {
+      for (const url of ['command:workbench.action.terminal.new', 'javascript:alert(1)', 'file:///C:/Windows/win.ini']) await probe.deliver({ type: 'openLink', url });
+      await probe.deliver({ type: 'openLayout', uri: 'file:///C:/Windows/System32/cmd.exe' });
+    });
+    assert.equal(blocked.asked.filter(a => a.startsWith('warning:')).length, 4);
+    assert.equal(opened, undefined, 'gefährliche Links erreichen keinen OS-Protokollhandler');
+    assert.deepEqual(errorsOf(probe), []);
+  } finally {
+    windowApi.showSaveDialog = originalSave;
+    envApi.openExternal = originalOpen;
     await restore(uri, original);
   }
 });

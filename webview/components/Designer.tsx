@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as RPointerEvent, DragEvent as RDragEvent, MouseEvent as RMouseEvent } from 'react';
 import { DRAG_MIME, DragPayload, currentDrag, useCommand, useEditor } from '../editor';
-import { embeddedImages, imageUrl } from '../images';
+import { embeddedImages, imageUrl, safeImageUrl } from '../images';
 import { designLabel } from '../expr';
 import { Box, ImageItem, Report, ReportItem, SectionKind, TableItem, TextboxItem } from '../model';
 import {
@@ -708,7 +708,7 @@ function ItemView({ item, r, fill }: { item: ReportItem; r: RenderProps; fill?: 
     }
     case 'image': {
       const embedded = item.source === 'Embedded' ? embeddedImages(ed.report).find(i => i.name === item.value) : undefined;
-      const src = embedded ? imageUrl(embedded) : item.source === 'External' && /^(https?:|data:)/.test(item.value) ? item.value : '';
+      const src = embedded ? imageUrl(embedded) : item.source === 'External' ? safeImageUrl(item.value, ed.allowExternalImages) : '';
       return (
         <div className={`item image ${selected ? 'selected' : ''}`} style={{ ...px(box, S), ...styleToCss(item.style) }} {...common}>
           {src

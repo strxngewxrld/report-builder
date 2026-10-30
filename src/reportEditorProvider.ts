@@ -9,6 +9,7 @@ import { ExportBlock, writeDocx, writeXlsx } from './ooxml';
 import { FontIndex, FontRequest } from './fonts';
 import type { LayoutClipboard } from '../webview/vscode';
 import type { EmbeddedImage } from '../webview/images';
+import { layoutOpenMode } from './layoutOpen';
 
 /** What the designer reports about itself (status bar, context keys of the editor title and context menus). */
 export interface DesignerState {
@@ -26,11 +27,14 @@ export interface DesignerState {
 }
 
 /** Designer settings (bcReportBuilder.designer.*). */
-export interface DesignerConfig { grid: boolean; snap: boolean; ruler: boolean; defaultZoom: number }
+export interface DesignerConfig { grid: boolean; snap: boolean; ruler: boolean; defaultZoom: number; allowExternalImages: boolean }
 
 export function readConfig(): DesignerConfig {
   const c = vscode.workspace.getConfiguration('bcReportBuilder.designer');
-  return { grid: c.get('showGrid', true), snap: c.get('snapToGrid', true), ruler: c.get('showRuler', true), defaultZoom: c.get('defaultZoom', 1) };
+  // Read user settings explicitly: a malicious workspace must not opt itself in.
+  const external = vscode.workspace.getConfiguration('bcReportBuilder.preview').inspect<boolean>('allowExternalImages');
+  return { grid: c.get('showGrid', true), snap: c.get('snapToGrid', true), ruler: c.get('showRuler', true), defaultZoom: c.get('defaultZoom', 1),
+    allowExternalImages: vscode.workspace.isTrusted && external?.globalValue === true };
 }
 
 /** One open designer. */
@@ -214,7 +218,13 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
             if (ReportEditorProvider.activeSession === session) ReportEditorProvider.changed.fire(session);
             break;
           case 'run':
-            if (msg.command.startsWith('bcReportBuilder.')) await vscode.commands.executeCommand(msg.command, ...(msg.args ?? []));
+            // only the buttons the webview has; a compromised webview must not drive commands that take URIs
+            if (msg.command === 'bcReportBuilder.addColumns') {
+              const dataItem = (msg.args?.[0] as { dataItem?: unknown } | undefined)?.dataItem;
+              await vscode.commands.executeCommand(msg.command, typeof dataItem === 'string' ? { dataItem } : undefined);
+            } else if (msg.command === 'bcReportBuilder.buildAl' || msg.command === 'bcReportBuilder.editCode') {
+              await vscode.commands.executeCommand(msg.command);
+            }
             break;
           case 'showProblems':
             await vscode.commands.executeCommand('workbench.actions.view.problems');
@@ -239,7 +249,8 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
             const target = vscode.Uri.joinPath(this.context.globalStorageUri, `${name}-Vorschau.html`);
             await vscode.workspace.fs.createDirectory(this.context.globalStorageUri);
             await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(msg.html));
-            await vscode.env.openExternal(target);
+            // VS Code can expose local profile storage as vscode-userdata:. The OS/browser needs a file URI.
+            await vscode.env.openExternal(target.scheme === 'vscode-userdata' ? vscode.Uri.file(target.fsPath) : target);
             break;
           }
           case 'openXml':
@@ -288,8 +299,13 @@ export class ReportEditorProvider implements vscode.CustomTextEditorProvider {
           }
           case 'openLayout': {
             // another layout of the same report: RDLC in the designer, Word/Excel in their application
+            const mode = layoutOpenMode(msg.uri, session.bc?.layouts, vscode.workspace.isTrusted);
+            if (!mode) {
+              vscode.window.showWarningMessage(l10n.t('This layout cannot be opened. Only report layouts and trusted Word/Excel documents are allowed.'));
+              break;
+            }
             const target = vscode.Uri.parse(msg.uri, true);
-            if (/\.rdlc?$/i.test(target.path)) await vscode.commands.executeCommand('vscode.openWith', target, ReportEditorProvider.viewType);
+            if (mode === 'designer') await vscode.commands.executeCommand('vscode.openWith', target, ReportEditorProvider.viewType);
             else await vscode.env.openExternal(target);
             break;
           }

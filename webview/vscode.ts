@@ -57,7 +57,7 @@ export interface DesignerState {
 }
 
 /** Mirrors DesignerConfig in src/reportEditorProvider.ts (bcReportBuilder.designer.* settings). */
-export interface DesignerConfig { grid: boolean; snap: boolean; ruler: boolean; defaultZoom: number }
+export interface DesignerConfig { grid: boolean; snap: boolean; ruler: boolean; defaultZoom: number; allowExternalImages: boolean }
 
 export const post = (msg: ToExtension) => api.postMessage(msg);
 

@@ -25,16 +25,29 @@ const name = (uri: vscode.Uri) => uri.path.split('/').pop() ?? '';
 const result = (text: string) => new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
 
 /**
+ * Tool inputs come from a language model that may follow instructions planted in files or web pages: paths it names
+ * must stay inside the workspace folders (absolute paths and "../" included).
+ */
+function workspaceCandidates(file: string): vscode.Uri[] {
+  const candidates = /^([a-zA-Z]:)?[\\/]/.test(file)
+    ? [vscode.Uri.file(file)]
+    : (vscode.workspace.workspaceFolders ?? []).map(w => vscode.Uri.joinPath(w.uri, file));
+  const inside = candidates.filter(uri => vscode.workspace.getWorkspaceFolder(uri));
+  if (candidates.length && !inside.length) throw new Error(`"${file}" is outside the workspace folders.`);
+  return inside;
+}
+
+/** Text shown in a confirmation (Markdown): model-chosen names must not inject formatting or links. */
+const md = (s: unknown) => String(s ?? '').replace(/[\\`*_{}[\]()<>#+\-.!|~]/g, '\\$&').replace(/\s+/g, ' ');
+
+/**
  * The layout a tool works on: the given path (absolute, workspace-relative or a unique file name), else the open
  * designer, else the RDLC in the active text editor, else the only layout of the workspace.
  */
 async function layoutUri(file: string | undefined): Promise<vscode.Uri> {
   if (file?.trim()) {
     const f = file.trim().replace(/^file:\/\//, '');
-    const candidates = /^([a-zA-Z]:)?[\\/]/.test(f)
-      ? [vscode.Uri.file(f)]
-      : (vscode.workspace.workspaceFolders ?? []).map(w => vscode.Uri.joinPath(w.uri, f));
-    for (const uri of candidates) {
+    for (const uri of workspaceCandidates(f)) {
       if (await vscode.workspace.fs.stat(uri).then(() => true, () => false)) {
         if (!isLayout(uri)) throw new Error(`${file} is not an RDLC/RDL layout.`);
         return uri;
@@ -317,8 +330,7 @@ const safe = (fn: () => string) => { try { return fn(); } catch (e) { return (e 
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml' };
 
 async function readImage(file: string): Promise<{ name: string; mimeType: string; data: string }> {
-  const uris = /^([a-zA-Z]:)?[\\/]/.test(file) ? [vscode.Uri.file(file)] : (vscode.workspace.workspaceFolders ?? []).map(w => vscode.Uri.joinPath(w.uri, file));
-  for (const uri of uris) {
+  for (const uri of workspaceCandidates(file)) {
     const bytes = await vscode.workspace.fs.readFile(uri).then(b => b, () => undefined);
     if (!bytes) continue;
     const ext = uri.path.split('.').pop()!.toLowerCase();
@@ -357,11 +369,11 @@ export function registerTools(context: vscode.ExtensionContext, service: LayoutS
     register('arrangeItems', tools.arrange, o => l10n.t('Arranging items in {0}', file(o))),
     register('setPageLayout', tools.page, o => l10n.t('Changing the page setup of {0}', file(o))),
     register('addAlColumns', tools.addColumns, o => l10n.t('Adding columns to data item {0}', o.dataItem),
-      o => ({ title: l10n.t('Add AL Columns'), message: l10n.t('Add {0} column(s) to data item **{1}** of the AL report?', o.columns?.length ?? 0, o.dataItem) })),
+      o => ({ title: l10n.t('Add AL Columns'), message: l10n.t('Add {0} column(s) to data item **{1}** of the AL report?', o.columns?.length ?? 0, md(o.dataItem)) })),
     register('createAlLabel', tools.createLabel, o => l10n.t('Creating the AL label "{0}"', o.text),
-      o => ({ title: l10n.t('Create AL Label'), message: l10n.t('Create the label "{0}" in the AL report{1}?', o.text, o.textbox ? l10n.t(' and show it in {0}', o.textbox) : '') })),
+      o => ({ title: l10n.t('Create AL Label'), message: l10n.t('Create the label "{0}" in the AL report{1}?', md(o.text), o.textbox ? l10n.t(' and show it in {0}', md(o.textbox)) : '') })),
     register('renameColumn', tools.renameColumn, o => l10n.t('Renaming column {0} to {1}', o.column, o.newName),
-      o => ({ title: l10n.t('Rename Column (AL and Layouts)'), message: l10n.t('Rename column **{0}** to **{1}** in AL and in all RDLC layouts of the report?', o.column, o.newName) })),
+      o => ({ title: l10n.t('Rename Column (AL and Layouts)'), message: l10n.t('Rename column **{0}** to **{1}** in AL and in all RDLC layouts of the report?', md(o.column), md(o.newName)) })),
     register('buildProject', tools.build, () => l10n.t('Building the AL project'),
       () => ({ title: l10n.t('Build Project'), message: l10n.t('Save all files and build the AL project (AL: Package)?') })),
     register('showInDesigner', tools.show, o => l10n.t('Opening {0} in the designer', file(o))),

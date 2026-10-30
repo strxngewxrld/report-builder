@@ -14,6 +14,20 @@ const ctx = (row: Record<string, unknown> | null = rows[0]): EvalContext => ({
 });
 const ev = (s: string, row?: Record<string, unknown> | null) => evaluate(s, ctx(row));
 
+test('Space cannot allocate attacker-selected unbounded strings', () => {
+  assert.equal(ev('=Space(3)'), '   ');
+  for (const value of ['1000000000', '1 / 0']) assert.throws(() => ev(`=Space(${value})`), /string allocation limit/);
+});
+
+test('Like handles adversarial wildcard patterns without exponential regex backtracking', () => {
+  assert.equal(ev(`="${'a'.repeat(60)}b" Like "${'*a'.repeat(30)}"`), false);
+  assert.equal(ev('="A5" Like "[A-Z]#"'), true);
+  assert.equal(ev('="a5" Like "[!A-Z]?"'), true);
+  assert.equal(ev('="a.b" Like "a.b"'), true);
+  assert.equal(ev('="axb" Like "a.b"'), false);
+  assert.throws(() => ev(`="${'a'.repeat(2000)}" Like "${'?'.repeat(2000)}"`), /matching limit/);
+});
+
 test('literals and fields', () => {
   assert.equal(ev('Hallo'), 'Hallo');
   assert.equal(ev('=Fields!Name.Value'), 'Anna');

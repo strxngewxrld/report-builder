@@ -12,6 +12,7 @@ import { CodeModule } from '../vb';
 import { ChartType, Css, PageInfo, RBox, RCell, RChart, RChartAxis, RChartSeries, RGauge, RNode, RPara, RRow, RSection, RTable, RenderResult } from './types';
 import { axesOf, deriveValues, readAxis, renderTypeOf } from '../charts';
 import { l10n } from '../l10n';
+import { safeImageUrl } from '../images';
 
 export interface RenderOptions {
   dom: XmlDom;
@@ -22,6 +23,8 @@ export interface RenderOptions {
   reportName?: string;
   locale?: string;
   now?: Date;
+  /** Explicit user opt-in, supplied by the host only for trusted workspaces. */
+  allowExternalImages?: boolean;
   /**
    * Interactivity of the preview: toggle keys the user clicked (drilldown, see RBox.toggle) and interactive sorts by
    * textbox name (UserSort).
@@ -103,7 +106,7 @@ class Engine {
 
     for (const img of elements(child(this.root, 'EmbeddedImages'), 'EmbeddedImage')) {
       const data = text(img, 'ImageData')?.replace(/\s/g, '');
-      if (data) this.images[img.getAttribute('Name') ?? ''] = `data:${text(img, 'MIMEType') ?? 'image/png'};base64,${data}`;
+      if (data) this.images[img.getAttribute('Name') ?? ''] = safeImageUrl(`data:${text(img, 'MIMEType') ?? 'image/png'};base64,${data}`);
     }
     for (const tag of ITEMS) {
       for (const e of Array.from(doc.getElementsByTagName(tag) as ArrayLike<Element>)) this.itemNames.add(e.getAttribute('Name') ?? '');
@@ -320,8 +323,8 @@ class Engine {
     const value = toStr(this.eval(text(el, 'Value') ?? '', ctx, name));
     if (!value || value === ERROR_VALUE()) return '';
     if (source === 'Embedded') return this.images[value] ?? '';
-    if (source === 'Database') return /^data:/.test(value) ? value : `data:${text(el, 'MIMEType') ?? 'image/png'};base64,${value}`;
-    return value;
+    if (source === 'Database') return safeImageUrl(/^data:/.test(value) ? value : `data:${text(el, 'MIMEType') ?? 'image/png'};base64,${value}`);
+    return safeImageUrl(value, this.opts.allowExternalImages);
   }
 
   private textbox(el: Element, ctx: EvalContext, base: Omit<RBox, 'kind' | 'css' | 'canGrow' | 'vAlign'>): RBox {

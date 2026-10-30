@@ -848,5 +848,13 @@
   "Renaming column {0} to {1}": "Spalte {0} in {1} umbenennen",
   "Rendering the preview of {0}": "Vorschau von {0} rendern",
   "Save all files and build the AL project (AL: Package)?": "Alle Dateien speichern und das AL-Projekt erstellen (AL: Package)?",
-  "the layout": "das Layout"
+  "the layout": "das Layout",
+  "This layout cannot be opened. Only report layouts and trusted Word/Excel documents are allowed.": "Dieses Layout kann nicht geöffnet werden. Erlaubt sind nur Berichtslayouts sowie Word-/Excel-Dokumente in vertrauenswürdigen Arbeitsbereichen.",
+  "ZIP entry limit exceeded": "Das ZIP-Archiv enthält zu viele Einträge",
+  "ZIP decompression limit exceeded": "Das ZIP-Archiv überschreitet die zulässige entpackte Größe",
+  "Unsupported ZIP compression or encryption": "Nicht unterstützte ZIP-Komprimierung oder Verschlüsselung",
+  "Code: array allocation limit exceeded": "Code: Die maximal zulässige Array-Größe wurde überschritten",
+  "Like: pattern matching limit exceeded": "Like: Der Mustervergleich überschreitet die zulässige Größe",
+  "Space: string allocation limit exceeded": "Space: Die maximal zulässige Zeichenkettenlänge wurde überschritten",
+  "The report URL is not an http(s) address: {0}": "Die Bericht-URL ist keine http(s)-Adresse: {0}"
 }

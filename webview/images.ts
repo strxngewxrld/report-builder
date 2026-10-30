@@ -20,8 +20,20 @@ export function embeddedImages(r: Report): EmbeddedImage[] {
   }));
 }
 
+/** Never let report expressions turn an image into a local-file/SMB request or an implicit data upload. */
+export function safeImageUrl(value: string, allowExternalImages = false): string {
+  if (/^data:image\/(?:png|jpe?g|gif|webp|bmp|avif|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(value)) return value;
+  if (allowExternalImages) {
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:' && !url.username && !url.password) return url.href;
+    } catch { /* not an allowed absolute URL */ }
+  }
+  return '';
+}
+
 /** data: URL of an image for display. */
-export const imageUrl = (img: EmbeddedImage) => `data:${img.mimeType};base64,${img.data}`;
+export const imageUrl = (img: EmbeddedImage) => safeImageUrl(`data:${img.mimeType};base64,${img.data}`);
 
 /** Decode with the same browser engine that displays the image, before changing the report. */
 export function validateImage(img: EmbeddedImage): Promise<void> {
