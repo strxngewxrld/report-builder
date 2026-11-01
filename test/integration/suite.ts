@@ -1883,7 +1883,9 @@ test('Sicherheit: präparierte Ausdrücke ändern keine Prototypen und blockiere
   const { uri, doc, probe } = await open(api, 'Bericht1.rdlc');
   const original = doc.getText();
   const textbox = (name: string, value: string, top: number) => `<Textbox Name="${name}"><Paragraphs><Paragraph><TextRuns><TextRun><Value>${value}</Value><Style /></TextRun></TextRuns><Style /></Paragraph></Paragraphs><Top>${top}in</Top><Left>0in</Left><Width>4in</Width><Height>0.3in</Height><Style /></Textbox>`;
-  const code = '<Code>Public Function Pollute(x)\nx.securityProbe = "polluted"\nReturn 1\nEnd Function</Code>';
+  // the document keeps its EOL (CRLF in a Windows checkout); a WorkspaceEdit would normalize a bare \n
+  const nl = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
+  const code = `<Code>Public Function Pollute(x)${nl}x.securityProbe = "polluted"${nl}Return 1${nl}End Function</Code>`;
   const xml = original.replace('</Report>', `${code}</Report>`).replace('<ReportItems>', '<ReportItems>' +
     textbox('DimensionAttack', '=UBound(Split("a b"), 1 / 0)', 0.5) +
     textbox('PrototypeAttack', '=Code.Pollute(Globals!__proto__.Value)', 1) +
